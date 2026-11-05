@@ -1,6 +1,20 @@
 begin;
 select plan(86);
 
+-- Neutral staff registry rows, loaded the way release loads the private file.
+do $fx$ begin perform app_private.staff_load($j${
+  "chats": [{"key":"staff_a","title_en":"Staff A","title_tr":"Ekip A","sort":1},
+            {"key":"staff_b","title_en":"Staff B","title_tr":"Ekip B","sort":2}],
+  "commands": [
+    {"chat_key":"staff_a","word":"/addios","handler":"tester_add_ios","help_en":"add ios","help_tr":"ios ekle","sort":1},
+    {"chat_key":"staff_a","word":"/addandroid","handler":"tester_add_android","help_en":"add android","help_tr":"android ekle","sort":2},
+    {"chat_key":"staff_a","word":"/remove","handler":"tester_remove","help_en":"remove","help_tr":"cikar","sort":3},
+    {"chat_key":"staff_a","word":"/list","handler":"tester_list","help_en":"list","help_tr":"liste","sort":4},
+    {"chat_key":"staff_a","word":"/saleson","handler":"sales_on","help_en":"on","help_tr":"ac","sort":5},
+    {"chat_key":"staff_a","word":"/salesoff","handler":"sales_off","help_en":"off","help_tr":"kapat","sort":6},
+    {"chat_key":"staff_b","word":"/sales","handler":"sales_total","help_en":"total","help_tr":"toplam","sort":1}]
+}$j$::jsonb); end $fx$;
+
 -- Admin chat, slice 2 (step 15): the Apple/TestFlight job lifecycle.
 -- Written from the contract, not from the migration:
 --
@@ -56,7 +70,7 @@ select test_as('00000000-0000-0000-0000-0000000ab001', 'ab000000-0000-0000-0000-
 select is(public.activate_session(), true, 'fixture: the owner is active');
 reset role;
 insert into app_private.owners(user_id) values ('00000000-0000-0000-0000-0000000ab001');
-create temp table adm as select id from public.conversations where admin_chat and not bacanaks_chat;
+create temp table adm as select id from public.conversations where admin_chat and staff_key = 'staff_a';
 grant select on adm to authenticated;
 select is((select count(*) from adm), 1::bigint, 'fixture: one admin conversation');
 
@@ -91,16 +105,16 @@ begin
   update app_private.admin_commands set at = at - interval '1 hour';
 end $$;
 
--- A job queued the production way: /addiostester for add; for remove the
--- tester is on the list, the owner sends /removetester and answers yes.
+-- A job queued the production way: /addios for add; for remove the
+-- tester is on the list, the owner sends /remove and answers yes.
 create function job(k text, e text) returns uuid language plpgsql as $$
 declare r uuid; card uuid;
 begin
   if k = 'add' then
-    perform cmd('/addiostester ' || e);
+    perform cmd('/addios ' || e);
   else
     insert into app_private.allowlist(email) values (e) on conflict do nothing;
-    perform cmd('/removetester ' || e);
+    perform cmd('/remove ' || e);
     select card_message_id into card from app_private.admin_pending where email = e and state = 'pending';
     perform test_as('00000000-0000-0000-0000-0000000ab001', 'ab000000-0000-0000-0000-000000000001');
     perform public.admin_answer(card, true);

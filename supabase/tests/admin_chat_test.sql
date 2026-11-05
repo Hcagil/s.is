@@ -1,6 +1,20 @@
 begin;
 select plan(179);
 
+-- Neutral staff registry rows, loaded the way release loads the private file.
+do $fx$ begin perform app_private.staff_load($j${
+  "chats": [{"key":"staff_a","title_en":"Staff A","title_tr":"Ekip A","sort":1},
+            {"key":"staff_b","title_en":"Staff B","title_tr":"Ekip B","sort":2}],
+  "commands": [
+    {"chat_key":"staff_a","word":"/addios","handler":"tester_add_ios","help_en":"add ios","help_tr":"ios ekle","sort":1},
+    {"chat_key":"staff_a","word":"/addandroid","handler":"tester_add_android","help_en":"add android","help_tr":"android ekle","sort":2},
+    {"chat_key":"staff_a","word":"/remove","handler":"tester_remove","help_en":"remove","help_tr":"cikar","sort":3},
+    {"chat_key":"staff_a","word":"/list","handler":"tester_list","help_en":"list","help_tr":"liste","sort":4},
+    {"chat_key":"staff_a","word":"/saleson","handler":"sales_on","help_en":"on","help_tr":"ac","sort":5},
+    {"chat_key":"staff_a","word":"/salesoff","handler":"sales_off","help_en":"off","help_tr":"kapat","sort":6},
+    {"chat_key":"staff_b","word":"/sales","handler":"sales_total","help_en":"total","help_tr":"toplam","sort":1}]
+}$j$::jsonb); end $fx$;
+
 -- Admin chat, slice 1 (step 15): the owner types tester commands into a
 -- private chat; the server parses them and answers from a fixed account.
 -- Written from the contract, not from the migration:
@@ -132,7 +146,7 @@ insert into app_private.owners(user_id) values ('00000000-0000-0000-0000-0000000
 select throws_ok($$insert into app_private.owners(user_id) values ('00000000-0000-0000-0000-0000000ac002')$$,
                  '23505', null, 'a second owner row is refused (single row)');
 
-create temp table adm as select id from public.conversations where admin_chat and not bacanaks_chat;
+create temp table adm as select id from public.conversations where admin_chat and staff_key = 'staff_a';
 grant select on adm to authenticated;
 select is((select count(*) from adm), 1::bigint, 'exactly one admin conversation exists');
 select is((select array_agg(user_id::text) from public.conversation_members where conversation_id = (select id from adm)),
@@ -195,8 +209,8 @@ $$;
 -- 3 replies --------------------------------------------------------------------
 create temp table r(name text primary key, v jsonb);
 
-insert into r select 'list0', say('/listtesters');
-select is(jsonb_array_length((select v from r where name = 'list0')), 1, '/listtesters gives one reply');
+insert into r select 'list0', say('/list');
+select is(jsonb_array_length((select v from r where name = 'list0')), 1, '/list gives one reply');
 select is((select v->0->>'k' from r where name = 'list0'), 'list', 'its k is list');
 select is((select (v->0->>'n')::int from r where name = 'list0'),
           (select count(*)::int from app_private.allowlist), 'n counts the allowlist');
@@ -212,11 +226,11 @@ insert into r select 'unk', say('/frobnicate');
 select is((select v->0->>'k' from r where name = 'unk'), 'unk', 'unknown command -> unk');
 select is((select (v->0->>'help')::boolean from r where name = 'unk'), true, 'unk carries help');
 
-insert into r select 'noem', say('/addiostester');
+insert into r select 'noem', say('/addios');
 select is((select v->0->>'k' from r where name = 'noem'), 'noem', 'a command without email -> noem');
 select is((select (v->0->>'help')::boolean from r where name = 'noem'), true, 'noem carries help');
 
-insert into r select 'bad', say('/addandroidtester not-an-email');
+insert into r select 'bad', say('/addandroid not-an-email');
 select is((select v->0->>'k' from r where name = 'bad'), 'bad', 'a malformed email -> bad');
 select is((select (v->0->>'help')::boolean from r where name = 'bad'), true, 'bad carries help');
 select is((select count(*) from app_private.allowlist where email like 'not-an-email%'), 0::bigint,
@@ -224,18 +238,18 @@ select is((select count(*) from app_private.allowlist where email like 'not-an-e
 
 -- Count from here: cards other runs left behind are not ours.
 create temp table p0 as select count(*) as n from app_private.admin_pending;
-insert into r select 'nolist', say('/removetester nobody@mail.test');
+insert into r select 'nolist', say('/remove nobody@mail.test');
 select ok((select v @> '[{"k":"nolist","help":true}]' from r where name = 'nolist'),
           'removing an address not on the list -> nolist with help');
 select is((select count(*) from app_private.admin_pending) - (select n from p0), 0::bigint, 'and no confirm card is made');
 select is(leaks('nobody@mail.test'), 0::bigint, 'nolist masks the email (reply and log)');
 
 -- Android without the Play link: nolink. Then with it: andOk + fwd.
-insert into r select 'nolink', say('/addandroidtester pat@mail.test');
+insert into r select 'nolink', say('/addandroid pat@mail.test');
 select ok((select v @> '[{"k":"nolink"}]' from r where name = 'nolink'),
           'without the Play opt-in link -> nolink');
 insert into app_private.admin_settings(key, value) values ('play_optin_link', 'https://play.test/optin');
-insert into r select 'and', say('/addandroidtester  Pat@Mail.TEST ');
+insert into r select 'and', say('/addandroid  Pat@Mail.TEST ');
 select ok((select v @> '[{"k":"andOk"}]' from r where name = 'and'), 'android add -> andOk');
 select ok((select v @> '[{"k":"fwd"}]' from r where name = 'and'), 'android add -> the forward card');
 select ok((select v @> '[{"k":"fwd","l":"https://play.test/optin","e":"pat@mail.test"}]' from r where name = 'and'),
@@ -251,12 +265,12 @@ select is((select count(*) from public.messages
               and position('pat@mail.test' in lower(body || admin_msg::text)) > 0), 0::bigint,
           'andOk masks the email');
 
-insert into r select 'and2', say('/addandroidtester pat@mail.test');
+insert into r select 'and2', say('/addandroid pat@mail.test');
 select ok((select v @> '[{"k":"andOk"}]' from r where name = 'and2'), 'adding again still replies');
 select is((select count(*) from app_private.allowlist where email = 'pat@mail.test'), 1::bigint,
           'and makes no duplicate row');
 
-insert into r select 'ios', say('/addiostester ivy@mail.test');
+insert into r select 'ios', say('/addios ivy@mail.test');
 select ok((select v @> '[{"k":"iosOk"}]' from r where name = 'ios'), 'iPhone add -> iosOk');
 select is((select platform from app_private.tester_platform where email = 'ivy@mail.test'), 'ios', 'tagged ios');
 select is((select count(*) from app_private.admin_jobs where kind = 'add' and email = 'ivy@mail.test'
@@ -268,7 +282,7 @@ select is(leaks('pat@mail.test'), 0::bigint, 'android add: replies (but the list
 
 -- the list now: full emails, split by platform
 insert into app_private.tester_platform(email, platform) values ('rob@mail.test', 'android');
-insert into r select 'list1', say('/listtesters');
+insert into r select 'list1', say('/list');
 select ok((select v->0->'ios' @> '["ivy@mail.test"]' from r where name = 'list1'), 'list: ivy under ios, full email');
 select ok((select v->0->'and' @> '["pat@mail.test", "rob@mail.test"]' from r where name = 'list1'),
           'list: pat and rob under and, full email');
@@ -287,21 +301,21 @@ create temp table cnt as select (select count(*) from app_private.admin_commands
 -- control: the owner, inserting with his claims and no admin_msg, is parsed.
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000ac001","role":"authenticated"}', true);
 insert into public.messages(conversation_id, sender_id, body)
-  values ((select id from adm), '00000000-0000-0000-0000-0000000ac001', '/listtesters');
+  values ((select id from adm), '00000000-0000-0000-0000-0000000ac001', '/list');
 select set_config('request.jwt.claims', '', true);
 select ok(fresh() @> '[{"k":"list"}]', 'control: the owner''s message (sender = auth.uid()) is parsed');
 
 -- the same, but carrying admin_msg: fails only "without admin_msg"
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000ac001","role":"authenticated"}', true);
 insert into public.messages(conversation_id, sender_id, body, admin_msg)
-  values ((select id from adm), '00000000-0000-0000-0000-0000000ac001', '/listtesters', '{"k":"list"}');
+  values ((select id from adm), '00000000-0000-0000-0000-0000000ac001', '/list', '{"k":"list"}');
 select set_config('request.jwt.claims', '', true);
 select is(fresh(), '[]'::jsonb, 'an owner row that already has admin_msg is not parsed');
 
 -- sender is the owner, but auth.uid() is someone else: fails only sender = auth.uid()
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000ac002","role":"authenticated"}', true);
 insert into public.messages(conversation_id, sender_id, body)
-  values ((select id from adm), '00000000-0000-0000-0000-0000000ac001', '/listtesters');
+  values ((select id from adm), '00000000-0000-0000-0000-0000000ac001', '/list');
 select set_config('request.jwt.claims', '', true);
 select is(fresh(), '[]'::jsonb, 'a row whose sender is not auth.uid() is not parsed');
 
@@ -309,14 +323,14 @@ select is(fresh(), '[]'::jsonb, 'a row whose sender is not auth.uid() is not par
 -- (inserted by the superuser: RLS would already stop mal; this proves the parser's own check)
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000ac002","role":"authenticated"}', true);
 insert into public.messages(conversation_id, sender_id, body)
-  values ((select id from adm), '00000000-0000-0000-0000-0000000ac002', '/listtesters');
+  values ((select id from adm), '00000000-0000-0000-0000-0000000ac002', '/list');
 select set_config('request.jwt.claims', '', true);
 select is(fresh(), '[]'::jsonb, 'a non-owner''s row in the admin chat is not parsed');
 
 -- the system sender, as itself (sender = auth.uid(), admin chat, no admin_msg): fails only "owner"
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-00000000ad41","role":"authenticated"}', true);
 insert into public.messages(conversation_id, sender_id, body)
-  values ((select id from adm), '00000000-0000-0000-0000-00000000ad41', '/listtesters');
+  values ((select id from adm), '00000000-0000-0000-0000-00000000ad41', '/list');
 select set_config('request.jwt.claims', '', true);
 select is((select count(*) from public.messages where conversation_id = (select id from adm)
             and sender_id = '00000000-0000-0000-0000-00000000ad41' and id not in (select id from seen)), 1::bigint,
@@ -326,7 +340,7 @@ select fresh();
 -- the owner, in an ordinary chat
 select as_own();
 select is(try_exec($$insert into public.messages(conversation_id, sender_id, body)
-                     values ('ac0c0000-0000-0000-0000-000000000001', auth.uid(), '/listtesters')$$),
+                     values ('ac0c0000-0000-0000-0000-000000000001', auth.uid(), '/list')$$),
           'ok:1', 'control: the owner may post in an ordinary chat');
 reset role;
 select is((select count(*) from public.messages where conversation_id = 'ac0c0000-0000-0000-0000-000000000001'
@@ -337,7 +351,7 @@ select is(fresh(), '[]'::jsonb, 'nor in the admin chat');
 -- a non-owner cannot even write into the admin chat
 select as_mal();
 select is(try_exec(format($$insert into public.messages(conversation_id, sender_id, body)
-                            values (%L, auth.uid(), '/listtesters')$$, (select id from adm))),
+                            values (%L, auth.uid(), '/list')$$, (select id from adm))),
           'err:42501', 'mal cannot post into the admin chat');
 reset role;
 select is(fresh(), '[]'::jsonb, 'and nothing answers');
@@ -417,8 +431,8 @@ select is((select count(*) from public.messages where conversation_id = (select 
 
 -- 4 removal and admin_answer ---------------------------------------------------
 select fresh();
-insert into r select 'conf_rob', say('/removetester ROB@mail.test');
-select ok((select v @> '[{"k":"conf"}]' from r where name = 'conf_rob'), '/removetester of a listed tester -> conf card');
+insert into r select 'conf_rob', say('/remove ROB@mail.test');
+select ok((select v @> '[{"k":"conf"}]' from r where name = 'conf_rob'), '/remove of a listed tester -> conf card');
 create temp table card as
   select id, 'rob'::text as who from public.messages
    where conversation_id = (select id from adm) and admin_msg->>'k' = 'conf';
@@ -500,7 +514,7 @@ select is((select count(*) from app_private.allowlist where email = 'rob@mail.te
 select ok(not fresh() @> '[{"k":"rmOk"}]', 'and gives no second rmOk');
 
 -- cancel
-insert into r select 'conf_rob2', say('/removetester rob@mail.test');
+insert into r select 'conf_rob2', say('/remove rob@mail.test');
 insert into card select id, 'rob2' from public.messages
   where conversation_id = (select id from adm) and admin_msg->>'k' = 'conf' and id not in (select id from card);
 select as_own();
@@ -520,7 +534,7 @@ select is((select count(*) from app_private.allowlist where email = 'rob@mail.te
           'yes after cancel removes nothing (one use)');
 
 -- expired card -> keep
-insert into r select 'conf_rob3', say('/removetester rob@mail.test');
+insert into r select 'conf_rob3', say('/remove rob@mail.test');
 insert into card select id, 'rob3' from public.messages
   where conversation_id = (select id from adm) and admin_msg->>'k' = 'conf' and id not in (select id from card);
 update app_private.admin_pending set expires_at = now() - interval '1 second'
@@ -537,12 +551,12 @@ select is((select email from app_private.admin_pending where card_message_id = (
 
 -- a card nobody answers: once expired, the raw email must not stay (no cron;
 -- the next command is the only thing that runs)
-insert into r select 'conf_rob4', say('/removetester rob@mail.test');
+insert into r select 'conf_rob4', say('/remove rob@mail.test');
 insert into card select id, 'rob4' from public.messages
   where conversation_id = (select id from adm) and admin_msg->>'k' = 'conf' and id not in (select id from card);
 update app_private.admin_pending set expires_at = now() - interval '1 second'
  where card_message_id = (select id from card where who = 'rob4');
-insert into r select 'after_expiry', say('/listtesters');
+insert into r select 'after_expiry', say('/list');
 select is((select email from app_private.admin_pending where card_message_id = (select id from card where who = 'rob4')), null,
           'an unanswered expired card loses its raw email by the next command');
 select is((select count(*) from app_private.admin_pending where email is not null and expires_at < now()), 0::bigint,
@@ -552,10 +566,10 @@ select is((select count(*) from app_private.admin_pending where email is not nul
 -- pending cards -> state expired, raw email gone; finished jobs (ok, failed)
 -- lose their raw email. Controls: a live card, a used card past its time, and
 -- unfinished jobs (pending, running) keep what they have.
-insert into r select 'conf_rob5', say('/removetester rob@mail.test');
+insert into r select 'conf_rob5', say('/remove rob@mail.test');
 insert into card select id, 'rob5' from public.messages
   where conversation_id = (select id from adm) and admin_msg->>'k' = 'conf' and id not in (select id from card);
-insert into r select 'conf_rob6', say('/removetester rob@mail.test');
+insert into r select 'conf_rob6', say('/remove rob@mail.test');
 insert into card select id, 'rob6' from public.messages
   where conversation_id = (select id from adm) and admin_msg->>'k' = 'conf' and id not in (select id from card);
 update app_private.admin_pending set expires_at = now() - interval '1 second'
@@ -601,17 +615,17 @@ reset role;
 delete from app_private.admin_jobs where email_masked = 'j***@m***.test';
 
 -- the owner removing his own address: refused as k = err, with help
-insert into r select 'rm_self', say('/removetester Own@Mail.test');
+insert into r select 'rm_self', say('/remove Own@Mail.test');
 select is((select jsonb_array_length(v) from r where name = 'rm_self'), 1, 'removing his own address -> one reply');
 select ok((select v @> '[{"k":"err","help":true}]' from r where name = 'rm_self'), 'and it is k = err with help');
 select is((select count(*) from app_private.allowlist where email = 'own@mail.test'), 1::bigint, 'the owner stays on the allowlist');
 select is((select count(*) from app_private.admin_pending where email = 'own@mail.test'), 0::bigint, 'and no card is made');
 
 -- iPhone and untagged testers: an Apple remove job is queued
-insert into r select 'conf_ivy', say('/removetester ivy@mail.test');
+insert into r select 'conf_ivy', say('/remove ivy@mail.test');
 insert into card select id, 'ivy' from public.messages
   where conversation_id = (select id from adm) and admin_msg->>'k' = 'conf' and id not in (select id from card);
-insert into r select 'conf_zed', say('/removetester zed@mail.test');
+insert into r select 'conf_zed', say('/remove zed@mail.test');
 insert into card select id, 'zed' from public.messages
   where conversation_id = (select id from adm) and admin_msg->>'k' = 'conf' and id not in (select id from card);
 select as_own();
@@ -631,7 +645,7 @@ alter table app_private.allowlist add constraint qa_boom check (email <> 'boom@m
 select fresh();
 select as_own();
 select is(try_exec(format($$insert into public.messages(conversation_id, sender_id, body)
-                            values (%L, auth.uid(), '/addandroidtester boom@mail.test')$$, (select id from adm))),
+                            values (%L, auth.uid(), '/addandroid boom@mail.test')$$, (select id from adm))),
           'ok:1', 'a command that fails inside does not fail the owner''s send');
 reset role;
 insert into r select 'boom', fresh();
@@ -646,7 +660,7 @@ alter table app_private.allowlist drop constraint qa_boom;
 -- 7 push -----------------------------------------------------------------------------
 select isnt(vault.create_secret('https://ac-test.local/hook', 'notify_on_message_url'), null, 'a notify URL is configured');
 create temp table q0 as select count(*) as n from net.http_request_queue;
-insert into r select 'push_list', say('/listtesters');
+insert into r select 'push_list', say('/list');
 select is((select count(*) from net.http_request_queue), (select n from q0),
           'an owner command and its ordinary replies queue no push');
 insert into public.messages(conversation_id, sender_id, body, admin_msg, admin_push)
@@ -666,7 +680,7 @@ select is((select count(*) from net.http_request_queue), (select n from q0) + 2,
 
 -- 8 previews ------------------------------------------------------------------------
 select fresh();
-insert into r select 'prev', say('/listtesters');
+insert into r select 'prev', say('/list');
 select as_own();
 select is((select admin_msg->>'k' from public.conversation_previews where conversation_id = (select id from adm)), 'list',
           'the owner''s preview of the admin chat carries the last reply''s admin_msg');
@@ -682,12 +696,12 @@ reset role;
 
 -- 9 rate limit ------------------------------------------------------------------------
 create temp table rate(i int, v jsonb);
-do $$ begin for i in 1..60 loop insert into rate select i, say('/listtesters'); end loop; end $$;
+do $$ begin for i in 1..60 loop insert into rate select i, say('/list'); end loop; end $$;
 select ok(exists (select 1 from rate where v @> '[{"k":"rate"}]'), 'many commands in a row hit the rate limit (k = rate)');
 select ok(not exists (select 1 from rate a join rate b on b.i > a.i
                        where a.v @> '[{"k":"rate"}]' and b.v @> '[{"k":"list"}]'), 'once limited, commands are not run');
 insert into app_private.admin_jobs(kind, email, email_masked, state) values ('add', 'job-late@mail.test', 'l***@m***.test', 'ok');
-insert into r select 'rated_add', say('/addandroidtester late@mail.test');
+insert into r select 'rated_add', say('/addandroid late@mail.test');
 select ok((select v @> '[{"k":"rate"}]' from r where name = 'rated_add'), 'fixture: this command is rate limited');
 select is((select email from app_private.admin_jobs where email_masked = 'l***@m***.test'), null,
           'the sweep runs even for a rate-limited command (it comes first)');

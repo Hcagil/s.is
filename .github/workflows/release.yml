@@ -121,6 +121,11 @@ jobs:
         with:
           ref: ${{ needs.scope.outputs.sha }}
           fetch-depth: 0
+      - name: Check the staff rows secret
+        env:
+          STAFF_ROWS: ${{ secrets.STAFF_ROWS_JSON }}
+        run: |
+          printf %s "$STAFF_ROWS" | jq -e '(.chats | type == "array" and length > 0) and (.commands | type == "array" and length > 0)' >/dev/null 2>&1 || { echo "::error::STAFF_ROWS_JSON is missing or malformed"; exit 1; }
       - name: Log in to the base image registry
         run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
         env:
@@ -173,29 +178,47 @@ jobs:
       - name: Install Supabase CLI
         uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3
         with: { version: 2.117.0 }
-      - name: Apply database migrations (schema goes forward before the app)
-        run: supabase link --project-ref "$SUPABASE_PROJECT_REF" && supabase db push
+      - name: Link the Supabase project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
-      # /podium (Bacanaks chat) is optional: a failure here must never block the Play upload.
-      - name: Deploy the podium function
+      # The sales function is optional: a failure here must never block the Play upload.
+      # It goes out before the schema: the new database code calls it, and nothing calls it until the push below.
+      - name: Deploy the sales function
         continue-on-error: true
         run: |
-          supabase functions deploy podium --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
-          # podium: one random secret shared by the database trigger (Vault) and the function; new every release, never printed.
-          PODIUM_SECRET=$(openssl rand -hex 32)
-          echo "::add-mask::$PODIUM_SECRET"
-          supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" PODIUM_SHARED_SECRET="$PODIUM_SECRET"
-          supabase db query --linked "delete from vault.secrets where name = 'podium_secret'"
-          supabase db query --linked "select vault.create_secret('$PODIUM_SECRET', 'podium_secret') is not null"
-          supabase db query --linked "select vault.create_secret('https://$SUPABASE_PROJECT_REF.supabase.co/functions/v1/podium', 'podium_url') where not exists (select 1 from vault.secrets where name = 'podium_url')"
+          supabase functions deploy sales-total --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
+          # One random secret shared by the database trigger (Vault) and the function; new every release, never printed.
+          JOB_SECRET=$(openssl rand -hex 32)
+          echo "::add-mask::$JOB_SECRET"
+          supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" JOB_SHARED_SECRET="$JOB_SECRET"
+          supabase db query --linked "delete from vault.secrets where name = 'job_secret'"
+          supabase db query --linked "select vault.create_secret('$JOB_SECRET', 'job_secret') is not null"
+          supabase db query --linked "select vault.create_secret('https://$SUPABASE_PROJECT_REF.supabase.co/functions/v1/sales-total', 'job_url') where not exists (select 1 from vault.secrets where name = 'job_url')"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      - name: Apply database migrations (schema goes forward before the app)
+        run: supabase db push
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      # The staff chat rows (titles, command words) live only in this secret. The JSON never enters the shell text:
+      # it is passed as base64, and every CLI line goes to /dev/null because an error would quote the query.
+      - name: Load the staff rows
+        run: |
+          B64=$(printf %s "$STAFF_ROWS" | base64 -w0)
+          echo "::add-mask::$B64"
+          supabase db query --linked "select app_private.staff_load(convert_from(decode('$B64','base64'),'utf8')::jsonb) is not null" >/dev/null 2>&1 || { echo "::error::staff rows load failed"; exit 1; }
+        env:
+          STAFF_ROWS: ${{ secrets.STAFF_ROWS_JSON }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
 
-      # storage-sweeper removes queued files from Storage for the cleanup jobs; optional like podium: a failure must never block the Play upload.
+      # storage-sweeper removes queued files from Storage for the cleanup jobs; optional like the sales function: a failure must never block the Play upload.
       - name: Deploy the storage sweeper
         id: sweeper
         continue-on-error: true
@@ -332,7 +355,7 @@ jobs:
     # and polling on a macOS runner would bill them. It waits for `publish`
     # only to read the What's new note; nothing waits on it, and its failure
     # is a red job beside a green Play release. Safe to re-run alone.
-    # Repository variable TESTFLIGHT_GROUPS (comma-separated names) picks the
+    # Secret TF_GROUPS (comma-separated names) picks the
     # groups; unset means `*`, every group of the app (internal and external).
     needs: [scope, ios, publish]
     if: ${{ !cancelled() && needs.ios.result == 'success' }}
@@ -381,8 +404,10 @@ jobs:
         env:
           BUILD: ${{ needs.scope.outputs.code }}
           NOTE_B64: ${{ needs.publish.outputs.note_b64 }}
-          TF_GROUPS: ${{ vars.TESTFLIGHT_GROUPS }}
+          TF_GROUPS: ${{ secrets.TF_GROUPS }}
         run: |
+          # Group names are private: mask each before anything can print one.
+          IFS=','; for g in $TF_GROUPS; do [ -n "$g" ] && echo "::add-mask::$g"; done; unset IFS
           note=$(printf '%s' "$NOTE_B64" | base64 -d)
           python3 tool/asc_signing.py distribute com.esd.sis "$BUILD" "${TF_GROUPS:-*}" "$note"
       - name: Remove the App Store Connect key

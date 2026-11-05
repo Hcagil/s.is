@@ -37,10 +37,13 @@ jobs:
           JOB_ID: ${{ inputs.job_id }}
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
-          TF_GROUPS: ${{ vars.TESTFLIGHT_GROUPS }}
+          TF_GROUPS: ${{ secrets.TF_GROUPS }}
         shell: bash
         run: |
           set -eu -o pipefail
+          # Group names are private: required, and masked before anything can print one.
+          [ -n "${TF_GROUPS:-}" ] || { echo 'TF_GROUPS is not set' >&2; exit 1; }
+          IFS=','; for g in $TF_GROUPS; do [ -n "$g" ] && echo "::add-mask::$g"; done; unset IFS
           printf '%s' "$JOB_ID" | grep -Eqi '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' || { echo 'job_id is not a uuid' >&2; exit 1; }
 
           # Called as a plain statement before every report call: inside $(...) the
@@ -98,7 +101,7 @@ jobs:
               sleep 20
             fi
             rc=0
-            TESTER_EMAIL="$EMAIL" python3 tool/asc_signing.py tester "$KIND" "${TF_GROUPS:-bacanaks}" || rc=$?
+            TESTER_EMAIL="$EMAIL" python3 tool/asc_signing.py tester "$KIND" "$TF_GROUPS" || rc=$?
             [ "$rc" = 75 ] || break
           done
 

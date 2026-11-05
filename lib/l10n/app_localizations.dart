@@ -761,7 +761,7 @@ abstract class AppLocalizations {
   /// Profile row subtitle under Encryption
   ///
   /// In en, this message translates to:
-  /// **'Messages are end-to-end encrypted. Tap to verify.'**
+  /// **'Text messages are end-to-end encrypted. Tap to verify.'**
   String get encryptionRowSubtitle;
 
   /// Title of the security code page

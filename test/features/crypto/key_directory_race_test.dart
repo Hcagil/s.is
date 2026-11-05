@@ -22,15 +22,6 @@ import '../../support/key_directory_fakes.dart';
 import '../chat/data/store/store_harness.dart';
 import 'data/drift_session_engine_test.dart' show Phone, ok, err;
 
-/// Real time passes (native calls and SQLite are real I/O).
-Future<void> until(bool Function() done, String what) async {
-  for (var i = 0; i < 1000; i++) {
-    if (done()) return;
-    await Future<void>.delayed(const Duration(milliseconds: 10));
-  }
-  fail('timed out waiting for $what');
-}
-
 void main() {
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
 
@@ -58,9 +49,14 @@ void main() {
       ],
     );
     addTearDown(c.dispose);
-    c.listen(keyDirectoryControllerProvider, (_, _) {});
+    // Waits follow events, not a wall-clock bound: under load (a parallel
+    // full run) real I/O is slow, and a polling bound timed out once.
+    final ready = Completer<void>();
+    c.listen(keyDirectoryControllerProvider, (_, next) {
+      if (next is KeysReady && !ready.isCompleted) ready.complete();
+    });
 
-    await until(() => dir.publishes.isNotEmpty, 'the first publish');
+    await dir.firstPublish.future;
     final pub = dir.publishes.single;
     expect(pub.oneTimeKeys, isNotEmpty);
     ClaimedKeys claimed(String otk) => ClaimedKeys(
@@ -103,12 +99,10 @@ void main() {
       isNot(isA<KeysReady>()),
       reason: 'the publish is still paused',
     );
+    expect(ready.isCompleted, isFalse, reason: 'the publish is still paused');
 
     paused.complete(const Ok(50));
-    await until(
-      () => c.read(keyDirectoryControllerProvider) is KeysReady,
-      'KeysReady',
-    );
+    await ready.future;
 
     // A second pre-key aimed at the consumed key must not open.
     final carol = await Phone.make('carol');

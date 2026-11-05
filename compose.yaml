@@ -7,6 +7,10 @@ services:
         LOCAL_UID: ${LOCAL_UID:-1000}
         LOCAL_GID: ${LOCAL_GID:-1000}
     working_dir: /workspace
+    # Tests run in a non-UTC zone, as CI does: in UTC, converting UTC to local
+    # changes nothing, so a test of that conversion passes with it deleted.
+    environment:
+      TZ: JST-9
     # Lets the integration tests reach the Supabase stack the CLI publishes on
     # the host (the unit tests never touch the network).
     extra_hosts:

@@ -187,6 +187,21 @@ void main() {
     expect(row.lastMessageAt, isNotNull);
   });
 
+  test(
+    'a normal chat from chat_list has no staffKey and is not a staff chat',
+    () async {
+      // chat_list no longer sends the old per-chat flag; the row must still parse.
+      final r = await ann.conversations();
+      expect(r, isA<Ok<dynamic>>(), reason: '$r');
+      final row = (r as Ok<dynamic>).value.firstWhere(
+        (c) => c.id == conversationId,
+      );
+      expect(row.staffKey, isNull);
+      expect(row.isAdminChat, isFalse);
+      expect(row.isSystem, isFalse);
+    },
+  );
+
   test('Realtime delivers a message to the other member', () async {
     final body = 'realtime ${DateTime.now().microsecondsSinceEpoch}';
     // Resolves only once the server has joined us, so no sleep is needed and

@@ -1,14 +1,17 @@
-// The Bacanaks Ozel command chat in the app, from the contract:
-// - header: the name "Bacanaks Özel", subtitle "Not end-to-end encrypted"
-//   (TR "Uçtan uca şifreli değil"), its own avatar; a normal chat has none.
+// The sales staff chat in the app (the registry chat whose commands include
+// the sales_total handler), from the contract:
+// - header: the registry title, subtitle "Not end-to-end encrypted"
+//   (TR "Uçtan uca şifreli değil"), its own avatar; a normal chat and a staff
+//   chat without sales_total have none.
 // - composer: hint "Type / for commands"; typing "/" opens the command list
-//   with /podium and its meaning; a tap fills "/podium " and sends nothing.
-//   A normal chat has no list.
+//   with the registry word and its server help; a tap fills "/word " and
+//   sends nothing. A normal chat has no list.
 // - reply bubble: pod / podPrev show the title, the amount as given, and
-//   "From Vega, fetched at HH:MM" in the phone's local time; no "Unchecked"
+//   the fetched line at HH:MM in the phone's local time; no "Unchecked"
 //   tag. podFail / podOff show their fixed text. EN and TR.
 // - chat-list preview: an answer shows the title only, never the amount.
 // Time is shown in local time: run under TZ=JST-9 (as CI does).
+// Fixture words are neutral ("/report", "staff_b"), never real ones.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,8 +25,8 @@ import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/text_sharer.dart';
 import 'package:sis/features/chat/presentation/admin_reply_bubble.dart';
-import 'package:sis/features/chat/presentation/bacanaks_widgets.dart'
-    show BacanaksAvatar;
+import 'package:sis/features/chat/presentation/staff_widgets.dart'
+    show SalesAvatar;
 import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
 
@@ -62,15 +65,11 @@ String screenText(WidgetTester tester) => [
     t.controller.text,
 ].join('\n');
 
-ChatFake world({required bool bacanaks}) => ChatFake(self: me.userId)
+/// [key] null: a normal 1:1 chat; else a staff chat with that staffKey.
+ChatFake world(String? key) => ChatFake(self: me.userId)
   ..conversationsResult = Ok([
-    bacanaks
-        ? const Conversation(
-            id: 'c1',
-            title: 'x',
-            isAdminChat: true,
-            isBacanaks: true,
-          )
+    key != null
+        ? Conversation(id: 'c1', title: 'x', isAdminChat: true, staffKey: key)
         : const Conversation(id: 'c1', other: bob),
   ])
   ..membersResult = const Ok([bob])
@@ -78,17 +77,17 @@ ChatFake world({required bool bacanaks}) => ChatFake(self: me.userId)
 
 Future<ChatFake> pumpChat(
   WidgetTester t, {
-  required bool bacanaks,
+  required String? key,
   Locale locale = const Locale('en'),
 }) async {
   t.view.physicalSize = const Size(411, 891);
   t.view.devicePixelRatio = 1;
   addTearDown(t.view.reset);
-  final chat = world(bacanaks: bacanaks);
+  final chat = world(key);
   final container = await settled(
     ProviderContainer.test(
       overrides: [
-        ...videoOverrides(),
+        ...videoOverrides(staff: StaffRegistryFake(stored: neutralRegistry())),
         chatRepositoryProvider.overrideWithValue(chat),
         presenceRepositoryProvider.overrideWithValue(PresenceFake()),
         attachmentCacheProvider.overrideWithValue(AttachmentCacheFake()),
@@ -102,7 +101,8 @@ Future<ChatFake> pumpChat(
       container: container,
       child: localizedApp(
         locale: locale,
-        home: MessageScreen(title: bacanaks ? 'Bacanaks Özel' : 'Bob'),
+        // A staff chat takes its title from the registry.
+        home: MessageScreen(title: key == null ? 'Bob' : null),
       ),
     ),
   );
@@ -123,6 +123,9 @@ Future<void> pumpBubble(
   await t.pumpWidget(
     ProviderScope(
       overrides: [
+        ...videoOverrides(staff: StaffRegistryFake(stored: neutralRegistry())),
+        sessionControllerProvider.overrideWith(_SignedIn.new),
+        chatRepositoryProvider.overrideWithValue(world('staff_b')),
         textSharerProvider.overrideWithValue(_NoSharer()),
         adminChatRepositoryProvider.overrideWithValue(_NoAdminRepo()),
       ],
@@ -173,20 +176,20 @@ void main() {
     testWidgets(
       '[$lang] header: name, "not end-to-end encrypted" subtitle and avatar',
       (t) async {
-        await pumpChat(t, bacanaks: true, locale: locale);
-        expect(find.text('Bacanaks Özel'), findsWidgets);
-        expect(find.text(l.podNotEnc), findsOneWidget);
-        expect(find.byType(BacanaksAvatar), findsOneWidget);
+        await pumpChat(t, key: 'staff_b', locale: locale);
+        expect(find.text(lang == 'tr' ? 'Ekip B' : 'Staff B'), findsWidgets);
+        expect(find.text(l.salesNotEnc), findsOneWidget);
+        expect(find.byType(SalesAvatar), findsOneWidget);
       },
     );
 
     testWidgets(
-      '[$lang] a normal chat has no Bacanaks subtitle, avatar, hint or panel',
+      '[$lang] a normal chat has no sales subtitle, avatar, hint or panel',
       (t) async {
-        await pumpChat(t, bacanaks: false, locale: locale);
-        expect(find.text(l.podNotEnc), findsNothing);
-        expect(find.byType(BacanaksAvatar), findsNothing);
-        expect(find.text(l.podHint), findsNothing);
+        await pumpChat(t, key: null, locale: locale);
+        expect(find.text(l.salesNotEnc), findsNothing);
+        expect(find.byType(SalesAvatar), findsNothing);
+        expect(find.text(l.salesHint), findsNothing);
         await t.enterText(field, '/');
         await t.pumpAndSettle();
         expect(byKey('command-list-panel'), findsNothing);
@@ -194,28 +197,40 @@ void main() {
     );
 
     testWidgets(
-      '[$lang] composer hint, then "/" opens the list and a tap fills /podium without sending',
+      '[$lang] a staff chat without the sales_total handler is not the sales chat',
       (t) async {
-        final chat = await pumpChat(t, bacanaks: true, locale: locale);
-        expect(find.text(l.podHint), findsOneWidget);
+        await pumpChat(t, key: 'staff_a', locale: locale);
+        expect(find.text(l.salesNotEnc), findsNothing);
+        expect(find.byType(SalesAvatar), findsNothing);
+      },
+    );
+
+    testWidgets(
+      '[$lang] composer hint, then "/" opens the list and a tap fills /report without sending',
+      (t) async {
+        final chat = await pumpChat(t, key: 'staff_b', locale: locale);
+        expect(find.text(l.salesHint), findsOneWidget);
         expect(byKey('command-list-panel'), findsNothing);
         await t.enterText(field, '/');
         await t.pumpAndSettle();
         expect(byKey('command-list-panel'), findsOneWidget);
-        expect(find.text(l.cmdPodMeaning), findsOneWidget);
-        expect(find.text('/podium'), findsOneWidget);
+        expect(
+          find.text((lang == 'tr' ? 'Toplamı göster' : 'Show the total')),
+          findsOneWidget,
+        );
+        expect(find.text('/report'), findsOneWidget);
         expect(chat.sent, isEmpty, reason: 'opening the list sends nothing');
-        await t.tap(find.text('/podium'));
+        await t.tap(find.text('/report'));
         await t.pumpAndSettle();
         expect(chat.sent, isEmpty, reason: 'a pick never sends');
-        expect(t.widget<EditableText>(field).controller.text, '/podium ');
+        expect(t.widget<EditableText>(field).controller.text, '/report ');
         expect(byKey('command-list-panel'), findsNothing);
       },
     );
 
-    testWidgets('[$lang] "/po" keeps the list; "/x" closes it', (t) async {
-      await pumpChat(t, bacanaks: true, locale: locale);
-      await t.enterText(field, '/po');
+    testWidgets('[$lang] "/rep" keeps the list; "/x" closes it', (t) async {
+      await pumpChat(t, key: 'staff_b', locale: locale);
+      await t.enterText(field, '/rep');
       await t.pumpAndSettle();
       expect(byKey('command-list-panel'), findsOneWidget);
       await t.enterText(field, '/x');
@@ -233,9 +248,9 @@ void main() {
           'at': at.toIso8601String(),
         }, locale);
         final s = screenText(t);
-        expect(s, contains(l.podTitle));
+        expect(s, contains(l.salesTitle));
         expect(s, contains(amount));
-        expect(s, contains(l.podFetched(hhmm(at))));
+        expect(s, contains(l.salesFetched(hhmm(at))));
         expect(hhmm(at), '11:20', reason: 'fixture: JST-9');
         expect(
           s,
@@ -292,7 +307,7 @@ void main() {
           'at': at.toIso8601String(),
         }, locale);
         final s = screenText(t);
-        final title = l.podPrevTitle('§');
+        final title = l.salesPrevTitle('§');
         expect(s, contains(title.substring(0, title.indexOf('§'))));
         expect(
           RegExp(r'\(28\b[^)]*\)').hasMatch(s),
@@ -301,11 +316,11 @@ void main() {
         );
         expect(
           s,
-          isNot(contains(l.podTitle)),
+          isNot(contains(l.salesTitle)),
           reason: 'not the current-day title',
         );
         expect(s, contains(amount));
-        expect(s, contains(l.podFetched(hhmm(at))));
+        expect(s, contains(l.salesFetched(hhmm(at))));
         expect(s, isNot(contains('Unchecked')));
         expect(s, isNot(contains('Kontrol edilmedi')));
       },
@@ -315,10 +330,10 @@ void main() {
       '[$lang] podFail and podOff show their fixed text and no amount line',
       (t) async {
         await pumpBubble(t, {'k': 'podFail'}, locale);
-        expect(screenText(t), contains(l.podFail));
-        expect(screenText(t), isNot(contains(l.podFetched('').trim())));
+        expect(screenText(t), contains(l.salesFail));
+        expect(screenText(t), isNot(contains(l.salesFetched('').trim())));
         await pumpBubble(t, {'k': 'podOff'}, locale);
-        expect(screenText(t), contains(l.podOff));
+        expect(screenText(t), contains(l.salesOff));
       },
     );
 
@@ -337,11 +352,11 @@ void main() {
           'day': '2026-10-28',
           'at': at.toIso8601String(),
         });
-        expect(pod, l.podTitle);
+        expect(pod, l.salesTitle);
         expect(prev, isNot(contains(amount)));
         expect(prev, isNotEmpty);
-        expect(adminPreviewLine(l, {'k': 'podFail'}), l.podFail);
-        expect(adminPreviewLine(l, {'k': 'podOff'}), l.podOff);
+        expect(adminPreviewLine(l, {'k': 'podFail'}), l.salesFail);
+        expect(adminPreviewLine(l, {'k': 'podOff'}), l.salesOff);
       },
     );
   }

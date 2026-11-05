@@ -63,10 +63,13 @@ void main() {
       expect(normalRound.isAdminChat, isFalse);
     });
 
-    test('label of an admin chat is SIS Admin', () {
-      final admin = _adminConv();
-      expect(admin.label, equals('SIS Admin'));
-    });
+    test(
+      'an admin chat has no built-in name (the registry or l10n names it)',
+      () {
+        final admin = _adminConv();
+        expect(admin.label, isEmpty);
+      },
+    );
   });
 
   group('Conversation copies keep isAdminChat', () {

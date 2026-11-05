@@ -11,13 +11,25 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/core/failure.dart';
+import 'package:sis/features/auth/application/session_controller.dart';
+import 'package:sis/features/auth/domain/member.dart';
+import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
+import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/admin_chat_repository.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/text_sharer.dart';
 import 'package:sis/features/chat/presentation/admin_reply_bubble.dart';
 
+import '../../support/fakes.dart';
 import '../../support/l10n.dart';
+import '../../support/video_fakes.dart';
+
+class _SignedIn extends SessionController {
+  @override
+  Future<SessionState> build() async =>
+      const Allowed(Member(userId: 'u1', displayName: 'Maya'));
+}
 
 class RecordingSharer implements TextSharer {
   final shared = <String>[];
@@ -59,6 +71,20 @@ Future<(RecordingSharer, RecordingAdminRepo)> pump(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        // The help list comes from the staff registry of this chat's staffKey.
+        ...videoOverrides(staff: StaffRegistryFake(stored: neutralRegistry())),
+        sessionControllerProvider.overrideWith(_SignedIn.new),
+        chatRepositoryProvider.overrideWithValue(
+          ChatFake(self: 'u1')
+            ..conversationsResult = const Ok([
+              Conversation(
+                id: 'admin-conv',
+                title: 'x',
+                isAdminChat: true,
+                staffKey: 'staff_a',
+              ),
+            ]),
+        ),
         textSharerProvider.overrideWithValue(sharer),
         adminChatRepositoryProvider.overrideWithValue(r),
       ],
@@ -123,15 +149,20 @@ void main() {
       ) async {
         await pump(tester, {'k': 'unk', 'help': true}, locale: locale);
         final withHelp = screenText(tester);
-        for (final line in [
-          l.adminHelpHeader,
-          l.adminHelpIos,
-          l.adminHelpAnd,
-          l.adminHelpRm,
-          l.adminHelpList,
-        ]) {
-          expect(withHelp, contains(line));
+        expect(withHelp, contains(l.adminHelpHeader));
+        for (final c in neutralRegistry().commandsFor('staff_a')) {
+          expect(withHelp, contains(c.name), reason: 'registry word listed');
+          expect(
+            withHelp,
+            contains(locale.languageCode == 'tr' ? c.helpTr : c.helpEn),
+            reason: 'registry help in the app language',
+          );
         }
+        expect(
+          withHelp,
+          isNot(contains('Show the total')),
+          reason: 'staff_b commands are not listed here',
+        );
         await pump(tester, {'k': 'canOk'}, locale: locale);
         expect(screenText(tester), isNot(contains(l.adminHelpHeader)));
       });

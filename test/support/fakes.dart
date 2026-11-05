@@ -27,6 +27,8 @@ import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/message_store.dart';
 import 'package:sis/features/chat/domain/picture_cropper.dart';
 import 'package:sis/features/chat/domain/read_marks.dart';
+import 'package:sis/features/chat/domain/staff_registry.dart';
+import 'package:sis/features/chat/domain/staff_registry_repository.dart';
 import 'package:sis/features/notifications/domain/notification_settings.dart';
 import 'package:sis/features/notifications/domain/push.dart';
 import 'package:sis/features/presence/domain/presence_repository.dart';
@@ -3963,3 +3965,91 @@ Map<String, Uint8List> previewsOf(Iterable<Message> rows, List<String> ids) {
         m.id: m.attachmentPreview!,
   };
 }
+
+/// Staff registry boundary, as the real one behaves: [cached] reads local
+/// storage (async, no network); [refresh] asks the server, which may be slow
+/// ([refreshGate]) or refuse ([refreshResult] as Err); an Ok answer replaces
+/// the stored registry, an Err keeps it. Neutral fixture words only.
+class StaffRegistryFake implements StaffRegistryRepository {
+  StaffRegistryFake({
+    this.stored,
+    Result<StaffRegistry>? refreshResult,
+    this.refreshGate,
+  }) : refreshResult = refreshResult ?? Ok(stored ?? StaffRegistry.empty);
+
+  StaffRegistry? stored;
+  Result<StaffRegistry> refreshResult;
+
+  /// When set, [refresh] waits for it: a slow or hanging network.
+  Completer<void>? refreshGate;
+  int refreshCalls = 0;
+  int clearCalls = 0;
+
+  @override
+  Future<StaffRegistry?> cached() async => stored;
+
+  @override
+  Future<Result<StaffRegistry>> refresh() async {
+    refreshCalls++;
+    final gate = refreshGate;
+    if (gate != null) await gate.future;
+    final r = refreshResult;
+    if (r is Ok<StaffRegistry>) stored = r.value;
+    return r;
+  }
+
+  @override
+  Future<void> clear() async {
+    clearCalls++;
+    stored = null;
+  }
+}
+
+/// A neutral registry: staff_a has four commands (one takes an email),
+/// staff_b has one. Words and titles are fixtures, never real ones.
+StaffRegistry neutralRegistry() => const StaffRegistry({
+  'staff_a': StaffChat(
+    'staff_a',
+    titleEn: 'Staff A',
+    titleTr: 'Ekip A',
+    commands: [
+      StaffCommand(
+        '/addios',
+        'tester_add_ios',
+        helpEn: 'Add a phone tester',
+        helpTr: 'Telefon testcisi ekle',
+      ),
+      StaffCommand(
+        '/list',
+        'tester_list',
+        helpEn: 'Show testers',
+        helpTr: 'Testcileri göster',
+      ),
+      StaffCommand(
+        '/reporton',
+        'sales_on',
+        helpEn: 'Turn the report on',
+        helpTr: 'Raporu aç',
+      ),
+      StaffCommand(
+        '/reportoff',
+        'sales_off',
+        helpEn: 'Turn the report off',
+        helpTr: 'Raporu kapat',
+      ),
+    ],
+  ),
+  'staff_b': StaffChat(
+    'staff_b',
+    titleEn: 'Staff B',
+    titleTr: 'Ekip B',
+    commands: [
+      StaffCommand(
+        '/report',
+        'sales_total',
+        helpEn: 'Show the total',
+        helpTr: 'Toplamı göster',
+      ),
+    ],
+  ),
+});

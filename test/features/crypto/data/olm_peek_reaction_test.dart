@@ -17,7 +17,8 @@ import 'package:sis/features/chat/data/store/drift_chat_list_snapshot_store.dart
 import 'package:sis/features/chat/data/store/drift_message_store.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/encrypted_message_repository.dart';
-import 'package:sis/features/chat/domain/message.dart' show Message, MessageDeletion;
+import 'package:sis/features/chat/domain/message.dart'
+    show Message, MessageDeletion;
 import 'package:sis/features/chat/domain/message_envelope.dart';
 import 'package:sis/features/chat/domain/shared_location.dart';
 import 'package:sis/features/chat/domain/reaction_envelope.dart';

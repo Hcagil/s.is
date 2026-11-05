@@ -588,7 +588,7 @@ class _ComposerState extends ConsumerState<_Composer>
                                       },
                                       decoration: InputDecoration(
                                         hintText: salesChat
-                                            ? l.podHint
+                                            ? l.salesHint
                                             : isAdminChat
                                             ? l.adminHint
                                             : l.commonMessage,

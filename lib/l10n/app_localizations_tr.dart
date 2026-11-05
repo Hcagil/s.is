@@ -2212,7 +2212,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get adminBad => 'E-posta adresi doğru görünmüyor.';
 
   @override
-  String get staffChatTitle => 'Ekip sohbeti';
+  String get staffChatTitleFallback => 'Ekip sohbeti';
 
   @override
   String get adminHelpHeader => 'Komutlar:';
@@ -2501,44 +2501,46 @@ class AppLocalizationsTr extends AppLocalizations {
   }
 
   @override
-  String get podTitle => 'Toplam para';
+  String get salesTitle => 'Toplam para';
 
   @override
-  String podPrevTitle(String date) {
+  String salesPrevTitle(String date) {
     return 'Önceki günün toplamı ($date)';
   }
 
   @override
-  String podFetched(String time) {
+  String salesFetched(String time) {
     return 'Vega\'dan alındı: $time';
   }
 
   @override
-  String get podFail => 'Vega yanıt vermedi.';
+  String get salesFail =>
+      'Vega yanıt vermedi. Lütfen daha sonra tekrar deneyin.';
 
   @override
-  String get podOff => 'Bu komut kapalı.';
+  String get salesOff => 'Bu komut kapalı.';
 
   @override
-  String podUnk(String cmd) {
+  String salesUnknown(String cmd) {
     return 'Bilinmeyen komut. $cmd yazın.';
   }
 
   @override
-  String get podRate => 'Çok fazla komut. Bir dakika bekleyip tekrar deneyin.';
+  String get salesRate =>
+      'Çok fazla komut. Lütfen bir dakika sonra tekrar deneyin.';
 
   @override
-  String podSwOn(String cmd) {
-    return '$cmd açıldı.';
+  String salesSwOn(String cmd) {
+    return '$cmd komutu açıldı.';
   }
 
   @override
-  String podSwOff(String cmd) {
-    return '$cmd kapatıldı.';
+  String salesSwOff(String cmd) {
+    return '$cmd komutu kapatıldı.';
   }
 
   @override
-  String get podHint => 'Komutlar için / yazın';
+  String get salesHint => 'Komutlar için / yazın';
 
   @override
   String get adminHint => 'Komutlar için / yazın';
@@ -2552,7 +2554,7 @@ class AppLocalizationsTr extends AppLocalizations {
   }
 
   @override
-  String get podNotEnc => 'Uçtan uca şifreli değil';
+  String get salesNotEnc => 'Uçtan uca şifreli değil';
 
   @override
   String get messageDeleteQuestion =>

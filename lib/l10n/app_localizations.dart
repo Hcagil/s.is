@@ -3926,11 +3926,11 @@ abstract class AppLocalizations {
   /// **'That email address doesn\'t look right.'**
   String get adminBad;
 
-  /// Name of a staff chat until the server has sent its title
+  /// Staff chat title fallback
   ///
   /// In en, this message translates to:
-  /// **'Staff chat'**
-  String get staffChatTitle;
+  /// **'Team chat'**
+  String get staffChatTitleFallback;
 
   /// Admin chat reply text
   ///
@@ -4400,65 +4400,65 @@ abstract class AppLocalizations {
   /// **'Reacted {emoji} to your file'**
   String noticeReactionToFile(String emoji);
 
-  /// Sales staff chat
+  /// Staff chat command reply
   ///
   /// In en, this message translates to:
   /// **'Total money'**
-  String get podTitle;
+  String get salesTitle;
 
-  /// Sales staff chat
+  /// Staff chat command reply
   ///
   /// In en, this message translates to:
   /// **'Previous day\'s total ({date})'**
-  String podPrevTitle(String date);
+  String salesPrevTitle(String date);
 
-  /// Sales staff chat
+  /// Staff chat command reply
   ///
   /// In en, this message translates to:
-  /// **'From Vega, fetched at {time}'**
-  String podFetched(String time);
+  /// **'Fetched from Vega at {time}'**
+  String salesFetched(String time);
 
-  /// Sales staff chat
+  /// Staff chat command reply
   ///
   /// In en, this message translates to:
-  /// **'Vega did not answer.'**
-  String get podFail;
+  /// **'Vega did not answer. Please try again later.'**
+  String get salesFail;
 
-  /// Sales staff chat
+  /// Staff chat command reply
   ///
   /// In en, this message translates to:
   /// **'This command is turned off.'**
-  String get podOff;
+  String get salesOff;
 
-  /// Sales staff chat
+  /// Staff chat command reply
   ///
   /// In en, this message translates to:
   /// **'Unknown command. Try {cmd}.'**
-  String podUnk(String cmd);
+  String salesUnknown(String cmd);
 
-  /// Sales staff chat
+  /// Staff chat command reply
   ///
   /// In en, this message translates to:
-  /// **'Too many commands. Wait a minute and try again.'**
-  String get podRate;
+  /// **'Too many commands. Please try again in a minute.'**
+  String get salesRate;
 
-  /// Sales staff chat
+  /// Staff chat command reply
   ///
   /// In en, this message translates to:
   /// **'{cmd} is turned on.'**
-  String podSwOn(String cmd);
+  String salesSwOn(String cmd);
 
-  /// Sales staff chat
+  /// Staff chat command reply
   ///
   /// In en, this message translates to:
   /// **'{cmd} is turned off.'**
-  String podSwOff(String cmd);
+  String salesSwOff(String cmd);
 
-  /// Sales staff chat
+  /// Staff chat command reply
   ///
   /// In en, this message translates to:
   /// **'Type / for commands'**
-  String get podHint;
+  String get salesHint;
 
   /// Admin chat field hint
   ///
@@ -4478,11 +4478,11 @@ abstract class AppLocalizations {
   /// **'{command}, {meaning}'**
   String cmdRowLabel(String command, String meaning);
 
-  /// Sales staff chat
+  /// Staff chat command reply
   ///
   /// In en, this message translates to:
   /// **'Not end-to-end encrypted'**
-  String get podNotEnc;
+  String get salesNotEnc;
 
   /// Delete box question
   ///

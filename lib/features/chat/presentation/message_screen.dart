@@ -598,7 +598,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                     listed.staffKey,
                     Localizations.localeOf(context).languageCode,
                   ) ??
-                  AppLocalizations.of(context).staffChatTitle
+                  AppLocalizations.of(context).staffChatTitleFallback
             : conversationLabel(AppLocalizations.of(context), listed));
     final isGroup = widget.group || (listed?.isGroup ?? false);
     final isSystem = listed?.isSystem ?? false;
@@ -756,7 +756,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                               ),
                               if (status == null && isSales)
                                 Text(
-                                  AppLocalizations.of(context).podNotEnc,
+                                  AppLocalizations.of(context).salesNotEnc,
                                   style: Theme.of(context).textTheme.bodySmall
                                       ?.copyWith(
                                         color: SisBrand.of(context).muted,

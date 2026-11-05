@@ -2241,7 +2241,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminBad => 'That email address doesn\'t look right.';
 
   @override
-  String get staffChatTitle => 'Staff chat';
+  String get staffChatTitleFallback => 'Team chat';
 
   @override
   String get adminHelpHeader => 'Commands:';
@@ -2529,44 +2529,44 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get podTitle => 'Total money';
+  String get salesTitle => 'Total money';
 
   @override
-  String podPrevTitle(String date) {
+  String salesPrevTitle(String date) {
     return 'Previous day\'s total ($date)';
   }
 
   @override
-  String podFetched(String time) {
-    return 'From Vega, fetched at $time';
+  String salesFetched(String time) {
+    return 'Fetched from Vega at $time';
   }
 
   @override
-  String get podFail => 'Vega did not answer.';
+  String get salesFail => 'Vega did not answer. Please try again later.';
 
   @override
-  String get podOff => 'This command is turned off.';
+  String get salesOff => 'This command is turned off.';
 
   @override
-  String podUnk(String cmd) {
+  String salesUnknown(String cmd) {
     return 'Unknown command. Try $cmd.';
   }
 
   @override
-  String get podRate => 'Too many commands. Wait a minute and try again.';
+  String get salesRate => 'Too many commands. Please try again in a minute.';
 
   @override
-  String podSwOn(String cmd) {
+  String salesSwOn(String cmd) {
     return '$cmd is turned on.';
   }
 
   @override
-  String podSwOff(String cmd) {
+  String salesSwOff(String cmd) {
     return '$cmd is turned off.';
   }
 
   @override
-  String get podHint => 'Type / for commands';
+  String get salesHint => 'Type / for commands';
 
   @override
   String get adminHint => 'Type / for commands';
@@ -2580,7 +2580,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get podNotEnc => 'Not end-to-end encrypted';
+  String get salesNotEnc => 'Not end-to-end encrypted';
 
   @override
   String get messageDeleteQuestion =>

@@ -8,4 +8,4 @@ String nameOrMember(AppLocalizations l, String name) =>
 
 /// A conversation's name for display; an unknown 1:1 partner shows "Member".
 String conversationLabel(AppLocalizations l, Conversation c) =>
-    c.staffKey != null ? l.staffChatTitle : nameOrMember(l, c.label);
+    c.staffKey != null ? l.staffChatTitleFallback : nameOrMember(l, c.label);

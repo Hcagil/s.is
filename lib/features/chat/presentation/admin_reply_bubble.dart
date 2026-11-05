@@ -49,12 +49,12 @@ String? adminReplyText(
     'keep' => l.adminKeep,
     'err' => l.adminErr,
     'nolink' => l.adminNoLink,
-    'podFail' => l.podFail,
-    'podOff' => l.podOff,
-    'podUnk' => cmd == null ? l.adminUnk : l.podUnk(cmd),
-    'podRate' => l.podRate,
-    'podSwOn' => cmd == null ? null : l.podSwOn(cmd),
-    'podSwOff' => cmd == null ? null : l.podSwOff(cmd),
+    'podFail' => l.salesFail,
+    'podOff' => l.salesOff,
+    'podUnk' => cmd == null ? l.adminUnk : l.salesUnknown(cmd),
+    'podRate' => l.salesRate,
+    'podSwOn' => cmd == null ? null : l.salesSwOn(cmd),
+    'podSwOff' => cmd == null ? null : l.salesSwOff(cmd),
     _ => null,
   };
   if (text == null || m['help'] != true) return text;
@@ -69,7 +69,7 @@ String adminPreviewLine(AppLocalizations l, Map<String, dynamic> m) =>
       'list' => l.adminListHeader(m['n'] as int? ?? 0),
       'fwd' => l.adminFwdTitle,
       'conf' => l.adminConfTitle,
-      'pod' || 'podPrev' => l.podTitle,
+      'pod' || 'podPrev' => l.salesTitle,
       _ => (adminReplyText(l, m) ?? '').split('\n').first,
     };
 
@@ -208,8 +208,8 @@ class _AdminReplyBubbleState extends ConsumerState<AdminReplyBubble> {
           children: [
             Text(
               m['k'] == 'pod'
-                  ? l.podTitle
-                  : l.podPrevTitle(
+                  ? l.salesTitle
+                  : l.salesPrevTitle(
                       day == null
                           ? ''
                           : DateFormat('d MMM', locale).format(day),
@@ -231,7 +231,7 @@ class _AdminReplyBubbleState extends ConsumerState<AdminReplyBubble> {
             ),
             const SizedBox(height: 4),
             Text(
-              l.podFetched(at == null ? '' : DateFormat('HH:mm').format(at)),
+              l.salesFetched(at == null ? '' : DateFormat('HH:mm').format(at)),
               style: TextStyle(fontSize: 12, color: brand.muted),
             ),
             const SizedBox(height: 4),

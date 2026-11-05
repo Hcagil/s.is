@@ -1274,3 +1274,66 @@ final class PeekReactionTextTests: XCTestCase {
     }
   }
 }
+
+/// PeekCore.plainReactionBody for a plain (not encrypted) reaction push: a group push names the sender with or without an emoji, as Android does.
+final class PeekPlainReactionBodyTests: XCTestCase {
+  let generic = "New reaction to your message"
+  let genericTr = "Mesajınıza yeni tepki"
+
+  func body(_ info: [AnyHashable: Any], tr: Bool = false) -> String {
+    PeekCore.plainReactionBody(userInfo: info, turkish: tr)
+  }
+
+  // Red if the sender prefix is gated on a non-empty emoji (the original bug).
+  func testGroupWithoutEmojiNamesTheSender() {
+    XCTAssertEqual(body(["sender": "Ayşe"]), "Ayşe: \(generic)")
+    XCTAssertEqual(body(["sender": "Ayşe"], tr: true), "Ayşe: \(genericTr)")
+  }
+
+  // Red if an empty emoji is treated as a real one, or drops the prefix.
+  func testGroupWithEmptyEmojiNamesTheSender() {
+    XCTAssertEqual(body(["sender": "Ayşe", "e": ""]), "Ayşe: \(generic)")
+    XCTAssertEqual(body(["sender": "Ayşe", "e": ""], tr: true), "Ayşe: \(genericTr)")
+  }
+
+  // Red if the emoji text is lost or the prefix is not added.
+  func testGroupWithEmojiNamesTheSender() {
+    XCTAssertEqual(body(["sender": "Ayşe", "e": "👍"]), "Ayşe: Reacted 👍 to your message")
+    XCTAssertEqual(body(["sender": "Ayşe", "e": "👍"], tr: true), "Ayşe: Mesajınıza 👍 tepkisini verdi")
+  }
+
+  // Red if the quote / quote kind are not read from "q" / "qk".
+  func testGroupWithQuoteAndKind() {
+    XCTAssertEqual(body(["sender": "Ayşe", "e": "👍", "q": "hi"]), "Ayşe: Reacted 👍 to: \"hi\"")
+    XCTAssertEqual(body(["sender": "Ayşe", "e": "👍", "qk": "photo"]), "Ayşe: Reacted 👍 to your photo")
+  }
+
+  // Red if a 1:1 push gets a prefix (": text" or a name).
+  func testOneToOneHasNoPrefix() {
+    XCTAssertEqual(body([:]), generic)
+    XCTAssertEqual(body([:], tr: true), genericTr)
+    XCTAssertEqual(body(["e": "👍"]), "Reacted 👍 to your message")
+    XCTAssertEqual(body(["e": "👍"], tr: true), "Mesajınıza 👍 tepkisini verdi")
+  }
+
+  // Red if the empty-sender guard is dropped (": text").
+  func testEmptySenderHasNoPrefix() {
+    XCTAssertEqual(body(["sender": ""]), generic)
+    XCTAssertEqual(body(["sender": "", "e": "👍"]), "Reacted 👍 to your message")
+    XCTAssertEqual(body(["sender": ""], tr: true), genericTr)
+  }
+
+  // Red if the sender is read with a cast that stringifies non-Strings ("42: ...").
+  func testNonStringSenderHasNoPrefix() {
+    XCTAssertEqual(body(["sender": 42]), generic)
+    XCTAssertEqual(body(["sender": 42, "e": "👍"]), "Reacted 👍 to your message")
+  }
+
+  // Red if the 1000-character cut is removed or changed.
+  func testLongBodyIsCutToTheFirst1000Characters() {
+    let long = String(repeating: "a", count: 2000)
+    let out = body(["sender": "Ayşe", "e": "👍", "q": long])
+    XCTAssertEqual(out.count, 1000)
+    XCTAssertTrue(out.hasPrefix("Ayşe: Reacted 👍 to: \"aaa"))
+  }
+}

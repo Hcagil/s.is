@@ -119,11 +119,7 @@ enum PushPeek {
       guard let r = PeekCore.reaction(push: rp, data: data, pickleKey: pickleKey, decryptor: decryptor) else { return (data.peerName, generic) }
       return (data.peerName, PeekCore.reactionText(emoji: r.emoji, quote: r.quote, quoteKind: nil, turkish: turkish))
     }
-    let emoji = userInfo["e"] as? String
-    let text = PeekCore.reactionText(emoji: emoji, quote: userInfo["q"] as? String, quoteKind: userInfo["qk"] as? String, turkish: turkish)
-    // Same rule as reactionText: only a non-empty emoji makes a real text; the generic text gets no sender name.
-    if let sender = userInfo["sender"] as? String, !sender.isEmpty, PeekCore.reactionNamesSender(emoji: emoji) { return (nil, shownBody(text: text, sender: sender)) }
-    return (nil, text)
+    return (nil, PeekCore.plainReactionBody(userInfo: userInfo, turkish: turkish))
   }
 
   /// Formats the shown body of a notification.

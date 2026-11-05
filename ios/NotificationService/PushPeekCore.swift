@@ -173,6 +173,13 @@ enum PeekCore {
     }
   }
 
+  /// The body of a plain (not encrypted) reaction push: reactionText from e/q/qk, prefixed "Sender: " (first 1000 chars) when the push carries a non-empty "sender" (group push; a 1:1 has none).
+  static func plainReactionBody(userInfo: [AnyHashable: Any], turkish: Bool) -> String {
+    let text = reactionText(emoji: userInfo["e"] as? String, quote: userInfo["q"] as? String, quoteKind: userInfo["qk"] as? String, turkish: turkish)
+    guard let sender = userInfo["sender"] as? String, !sender.isEmpty else { return text }
+    return String("\(sender): \(text)".prefix(1000))
+  }
+
   static func isUuid(_ s: String) -> Bool {
     return s.range(of: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", options: .regularExpression) != nil
   }

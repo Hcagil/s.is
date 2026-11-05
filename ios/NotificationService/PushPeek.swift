@@ -119,11 +119,7 @@ enum PushPeek {
       guard let r = PeekCore.reaction(push: rp, data: data, pickleKey: pickleKey, decryptor: decryptor) else { return (data.peerName, generic) }
       return (data.peerName, PeekCore.reactionText(emoji: r.emoji, quote: r.quote, quoteKind: nil, turkish: turkish))
     }
-    let emoji = userInfo["e"] as? String
-    let text = PeekCore.reactionText(emoji: emoji, quote: userInfo["q"] as? String, quoteKind: userInfo["qk"] as? String, turkish: turkish)
-    // A group push carries "sender" (the server omits it for a 1:1); with or without an emoji it is shown as "Sender: text", like a group message push and Android.
-    if let sender = userInfo["sender"] as? String, !sender.isEmpty { return (nil, shownBody(text: text, sender: sender)) }
-    return (nil, text)
+    return (nil, PeekCore.plainReactionBody(userInfo: userInfo, turkish: turkish))
   }
 
   /// Formats the shown body of a notification.

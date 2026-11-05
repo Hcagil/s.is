@@ -164,6 +164,10 @@ class FakeKeyDirectory implements KeyDirectory {
   Result<ClaimedKeys?> claimAnswer = const Ok(null);
 
   final publishes = <PublishCall>[];
+
+  /// Completes when [publish] is first called, so a test waits on the event
+  /// rather than on a polling bound.
+  final firstPublish = Completer<void>();
   final claims = <String>[];
   int statusCalls = 0;
   final _free = <String>{};
@@ -197,6 +201,7 @@ class FakeKeyDirectory implements KeyDirectory {
       oneTimeKeys: List.of(oneTimeKeys),
       fallbackKey: fallbackKey,
     ));
+    if (!firstPublish.isCompleted) firstPublish.complete();
     _log.add(
       'publish:${oneTimeKeys.length}${fallbackKey == null ? '' : ':fb'}',
     );

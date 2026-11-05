@@ -107,6 +107,38 @@ begin
     raise exception 'staff_load: bad input';
   end if;
 
+  -- Every value is checked here, with the table limits, so a bad value never reaches a constraint (its error would print the row).
+  if exists (
+    select 1 from jsonb_array_elements(p->'chats') e
+    where jsonb_typeof(e) <> 'object'
+       or jsonb_typeof(e->'key') is distinct from 'string'
+       or coalesce(jsonb_typeof(e->'title_en'), 'null') not in ('null', 'string')
+       or coalesce(jsonb_typeof(e->'title_tr'), 'null') not in ('null', 'string')
+       or length(e->>'title_en') > 200
+       or length(e->>'title_tr') > 200
+       or coalesce(jsonb_typeof(e->'sort'), 'null') not in ('null', 'number')
+       or (jsonb_typeof(e->'sort') = 'number' and (e->>'sort') !~ '^-?[0-9]{1,9}$')
+  ) or exists (
+    select 1 from jsonb_array_elements(p->'commands') e
+    where jsonb_typeof(e) <> 'object'
+       or jsonb_typeof(e->'chat_key') is distinct from 'string'
+       or jsonb_typeof(e->'word') is distinct from 'string'
+       or (e->>'word') !~ '^/[a-z0-9]{2,32}$'
+       or jsonb_typeof(e->'handler') is distinct from 'string'
+       or (e->>'handler') not in ('tester_add_ios','tester_add_android','tester_remove','tester_list','sales_on','sales_off','sales_total')
+       or coalesce(jsonb_typeof(e->'help_en'), 'null') not in ('null', 'string')
+       or coalesce(jsonb_typeof(e->'help_tr'), 'null') not in ('null', 'string')
+       or length(e->>'help_en') > 200
+       or length(e->>'help_tr') > 200
+       or coalesce(jsonb_typeof(e->'sort'), 'null') not in ('null', 'number')
+       or (jsonb_typeof(e->'sort') = 'number' and (e->>'sort') !~ '^-?[0-9]{1,9}$')
+  ) or (
+    select count(*) <> count(distinct (e->>'chat_key') || ' ' || (e->>'word'))
+    from jsonb_array_elements(p->'commands') e
+  ) then
+    raise exception 'staff_load: bad input';
+  end if;
+
   update app_private.staff_chats
   set title_en = x.title_en,
       title_tr = x.title_tr,

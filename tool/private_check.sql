@@ -29,19 +29,19 @@ begin
   end if;
 
   -- 3. Check owner mismatch against admin_handle
-  select count(*) into n from pg_proc p where p.oid in (h, a, s) and p.proowner != (select proowner from pg_proc where oid = r);
+  select count(*) into n from pg_proc p where p.pronamespace = 'app_private'::regnamespace and p.proname like 'private\_%' and p.proowner != (select proowner from pg_proc where oid = r);
   if n > 0 then
     raise exception 'private function owner mismatch count %', n;
   end if;
 
   -- 4. Check if private functions are callable by clients
-  select count(*) into n from pg_proc p where p.oid in (h, a, s) and (has_function_privilege('anon', p.oid, 'execute') or has_function_privilege('authenticated', p.oid, 'execute'));
+  select count(*) into n from pg_proc p where p.pronamespace = 'app_private'::regnamespace and p.proname like 'private\_%' and (has_function_privilege('anon', p.oid, 'execute') or has_function_privilege('authenticated', p.oid, 'execute') or has_function_privilege('service_role', p.oid, 'execute'));
   if n > 0 then
     raise exception 'private function callable by clients count %', n;
   end if;
 
   -- 5. Check if private functions are definer with empty search_path
-  select count(*) into n from pg_proc p where p.oid in (h, a, s) and (p.prosecdef = false or not coalesce(p.proconfig, array[]::text[]) @> array['search_path=""']);
+  select count(*) into n from pg_proc p where p.pronamespace = 'app_private'::regnamespace and p.proname like 'private\_%' and (p.prosecdef = false or not coalesce(p.proconfig, array[]::text[]) @> array['search_path=""']);
   if n > 0 then
     raise exception 'private function not definer with empty search_path count %', n;
   end if;

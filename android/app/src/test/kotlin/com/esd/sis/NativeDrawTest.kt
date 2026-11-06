@@ -268,8 +268,15 @@ class NativeDrawTest {
         assertEquals(15, PushArrivalReceiver.PACE_CAP)
         val n = PushArrivalReceiver.PACE_CAP + 3
         val chats = (1..n).map { "cap-$it" }
-        // All queued before the first is drawn: depths 1..18 at arrival.
-        chats.forEachIndexed { i, c -> broadcast(push(chat = c, title = "Chat $i")) }
+        // All queued before the first is drawn: depths 1..18 at arrival. A draw that ends while
+        // the receives are still dispatched lowers the depth of the later pushes (push 16 at
+        // depth 15 is paced), so the draw thread is held back on InstantPush's lock (pace() is
+        // @Synchronized) until all 18 are accepted.
+        synchronized(InstantPush) {
+            chats.forEachIndexed { i, c -> broadcast(push(chat = c, title = "Chat $i")) }
+            ShadowLooper.idleMainLooper()
+            assertTrue("a push was drawn before the burst was queued", chats.all { posted(it) == null })
+        }
 
         val seen = linkedMapOf<String, Long>()
         waitFor("all $n drawn") {

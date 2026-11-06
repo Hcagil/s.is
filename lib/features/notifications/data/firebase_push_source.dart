@@ -77,7 +77,8 @@ Future<String> _deliver(
   final owner = await LocalPushDisplay.currentOwner();
   if (owner == null) return 'dropped:no_owner';
   final targetUser = d['user_id'];
-  if (targetUser is String && targetUser != owner) {
+  // Every push carries user_id; one without it (or not a String) is forged.
+  if (targetUser is! String || targetUser != owner) {
     return 'dropped:owner_mismatch';
   }
   if (!await LocalPushDisplay.notificationsEnabled()) {

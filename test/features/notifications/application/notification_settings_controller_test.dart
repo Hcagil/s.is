@@ -360,6 +360,68 @@ void main() {
       );
       expect(mutes, isEmpty);
     });
+
+    group('acting before the saved mutes have loaded', () {
+      const saved = [
+        Mute(kind: MuteKind.person, target: 'u2'),
+        Mute(kind: MuteKind.conversation, target: 'c9'),
+      ];
+
+      Set<String> targets(Iterable<Mute> m) => m.map((e) => e.target).toSet();
+
+      // Nothing but the held load knows the saved mutes (the write returns
+      // no list), so the only right behaviour is to wait for the load: the
+      // state must stay loading, never show a list that lost saved mutes.
+      test('mute waits for the load and keeps every saved mute', () async {
+        final fake = NotificationSettingsFake(mutes: saved)..holdMutes();
+        final c = make(fake);
+        c.listen(mutesProvider, (_, _) {});
+        final pending = c
+            .read(mutesProvider.notifier)
+            .mute(MuteKind.conversation, 'cX', MuteLength.eightHours);
+        await drain();
+
+        final mid = c.read(mutesProvider);
+        expect(
+          mid.hasValue,
+          isFalse,
+          reason:
+              'showed ${mid.value?.length} mutes while the saved list loaded',
+        );
+
+        fake.releaseMutes();
+        await pending;
+        await drain();
+
+        expect(targets(c.read(mutesProvider).requireValue), {'u2', 'c9', 'cX'});
+        expect(targets(fake.savedMutes), {'u2', 'c9', 'cX'});
+      });
+
+      test('unmute waits for the load and keeps the other mutes', () async {
+        final fake = NotificationSettingsFake(mutes: saved)..holdMutes();
+        final c = make(fake);
+        c.listen(mutesProvider, (_, _) {});
+        final pending = c
+            .read(mutesProvider.notifier)
+            .unmute(MuteKind.person, 'u2');
+        await drain();
+
+        final mid = c.read(mutesProvider);
+        expect(
+          mid.hasValue,
+          isFalse,
+          reason:
+              'showed ${mid.value?.length} mutes while the saved list loaded',
+        );
+
+        fake.releaseMutes();
+        await pending;
+        await drain();
+
+        expect(targets(c.read(mutesProvider).requireValue), {'c9'});
+        expect(targets(fake.savedMutes), {'c9'});
+      });
+    });
   });
 
   group('activeMute', () {

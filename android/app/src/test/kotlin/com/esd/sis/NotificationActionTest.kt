@@ -40,7 +40,7 @@ import org.robolectric.shadows.ShadowLooper
  * reply that did not go through says "Not sent" on the chat's notification.
  */
 private const val MSG = "6f1b7c1e-2a55-4c1f-9e0a-0d7f7b1a2c3d"
-private const val TOKEN = "v1.ticket-for-chat.sig"
+private val TOKEN = fixtureActionToken("mark_read", "reply")
 private const val URL = "https://project.example/functions/v1/notification-action"
 
 @RunWith(RobolectricTestRunner::class)

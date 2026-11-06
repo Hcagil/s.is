@@ -97,7 +97,7 @@ class EncryptedReplyTest {
             if (user != null) putString("user_id", user)
             putString("google.original_priority", "normal")
             putString("google.delivered_priority", "normal")
-            putString("action_token", "v1.ticket-for-chat.sig")
+            putString("action_token", fixtureActionToken("mark_read", "reply"))
             putString("action_url", "https://project.example/functions/v1/notification-action")
             if (encrypted != null) putString("encrypted", encrypted)
         }

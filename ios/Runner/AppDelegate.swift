@@ -74,44 +74,37 @@ import UserNotifications
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     request.httpBody = data
-    var background = UIBackgroundTaskIdentifier.invalid
-    background = UIApplication.shared.beginBackgroundTask {
-      UIApplication.shared.endBackgroundTask(background)
-      background = .invalid
-    }
-    func finish(_ ok: Bool) {
-      if ok {
-        // Reading from here clears the chat's other delivered pushes too (matched by thread id, as the clearThread channel does).
-        let center = UNUserNotificationCenter.current()
-        center.getDeliveredNotifications { delivered in
-          let ids = delivered.filter { $0.request.content.threadIdentifier == conversation }.map { $0.request.identifier }
-          if !ids.isEmpty { center.removeDeliveredNotifications(withIdentifiers: ids) }
+    NotificationActionRun.run(time: ApplicationBackgroundTime(), work: { done in
+      func finish(_ ok: Bool) {
+        if ok {
+          // Reading from here clears the chat's other delivered pushes too (matched by thread id, as the clearThread channel does).
+          let center = UNUserNotificationCenter.current()
+          center.getDeliveredNotifications { delivered in
+            let ids = delivered.filter { $0.request.content.threadIdentifier == conversation }.map { $0.request.identifier }
+            if !ids.isEmpty { center.removeDeliveredNotifications(withIdentifiers: ids) }
+          }
+        } else if let reply = reply {
+          // The system dismissed the notification when the reply was sent; say so if it did not go through.
+          let note = UNMutableNotificationContent()
+          note.title = content.title
+          note.body = (Locale.preferredLanguages.first?.hasPrefix("tr") ?? false ? "Gönderilemedi: " : "Not sent: ") + reply
+          note.threadIdentifier = conversation
+          note.userInfo = ["conversation_id": conversation]
+          UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: UUID().uuidString, content: note, trigger: nil))
         }
-      } else if let reply = reply {
-        // The system dismissed the notification when the reply was sent; say so if it did not go through.
-        let note = UNMutableNotificationContent()
-        note.title = content.title
-        note.body = (Locale.preferredLanguages.first?.hasPrefix("tr") ?? false ? "Gönderilemedi: " : "Not sent: ") + reply
-        note.threadIdentifier = conversation
-        note.userInfo = ["conversation_id": conversation]
-        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: UUID().uuidString, content: note, trigger: nil))
+        done(ok)
       }
-      completion()
-      if background != .invalid {
-        UIApplication.shared.endBackgroundTask(background)
-        background = .invalid
+      func send(retry: Bool) {
+        URLSession.shared.dataTask(with: request) { _, response, error in
+          let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+          if error == nil && status == 200 { return finish(true) }
+          // 429, 5xx and no answer are passing failures: try once more.
+          if retry && (error != nil || status == 429 || status >= 500) { return send(retry: false) }
+          finish(false)
+        }.resume()
       }
-    }
-    func send(retry: Bool) {
-      URLSession.shared.dataTask(with: request) { _, response, error in
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        if error == nil && status == 200 { return finish(true) }
-        // 429, 5xx and no answer are passing failures: try once more.
-        if retry && (error != nil || status == 429 || status >= 500) { return send(retry: false) }
-        finish(false)
-      }.resume()
-    }
-    send(retry: true)
+      send(retry: true)
+    }, completion: completion)
     return true
   }
 

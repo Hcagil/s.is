@@ -8,7 +8,7 @@ LIB_DIR="${LIB_DIR:-lib}"
 # docs/ARCHITECTURE.md's data/ layer list, which names this script as the
 # authority.
 SDKS='package:(drift|sqlite3|flutter_rust_bridge|supabase_flutter|supabase|google_sign_in|sign_in_with_apple|in_app_update|package_info_plus|flutter_secure_storage|flutter_local_notifications|firebase_messaging|firebase_core|shared_preferences|web_socket_channel|path_provider|path_provider_foundation|photo_manager|flutter_contacts|url_launcher|http|connectivity_plus|file_picker|open_filex|light_compressor_v2|video_player|share_plus|google_maps_flutter|flutter_map|latlong2|geolocator|record|speech_to_text|imcodec|webview_flutter|webview_flutter_android|webview_flutter_wkwebview)/'
-FAILFLAG=$(mktemp); trap 'rm -f "$FAILFLAG"' EXIT
+FAILFLAG=$(mktemp); words=$(mktemp); trap 'rm -f "$FAILFLAG" "$words"' EXIT
 report() { echo "PATTERN VIOLATION: $1"; echo 1 > "$FAILFLAG"; }
 # Rule 1: presentation never imports SDKs or data/
 while IFS= read -r f; do
@@ -47,4 +47,29 @@ done < <(find "$LIB_DIR" -path '*/data/*.dart' 2>/dev/null)
 while IFS= read -r f; do
   grep -nE "NetworkFailure\\([^'\"]|NetworkFailure\\(['\"][^'\"]*\\$" "$f" | sed "s|^|$f:|" | while read -r l; do report "raw error text in a Failure: $l"; done || true
 done < <(find "$LIB_DIR" -path '*/features/*/data/*.dart' 2>/dev/null)
+# Rule 7: none of the words in a secret list appears in what this change adds (diff lines, commit messages, PR text). The list lives outside git:
+# PRIVATE_WORDS (one word per line) or .private/ops/private-words.txt in the main checkout. Prints counts only, never a match.
+# PRIVATE_EXPECTED=1 makes a missing or short list (fewer than 5 words) a failure. PRIVATE_BASE is the commit the change starts from (default origin/main).
+if [ -n "${PRIVATE_WORDS:-}" ]; then
+  printf '%s\n' "$PRIVATE_WORDS" > "$words"
+elif f="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || echo /nonexistent/.git)")/.private/ops/private-words.txt"; [ -f "$f" ]; then
+  cat "$f" > "$words"
+fi
+tr -d '\r' < "$words" | grep -v '^[[:space:]]*$' > "$words.clean" || true
+mv "$words.clean" "$words"
+nwords=$(wc -l < "$words")
+if [ "${PRIVATE_EXPECTED:-}" = 1 ] && [ "$nwords" -lt 5 ]; then report "private word list missing or shorter than 5 words"; fi
+base="${PRIVATE_BASE:-origin/main}"
+if [ "$nwords" -gt 0 ]; then
+  if git rev-parse -q --verify "$base^{commit}" >/dev/null 2>&1; then
+    hits=$({
+      git diff -U0 "$(git merge-base "$base" HEAD)" | { grep '^+' || true; } | { grep -v '^+++' || true; }
+      git log --format=%B "$base"..HEAD
+      printf '%s\n' "${PRIVATE_PR_TEXT:-}"
+    } | { grep -ciF -f "$words" || true; })
+    if [ "$hits" -ne 0 ]; then report "private words: $hits hits in added lines, commit messages or PR text"; fi
+  elif [ "${PRIVATE_EXPECTED:-}" = 1 ]; then
+    report "private word guard cannot find its base commit"
+  fi
+fi
 if [ -s "$FAILFLAG" ]; then exit 1; fi; echo "pattern: OK"

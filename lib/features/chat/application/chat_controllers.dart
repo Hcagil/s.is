@@ -124,7 +124,7 @@ final adminChatRepositoryProvider = Provider<AdminChatRepository>(
 /// Answers an admin chat confirmation card: true removes the tester, false cancels.
 final adminAnswerProvider =
     Provider<Future<Result<void>> Function(String cardId, bool yes)>(
-      (ref) => ref.read(adminChatRepositoryProvider).answer,
+      (ref) => ref.watch(adminChatRepositoryProvider).answer,
     );
 final groupSettingsRepositoryProvider = Provider<GroupSettingsRepository>(
   (_) => throw UnimplementedError('override in main'),

@@ -2279,6 +2279,18 @@ class AppLocalizationsTr extends AppLocalizations {
   String get adminConfCancelled => 'İptal edildi';
 
   @override
+  String get adminCardConfirm => 'Onayla';
+
+  @override
+  String get adminCardCancel => 'İptal et';
+
+  @override
+  String get adminCardDone => 'Tamamlandı';
+
+  @override
+  String get adminCardExpired => 'Sona erdi';
+
+  @override
   String adminRmOk(String email) {
     return '$email izin listesinden kaldırıldı. Şimdi Play’de elle kaldırın: Play Console > Internal testing > Testers: bu e-postayı iç test kullanıcıları listesinden silin.';
   }

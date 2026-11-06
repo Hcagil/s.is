@@ -51,3 +51,6 @@ skill-updates/
 # Prebuilt codegen binaries restored by CI (docker/Dockerfile).
 docker/cargo-tools/*
 !docker/cargo-tools/.gitkeep
+
+# ci_local copies the private tests here.
+supabase/tests/private/

@@ -65,7 +65,8 @@ abstract interface class MessageStore {
   /// Applies a page the server just returned for [conversationId] (oldest
   /// first) in one transaction: upserts it, deletes stored rows of the same
   /// time range that the server no longer returns (everything, when
-  /// [reachedStart]), and moves the chat's [StoredSync]. [reachedStart] is
+  /// [reachedStart]; never rows newer than the page's newest; an empty page
+  /// deletes nothing unless [reachedStart]), and moves the chat's [StoredSync]. [reachedStart] is
   /// true when the page is shorter than the page size, i.e. it holds the
   /// first message.
   Future<void> reconcilePage(

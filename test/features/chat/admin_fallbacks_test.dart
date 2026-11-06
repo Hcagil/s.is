@@ -9,18 +9,23 @@ import 'package:sis/features/chat/presentation/member_name.dart';
 import '../../support/l10n.dart';
 
 void main() {
-  test('admin chat without staffKey shows the neutral staff title, not Member', () {
-    const c = Conversation(id: 'c1', isAdminChat: true);
-    for (final l in [l10nEn, l10nTr]) {
-      expect(conversationLabel(l, c), l.staffChatTitleFallback);
-      expect(conversationLabel(l, c), isNot(l.commonMember));
-    }
-  });
+  test(
+    'admin chat without staffKey shows the neutral staff title, not Member',
+    () {
+      const c = Conversation(id: 'c1', isAdminChat: true);
+      for (final l in [l10nEn, l10nTr]) {
+        expect(conversationLabel(l, c), l.staffChatTitleFallback);
+        expect(conversationLabel(l, c), isNot(l.commonMember));
+      }
+    },
+  );
 
   for (final (key, on) in [('podSwOn', true), ('podSwOff', false)]) {
     test('$key without c uses the neutral title in EN and TR', () {
       for (final l in [l10nEn, l10nTr]) {
-        final want = on ? l.salesSwOn(l.salesTitle) : l.salesSwOff(l.salesTitle);
+        final want = on
+            ? l.salesSwOn(l.salesTitle)
+            : l.salesSwOff(l.salesTitle);
         expect(adminReplyText(l, {'k': key}), want);
         expect(adminReplyText(l, {'k': key}), contains(l.salesTitle));
       }

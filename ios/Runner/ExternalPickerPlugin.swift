@@ -142,7 +142,6 @@ final class ExternalPickerPlugin: NSObject, FlutterPlugin, PHPickerViewControlle
   }
 
   func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
-    picker.dismiss(animated: true)
     guard let reply = pending else { return }
     pending = nil
     if results.isEmpty {

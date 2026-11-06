@@ -84,7 +84,7 @@ void main() {
     // The server addresses the push to whoever is signed in on the phone.
     final owner = disk.values['flutter.sis.push_inbox_owner'];
     NativeReceiver(shade, disk).receive({
-      if (owner != null) 'user_id': owner,
+      'user_id': ?owner,
       'conversation_id': chat,
       'title': title,
       'body': body,

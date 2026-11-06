@@ -732,8 +732,7 @@ void main() {
       expect(jsonEncode(disk.values), contains('for Bea'));
     });
 
-    _android('a push without user_id (a server from before it was sent) '
-        'still draws for the member signed in', (t) async {
+    _android('a push without user_id is nobody\'s and is not drawn', (t) async {
       final auth = FakeAuth(session: true, member: ava);
       final p = ProfileFake(profile: profileOf(ava));
       await launch(t, auth, p);
@@ -741,8 +740,8 @@ void main() {
 
       await background(t, dataPush('c-old', 'Cal', 'no address'));
 
-      expect(shade.childChats, {'c-old'});
-      expect(jsonEncode(disk.values), contains('no address'));
+      expect(shade.childChats, isEmpty);
+      expect(jsonEncode(disk.values), isNot(contains('no address')));
     });
   });
 

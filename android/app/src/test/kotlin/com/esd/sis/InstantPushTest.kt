@@ -58,9 +58,13 @@ class InstantPushTest {
         assertFalse(decide(owner = null, targetUser = null))
     }
 
-    /** As the Dart handler: a server from before user_id was sent still draws for the signed-in member. */
+    /** The server sends user_id on every push (since #40): a push naming no user is nobody's, like a wrong owner. */
     @Test
-    fun `a push naming no user draws for the signed-in member`() = assertTrue(decide(targetUser = null))
+    fun `a push naming no user draws nothing`() {
+        assertFalse(decide(targetUser = null))
+        assertFalse(decide(targetUser = ""))
+        assertFalse(decide(targetUser = "  "))
+    }
 
     @Test
     fun `missing title, body or conversation draws nothing`() = assertFalse(decide(hasFields = false))
@@ -73,6 +77,7 @@ class InstantPushTest {
         assertFalse(decide(appInForeground = true))
         assertFalse(decide(notificationsEnabled = false))
         assertFalse(decide(targetUser = "member-b"))
+        assertFalse(decide(targetUser = null))
         assertFalse(decide(hasFields = false))
     }
 

@@ -113,6 +113,7 @@ void main() {
   /// Update 1).
   bool push(String chat, String title, String body) =>
       NativeReceiver(shade, disk).receive({
+        'user_id': 'member-a',
         'conversation_id': chat,
         'title': title,
         'body': body,

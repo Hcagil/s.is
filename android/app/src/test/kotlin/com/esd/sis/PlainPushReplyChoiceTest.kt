@@ -11,6 +11,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -21,7 +22,7 @@ import org.robolectric.annotation.Config
 /**
  * Which Reply a plain (not locked) push draws, decided by the action token's `a` list:
  * `reply` -> Mark as read + plain Reply; no `reply` (or unreadable token) with a user_id ->
- * Mark as read + the locked Reply (EncryptedReplyActivity); no user_id -> Mark as read only.
+ * Mark as read + the locked Reply (EncryptedReplyActivity); no user_id -> the push is not drawn (owner gate).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -52,7 +53,10 @@ class PlainPushReplyChoiceTest {
         InstantPush.resetPacing()
     }
 
-    private fun draw(chat: String, token: String, user: String? = "member-a"): Notification {
+    private fun draw(chat: String, token: String, user: String? = "member-a"): Notification =
+        drawOrNull(chat, token, user)!!
+
+    private fun drawOrNull(chat: String, token: String, user: String? = "member-a"): Notification? {
         val b = Bundle().apply {
             putString("message_id", "00000000-0000-4000-8000-%012d".format(++seq))
             putString("conversation_id", chat)
@@ -67,7 +71,7 @@ class PlainPushReplyChoiceTest {
             putString("action_url", "https://project.example/functions/v1/notification-action")
         }
         PushArrivalReceiver().onReceive(app, Intent("com.google.android.c2dm.intent.RECEIVE").apply { putExtras(b) })
-        return shadowOf(manager).getNotification(InstantPush.notificationId(chat))!!
+        return shadowOf(manager).getNotification(InstantPush.notificationId(chat))
     }
 
     private fun titles(n: Notification) = n.actions.orEmpty().map { it.title.toString() }
@@ -98,9 +102,8 @@ class PlainPushReplyChoiceTest {
     }
 
     @Test
-    fun `no reply and no user_id gives Mark as read only`() {
-        val n = draw("c-ch-3", fixtureActionToken("mark_read"), user = null)
-        assertEquals(listOf("Mark as read"), titles(n))
+    fun `a push with no user_id is not drawn at all`() {
+        assertNull("owner-less push must draw nothing", drawOrNull("c-ch-3", fixtureActionToken("mark_read"), user = null))
     }
 
     @Test

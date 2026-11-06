@@ -319,15 +319,33 @@ void main() {
       expect(shade.childChats, {_chat});
     });
 
-    test('shown: an owner, a push without user_id (older server)', () async {
-      await LocalPushDisplay.forUser('member-a');
-      final mark = (await receipts()).length;
+    for (final (name, extra) in <(String, Map<String, dynamic>)>[
+      ('missing', {}),
+      ('null', {'user_id': null}),
+      ('not a String', {'user_id': 42}),
+    ]) {
+      test('dropped:owner_mismatch: user_id $name (a forged push)', () async {
+        await LocalPushDisplay.forUser('member-a');
+        final mark = (await receipts()).length;
 
-      await background(_push());
+        await background(
+          _push(
+            data: {
+              'conversation_id': _chat,
+              'title': _title,
+              'body': _body,
+              'message_id': _msg,
+              ...extra,
+            },
+          ),
+        );
 
-      expect((await stages()).sublist(mark), ['received', 'shown']);
-      expect(shade.childChats, {_chat});
-    });
+        expect((await stages()).sublist(mark), [
+          'received',
+          'dropped:owner_mismatch',
+        ]);
+      });
+    }
 
     test('shown: the note is still ",q" (the receiver is drawing it) when '
         'the handler runs', () async {

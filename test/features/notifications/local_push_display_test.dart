@@ -81,7 +81,10 @@ void main() {
   /// (the only drawer since Update 1), writing the preferences file under
   /// whatever copy an isolate holds, as a native write does.
   Future<void> push(String chat, String title, String body) async {
+    // The server addresses the push to whoever is signed in on the phone.
+    final owner = disk.values['flutter.sis.push_inbox_owner'];
     NativeReceiver(shade, disk).receive({
+      'user_id': ?owner,
       'conversation_id': chat,
       'title': title,
       'body': body,

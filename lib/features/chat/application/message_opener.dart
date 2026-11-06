@@ -137,10 +137,14 @@ class StoreMessageOpener implements MessageOpener {
   bool _locked(Message m) =>
       m.ciphertext != null && m.olmType != null && m.deletion == null;
 
+  /// Only one of ciphertext / olmType is set: a forged row, never real text.
+  bool _half(Message m) =>
+      (m.ciphertext == null) != (m.olmType == null) && m.deletion == null;
+
   @override
   Future<List<Message>> open(List<Message> rows, {bool fresh = false}) {
     final memory = _memory();
-    if (rows.every((m) => !_locked(m)) &&
+    if (rows.every((m) => !_locked(m) && !_half(m)) &&
         (memory == null || !rows.any(_plainSuspect))) {
       return Future.value(rows);
     }
@@ -151,6 +155,11 @@ class StoreMessageOpener implements MessageOpener {
       _tries = 0;
       if (_pending.isNotEmpty) _schedule();
       final out = List<Message>.of(rows);
+      for (var i = 0; i < rows.length; i++) {
+        if (_half(rows[i])) {
+          out[i] = rows[i].withPlain(lockedBodyPlaceholder, null);
+        }
+      }
       await _markHeld(rows, memory);
       final keys = <String, Result<ClaimedKeys?>>{};
       // Oldest first, so a pre-key message makes its session before the normal ones behind it.
@@ -190,7 +199,7 @@ class StoreMessageOpener implements MessageOpener {
     }).catchError((_) {
       return [
         for (final m in rows)
-          _locked(m) ? m.withPlain(lockedBodyPlaceholder, null) : m,
+          _locked(m) || _half(m) ? m.withPlain(lockedBodyPlaceholder, null) : m,
       ];
     });
   }

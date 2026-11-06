@@ -104,8 +104,9 @@ void main() {
   }
 
   group('1 what is locked', () {
-    test('plain, deleted-locked and half-locked rows pass unchanged, '
-        'the same instances, and nothing is decrypted', () async {
+    test('plain and deleted-locked rows pass unchanged (same instances), a '
+        'half-locked row shows the locked placeholder, and nothing is '
+        'decrypted', () async {
       final rows = [
         plain('p1'),
         locked('d1', deletion: MessageDeletion.vanished),
@@ -120,9 +121,10 @@ void main() {
       ];
       final out = await make().open(rows);
       expect(out, hasLength(3));
-      for (var i = 0; i < 3; i++) {
+      for (var i = 0; i < 2; i++) {
         expect(identical(out[i], rows[i]), isTrue, reason: rows[i].id);
       }
+      expect(out[2].body, lockedBodyPlaceholder);
       expect(engine.calls, isEmpty);
     });
 

@@ -34,6 +34,7 @@ language plpgsql security definer set search_path = '' as $$
 declare
   t text := btrim(body, E' \t\r\n');
   parts text[]; c text; em text; masked text; outcome text; cnt integer;
+  fn regprocedure;
   sk text; h text; rest text;
 begin
   parts := regexp_split_to_array(t, '\s+');
@@ -42,7 +43,8 @@ begin
   select c2.staff_key into sk from public.conversations c2 where c2.id = conv;
   select s.handler into h from app_private.staff_commands s where s.chat_key = sk and s.word = c;
   -- A private word whose server function is missing is an unknown word.
-  if h like 'private:%' and to_regprocedure('app_private.private_handler(text,uuid,uuid,text,text)') is null then h := null; end if;
+  fn := to_regprocedure('app_private.private_handler(text,uuid,uuid,text,text)');
+  if h like 'private:%' and fn is null then h := null; end if;
   -- Outside the first chat only private words are ours: stay silent before any sweep, limit or log.
   if sk is distinct from 'staff_a' and (h is null or h not like 'private:%') then return; end if;
   -- No cron: each command first drops the raw email of expired cards and ended jobs.
@@ -66,7 +68,8 @@ begin
     outcome := 'unk'; c := 'unknown'; em := null;
   elsif h like 'private:%' then
     -- Values only (USING): the name and the text never become SQL.
-    execute format('select %s($1,$2,$3,$4,$5)', to_regprocedure('app_private.private_handler(text,uuid,uuid,text,text)')::regproc) using substr(h, 9), conv, owner, c, rest;
+    if fn is null then raise exception 'private handler missing'; end if;
+    execute format('select %s($1,$2,$3,$4,$5)', fn::regproc) using substr(h, 9), conv, owner, c, rest;
     outcome := 'ok'; em := null;
   elsif h = 'tester_list' then
     outcome := app_private.admin_cmd_list(conv); em := null;
@@ -110,7 +113,7 @@ create or replace function app_private.sales_handle(conv uuid, uid uuid, body te
   begin
     -- A private word is answered by the private path only: no reply, no row, no rate-limit count here.
     select c.staff_key into sk from public.conversations c where c.id = conv;
-    first_word := lower((regexp_split_to_array(btrim(body), '\s+'))[1]);
+    first_word := lower((regexp_split_to_array(t, '\s+'))[1]);
     if exists (select 1 from app_private.staff_commands s where s.chat_key = sk and s.word = first_word and s.handler like 'private:%') then
       return;
     end if;
@@ -150,7 +153,7 @@ create or replace function app_private.sales_handle(conv uuid, uid uuid, body te
     d := app_private.sales_business_day(now());
     prev := d < ist::date;
 
-    -- Shared 30 s gap between Vega calls: a fresh answer is reused.
+    -- Shared 30 s gap between upstream calls: a fresh answer is reused.
     if st.fetched_at is not null and st.fetched_at > now() - interval '30 seconds' and st.day = d and st.amount is not null then
       perform app_private.admin_reply(conv, jsonb_build_object('k', case when prev then 'podPrev' else 'pod' end, 'amt', st.amount, 'day', d, 'at', st.fetched_at));
       insert into app_private.sales_commands(user_id, command, outcome) values (uid,'sales_total','cache');
@@ -174,6 +177,7 @@ declare
   jid uuid;
   mid uuid;
   card_k text;
+  pa regprocedure;
 begin
   if not (select app_private.has_app_access()) or not (select app_private.is_owner()) then
     raise exception 'not permitted' using errcode = '42501';
@@ -212,7 +216,8 @@ begin
 
   if p.kind like 'private:%' then
     -- The private code does the work; this function only keeps the card's life: used after a clean return, else expired.
-    if to_regprocedure('app_private.private_answer(uuid,boolean,uuid)') is null then
+    pa := to_regprocedure('app_private.private_answer(uuid,boolean,uuid)');
+    if pa is null then
       update app_private.admin_pending set state = 'expired', email = null where card_message_id = card;
       update public.messages set admin_msg = admin_msg || jsonb_build_object('st','expired')
        where id = card and not (admin_msg ? 'st');
@@ -220,7 +225,7 @@ begin
       return;
     end if;
     begin
-      execute format('select %s($1,$2,$3)', to_regprocedure('app_private.private_answer(uuid,boolean,uuid)')::regproc) using card, yes, conv;
+      execute format('select %s($1,$2,$3)', pa::regproc) using card, yes, conv;
     exception when others then
       perform set_config('app_private.admin_write', 'on', true);
       update app_private.admin_pending set state = 'expired', email = null where card_message_id = card;

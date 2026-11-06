@@ -16,7 +16,7 @@ begin
 
   -- 1. Check if private handlers exist and required functions are present
   select count(*) into n from app_private.staff_commands where handler like 'private:%';
-  if n > 0 and (h is null or s is null) then
+  if n > 0 and (h is null or a is null or s is null or r is null) then
     raise exception 'missing private handler count %', n;
   end if;
 

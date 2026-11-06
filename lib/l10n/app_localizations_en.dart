@@ -2308,6 +2308,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminConfCancelled => 'Canceled';
 
   @override
+  String get adminCardConfirm => 'Confirm';
+
+  @override
+  String get adminCardCancel => 'Cancel';
+
+  @override
+  String get adminCardDone => 'Done';
+
+  @override
+  String get adminCardExpired => 'Expired';
+
+  @override
   String adminRmOk(String email) {
     return 'Removed $email from the allowlist. Now remove it by hand in Play: Play Console > Internal testing > Testers: delete this email from the internal testers list.';
   }

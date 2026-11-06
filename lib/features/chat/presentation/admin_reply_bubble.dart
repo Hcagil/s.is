@@ -69,6 +69,7 @@ String adminPreviewLine(AppLocalizations l, Map<String, dynamic> m) =>
       'list' => l.adminListHeader(m['n'] as int? ?? 0),
       'fwd' => l.adminFwdTitle,
       'conf' => l.adminConfTitle,
+      'card' || 'note' => ('${m['t'] ?? ''}').split('\n').first,
       'pod' || 'podPrev' => l.salesTitle,
       _ => (adminReplyText(l, m) ?? '').split('\n').first,
     };
@@ -197,6 +198,38 @@ class _AdminReplyBubbleState extends ConsumerState<AdminReplyBubble> {
                 st == 'done' ? l.adminConfDone : l.adminConfCancelled,
                 style: muted,
               ),
+          ],
+        );
+      case 'note':
+        content = Text('${m['t'] ?? ''}');
+      case 'card':
+        // Same shape as the 'conf' case: server text, then Cancel/Confirm (-> _answer(false/true)), or the state line.
+        final st = m['st'] as String?;
+        content = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${m['t'] ?? ''}'),
+            const SizedBox(height: 8),
+            if (st == null)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextButton(
+                    onPressed: _busy ? null : () => _answer(false),
+                    child: Text(l.adminCardCancel),
+                  ),
+                  TextButton(
+                    onPressed: _busy ? null : () => _answer(true),
+                    child: Text(l.adminCardConfirm),
+                  ),
+                ],
+              )
+            else
+              Text(switch (st) {
+                'done' => l.adminCardDone,
+                'cancelled' => l.adminConfCancelled,
+                _ => l.adminCardExpired,
+              }, style: muted),
           ],
         );
       case 'pod' || 'podPrev':

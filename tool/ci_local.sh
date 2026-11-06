@@ -89,6 +89,29 @@ integration() {
     flutter flutter test --run-skipped --tags integration --concurrency=1 test/integration
 }
 
+# The private functions and their tests live outside git, in the main checkout's .private/ops (found through the git common dir, so a worktree sees them).
+# No private-sql folder: skipped, unless the marker file EXPECT_PRIVATE says this machine must have them; then it FAILS.
+private_scripts() {
+  local main priv f n=0
+  main=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
+  priv="$main/.private/ops"
+  shopt -s nullglob
+  if [ ! -d "$priv/private-sql" ] || [ -z "$(echo "$priv"/private-sql/*.sql)" ]; then
+    if [ -e "$priv/EXPECT_PRIVATE" ]; then echo 'private scripts are expected here but .private/ops/private-sql has no .sql file' >&2; return 1; fi
+    echo 'no private scripts on this machine: skipped'
+    return 0
+  fi
+  for f in "$priv"/private-sql/*.sql; do
+    docker exec -i supabase_db_s.is psql -U postgres -v ON_ERROR_STOP=1 -q < "$f" >/dev/null 2>&1 || { echo 'private install failed' >&2; return 1; }
+  done
+  docker compose run --rm supabase db query --local -f tool/private_check.sql || return 1
+  for f in "$priv"/private-tests/*.sql; do n=$((n + 1)); done
+  [ "$n" -gt 0 ] || { echo 'no private tests found' >&2; return 1; }
+  rm -rf supabase/tests/private && mkdir -p supabase/tests/private && cp "$priv"/private-tests/*.sql supabase/tests/private/
+  docker compose run --rm supabase test db supabase/tests/private || { rm -rf supabase/tests/private; return 1; }
+  rm -rf supabase/tests/private
+}
+
 job_android() {
   step "Build development image" "${CI[@]}" build || return 1
   step "Resolve dependencies" "${CI[@]}" run --rm flutter flutter pub get || return 1
@@ -115,6 +138,7 @@ job_database() {
   step "Start Supabase and replay migrations" docker compose run --rm supabase start -x "$SKIP" || return 1
   step "Lint database" docker compose run --rm supabase db lint --level error || return 1
   step "Test database" docker compose run --rm supabase test db || return 1
+  step "Private functions and tests" private_scripts || return 1
   step "Edge function tests" edge_tests || return 1
   step "Build development image" "${CI[@]}" build flutter || return 1
   step "Build the Rust library for the Dart tests" "${CI[@]}" run --rm flutter cargo build --release --manifest-path rust/Cargo.toml || return 1

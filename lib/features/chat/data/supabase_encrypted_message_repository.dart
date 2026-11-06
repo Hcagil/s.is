@@ -14,7 +14,7 @@ final class SupabaseEncryptedMessageRepository
   final SupabaseClient _client;
 
   static const _columns =
-      'id, conversation_id, sender_id, body, created_at, reply_to, forwarded, edited_at';
+      'id, conversation_id, sender_id, body, created_at, reply_to, forwarded, edited_at, ciphertext, olm_type';
 
   @override
   Future<Result<Message>> send({
@@ -49,7 +49,7 @@ final class SupabaseEncryptedMessageRepository
         try {
           final row = await _client
               .from('messages')
-              .select('$_columns, ciphertext')
+              .select(_columns)
               .eq('id', id)
               .maybeSingle()
               .retriedOnce();
@@ -96,11 +96,13 @@ final class SupabaseEncryptedMessageRepository
   }
 
   Message _toMessage(Map<String, dynamic> row) {
+    // Exactly one of the two set is a forged row: show it locked, never plain.
+    final half = (row['ciphertext'] == null) != (row['olm_type'] == null);
     return Message(
       id: row['id'] as String,
       conversationId: row['conversation_id'] as String,
       senderId: row['sender_id'] as String,
-      body: row['body'] as String,
+      body: half ? lockedBodyPlaceholder : row['body'] as String,
       createdAt: DateTime.parse(row['created_at'] as String).toLocal(),
       replyTo: row['reply_to'] as String?,
       forwarded: row['forwarded'] as bool? ?? false,

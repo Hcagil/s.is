@@ -387,7 +387,10 @@ final class DriftMessageStore
       final oldest = page.isEmpty
           ? null
           : page.first.createdAt.microsecondsSinceEpoch;
-      // Stored rows the server no longer returns for the range this page covers; a held chat keeps its placeholders.
+      final pageNewest = page.isEmpty
+          ? null
+          : page.last.createdAt.microsecondsSinceEpoch;
+      // Stored rows the server no longer returns for the range this page covers (never newer than its pageNewest row); a held chat keeps its placeholders.
       await (db.delete(db.messages)..where((t) {
             final stale =
                 t.conversationId.equals(conversationId) &
@@ -395,9 +398,14 @@ final class DriftMessageStore
                 (held
                     ? t.body.equals(lockedBodyPlaceholder).not()
                     : const Constant(true));
-            return reachedStart || oldest == null
-                ? stale
-                : stale & t.createdAt.isBiggerOrEqualValue(oldest);
+            // An empty page covers no range: it deletes all only as the server's "chat is empty" (reachedStart).
+            if (pageNewest == null) {
+              return reachedStart ? stale : const Constant(false);
+            }
+            final upTo = stale & t.createdAt.isSmallerOrEqualValue(pageNewest);
+            return reachedStart
+                ? upTo
+                : upTo & t.createdAt.isBiggerOrEqualValue(oldest!);
           }))
           .go();
       for (final m in page) {

@@ -3926,35 +3926,17 @@ abstract class AppLocalizations {
   /// **'That email address doesn\'t look right.'**
   String get adminBad;
 
+  /// Staff chat title fallback
+  ///
+  /// In en, this message translates to:
+  /// **'Team chat'**
+  String get staffChatTitleFallback;
+
   /// Admin chat reply text
   ///
   /// In en, this message translates to:
   /// **'Commands:'**
   String get adminHelpHeader;
-
-  /// Admin chat reply text
-  ///
-  /// In en, this message translates to:
-  /// **'Add an iPhone tester'**
-  String get adminHelpIos;
-
-  /// Admin chat reply text
-  ///
-  /// In en, this message translates to:
-  /// **'Add an Android tester'**
-  String get adminHelpAnd;
-
-  /// Admin chat reply text
-  ///
-  /// In en, this message translates to:
-  /// **'Remove a tester'**
-  String get adminHelpRm;
-
-  /// Admin chat reply text
-  ///
-  /// In en, this message translates to:
-  /// **'Show all testers'**
-  String get adminHelpList;
 
   /// Admin chat reply text
   ///
@@ -3989,7 +3971,7 @@ abstract class AppLocalizations {
   /// Admin chat reply text
   ///
   /// In en, this message translates to:
-  /// **'Added {email} to the allowlist. One step by hand: add this email to Play Console > Internal testing > Testers > Bacanaks.'**
+  /// **'Added {email} to the allowlist. One step by hand: add this email to the internal testers list in Play Console.'**
   String adminAndOk(String email);
 
   /// Admin chat reply text
@@ -4061,7 +4043,7 @@ abstract class AppLocalizations {
   /// Admin chat reply text
   ///
   /// In en, this message translates to:
-  /// **'Removed {email} from the allowlist. Now remove it by hand in Play: Play Console > Internal testing > Testers > Bacanaks > delete this email.'**
+  /// **'Removed {email} from the allowlist. Now remove it by hand in Play: Play Console > Internal testing > Testers: delete this email from the internal testers list.'**
   String adminRmOk(String email);
 
   /// Admin chat reply text
@@ -4418,89 +4400,71 @@ abstract class AppLocalizations {
   /// **'Reacted {emoji} to your file'**
   String noticeReactionToFile(String emoji);
 
-  /// Bacanaks Ozel command chat
+  /// Staff chat command reply
   ///
   /// In en, this message translates to:
   /// **'Total money'**
-  String get podTitle;
+  String get salesTitle;
 
-  /// Bacanaks Ozel command chat
+  /// Staff chat command reply
   ///
   /// In en, this message translates to:
   /// **'Previous day\'s total ({date})'**
-  String podPrevTitle(String date);
+  String salesPrevTitle(String date);
 
-  /// Bacanaks Ozel command chat
+  /// Staff chat command reply
   ///
   /// In en, this message translates to:
-  /// **'From Vega, fetched at {time}'**
-  String podFetched(String time);
+  /// **'Fetched from Vega at {time}'**
+  String salesFetched(String time);
 
-  /// Bacanaks Ozel command chat
+  /// Staff chat command reply
   ///
   /// In en, this message translates to:
-  /// **'Vega did not answer.'**
-  String get podFail;
+  /// **'Vega did not answer. Please try again later.'**
+  String get salesFail;
 
-  /// Bacanaks Ozel command chat
+  /// Staff chat command reply
   ///
   /// In en, this message translates to:
   /// **'This command is turned off.'**
-  String get podOff;
+  String get salesOff;
 
-  /// Bacanaks Ozel command chat
+  /// Staff chat command reply
   ///
   /// In en, this message translates to:
-  /// **'Unknown command. Try /podium.'**
-  String get podUnk;
+  /// **'Unknown command. Try {cmd}.'**
+  String salesUnknown(String cmd);
 
-  /// Bacanaks Ozel command chat
+  /// Staff chat command reply
   ///
   /// In en, this message translates to:
-  /// **'Too many commands. Wait a minute and try again.'**
-  String get podRate;
+  /// **'Too many commands. Please try again in a minute.'**
+  String get salesRate;
 
-  /// Bacanaks Ozel command chat
+  /// Staff chat command reply
   ///
   /// In en, this message translates to:
-  /// **'/podium is turned on.'**
-  String get podSwOn;
+  /// **'{cmd} is turned on.'**
+  String salesSwOn(String cmd);
 
-  /// Bacanaks Ozel command chat
+  /// Staff chat command reply
   ///
   /// In en, this message translates to:
-  /// **'/podium is turned off.'**
-  String get podSwOff;
+  /// **'{cmd} is turned off.'**
+  String salesSwOff(String cmd);
 
-  /// Bacanaks Ozel command chat
+  /// Staff chat command reply
   ///
   /// In en, this message translates to:
   /// **'Type / for commands'**
-  String get podHint;
+  String get salesHint;
 
   /// Admin chat field hint
   ///
   /// In en, this message translates to:
   /// **'Type / for commands'**
   String get adminHint;
-
-  /// Command list row meaning
-  ///
-  /// In en, this message translates to:
-  /// **'Turn on /podium'**
-  String get cmdPodOnMeaning;
-
-  /// Command list row meaning
-  ///
-  /// In en, this message translates to:
-  /// **'Turn off /podium'**
-  String get cmdPodOffMeaning;
-
-  /// Command list row meaning
-  ///
-  /// In en, this message translates to:
-  /// **'Show total money from Vega'**
-  String get cmdPodMeaning;
 
   /// Command list argument hint
   ///
@@ -4514,11 +4478,11 @@ abstract class AppLocalizations {
   /// **'{command}, {meaning}'**
   String cmdRowLabel(String command, String meaning);
 
-  /// Bacanaks Ozel command chat
+  /// Staff chat command reply
   ///
   /// In en, this message translates to:
   /// **'Not end-to-end encrypted'**
-  String get podNotEnc;
+  String get salesNotEnc;
 
   /// Delete box question
   ///

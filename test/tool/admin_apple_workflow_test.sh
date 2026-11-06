@@ -296,7 +296,7 @@ EOS
   : > "$d/calls"; : > "$d/tool"; : > "$d/used"; : > "$d/out"
   (cd "$d" && env -i PATH="$bin:/usr/bin:/bin" HOME="$d" A8_DIR="$d" A8_TOKEN=$A8_TOKEN A8_EMAIL=$A8_EMAIL \
     A8_KIND=${A8_KIND:-add} A8_TOKFAIL="${A8_TOKFAIL-}" JOB_ID=0b1e2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d SUPABASE_URL=https://sb.example.test \
-    KEY=pemdata KEY_ID=K1 ISSUER_ID=I1 TF_GROUPS=bacanaks RUNNER_TEMP="$d/tmp" \
+    KEY=pemdata KEY_ID=K1 ISSUER_ID=I1 TF_GROUPS="${A8_GROUPS-crew,Friends Club}" RUNNER_TEMP="$d/tmp" \
     ACTIONS_ID_TOKEN_REQUEST_TOKEN=req-tok ACTIONS_ID_TOKEN_REQUEST_URL='https://tok.example.test/x?api=1' \
     bash "$d/job.sh" >> "$d/out" 2> "$d/err"); echo $? > "$d/rc"
 }
@@ -315,14 +315,25 @@ a8() {
   # claim and finish, each with its own fresh token
   fresh "$d" 2 || { echo "A8 calls: $(cat "$d/calls")" >&2; return 1; }
   grep -q "^report $t-1 .*\"action\":\"claim\"" "$d/calls" && grep -q "^report $t-2 .*\"action\":\"finish\"" "$d/calls" || return 1
-  # stdout: exactly the masks: claim token, the email straight after the claim, finish token
+  # stdout: exactly the masks: every group name first, then the claim token,
+  # the email straight after the claim, the finish token
   o=$(cat "$d/out")
-  [ "$o" = "::add-mask::$t-1"$'\n'"::add-mask::$A8_EMAIL"$'\n'"::add-mask::$t-2" ] || { echo "A8 stdout: $o" >&2; return 1; }
+  [ "$o" = "::add-mask::crew"$'\n'"::add-mask::Friends Club"$'\n'"::add-mask::$t-1"$'\n'"::add-mask::$A8_EMAIL"$'\n'"::add-mask::$t-2" ] || { echo "A8 stdout: $o" >&2; return 1; }
   ! grep -qF "$A8_EMAIL" "$d/err" && ! grep -qF "$t" "$d/err" || return 1
   # the claim parsed: the tool got the email, from env only
-  [ "$(cat "$d/tool")" = "tool TESTER_EMAIL=$A8_EMAIL argv=tool/asc_signing.py tester add bacanaks" ] ||
+  [ "$(cat "$d/tool")" = "tool TESTER_EMAIL=$A8_EMAIL argv=tool/asc_signing.py tester add crew,Friends Club" ] ||
     { echo "A8 tool: $(cat "$d/tool")" >&2; return 1; }
   [ "$(finish_of "$d")" = '"action":"finish","job_id":"0b1e2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d","ok":true,"reason":"ok"' ] || return 1
+  rm -rf "$d"
+}
+a13() {
+  local d
+  # TF_GROUPS empty (a missing secret reaches the step as ''): the step fails
+  # before any token, report or tool call, and prints nothing on stdout
+  d=$(mktemp -d); A8_GROUPS= job_run "$d" "0"
+  [ "$(cat "$d/rc")" != 0 ] && [ ! -s "$d/calls" ] && [ ! -s "$d/tool" ] && [ ! -s "$d/out" ] &&
+    grep -q 'TF_GROUPS is not set' "$d/err" ||
+    { echo "A13: rc $(cat "$d/rc") calls [$(cat "$d/calls")] tool [$(cat "$d/tool")]" >&2; return 1; }
   rm -rf "$d"
 }
 a10() {
@@ -369,7 +380,16 @@ a9() {
   [ "$(grep -c '"action":"finish"' "$d/calls")" = 1 ] || return 1
   fresh "$d" "$(grep -c '^report ' "$d/calls")" || return 1   # progress too: a fresh token each
   rm -rf "$d"; d=$(mktemp -d); A8_KIND=remove job_run "$d" "0"
-  [ "$(cat "$d/rc")" = 0 ] && grep -q 'argv=tool/asc_signing.py tester remove bacanaks' "$d/tool" || return 1
+  [ "$(cat "$d/rc")" = 0 ] && grep -q 'argv=tool/asc_signing.py tester remove crew' "$d/tool" || return 1
+  rm -rf "$d"
+}
+a14() {
+  # The job runs in $d, which holds the file "calls": unless globbing is off, c*ll? would be masked as "calls".
+  local d o; d=$(mktemp -d); A8_GROUPS='crew,c*ll?' job_run "$d" "0"
+  [ -e "$d/calls" ] || { echo "A14: no file for the pattern to match" >&2; return 1; }
+  o=$(head -2 "$d/out")
+  [ "$o" = "::add-mask::crew"$'\n'"::add-mask::c*ll?" ] || { echo "A14 masks: $o" >&2; return 1; }
+  ! grep -qxF '::add-mask::calls' "$d/out" || return 1
   rm -rf "$d"
 }
 b1() { grep -qE '^\s+environment:\s*apple-signing\s*$' "$B" ||
@@ -387,6 +407,8 @@ check "A9 admin-apple: tool exit 1 -> rejected, 75 x3 -> timeout, remove passes 
 check "A10 admin-apple: claim token fetch fails: the job stops, nothing reported, tool never runs" a10
 check "A11 admin-apple: progress token fetch fails: ignored, retries and finish go on" a11
 check "A12 admin-apple: finish token fetch fails: swallowed, tool's exit code kept, no false reason" a12
+check "A13 admin-apple: TF_GROUPS empty: the job fails first, nothing called, nothing printed" a13
+check "A14 admin-apple: a group name with * or ? is masked as written, never glob-expanded" a14
 check "R1 release: workflow_run on CI, daily schedule and dispatch, no tip-of-main check left" r1
 check "R1c release publish/distribute + ios-ipa ipa (upload true): first step is the release guard; a re-run never deploys a commit older than the last release" r1c
 check "R1d ios-ipa: CI's call (upload false) skips the release guard" r1d

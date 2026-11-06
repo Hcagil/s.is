@@ -11,9 +11,13 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/domain/file_attachment.dart';
+import 'package:sis/features/chat/application/staff_registry_controller.dart';
 import 'package:sis/features/chat/domain/send_queue_store.dart';
+import 'package:sis/features/chat/domain/staff_registry_repository.dart';
 import 'package:sis/features/chat/domain/video.dart';
 import 'package:sis/features/chat/presentation/video_player_page.dart';
+
+import 'fakes.dart' show StaffRegistryFake;
 
 /// A picked video, as DeviceVideos.pick hands it over (copied to [path]).
 VideoSource videoSource(
@@ -216,7 +220,12 @@ List<Override> videoOverrides({
   DeviceVideos? videos,
   VideoPlaybackFactory? playback,
   VideoSharer? sharer,
+  StaffRegistryRepository? staff,
 }) => [
+  // Every screen may read the staff registry; a normal member has none.
+  staffRegistryRepositoryProvider.overrideWithValue(
+    staff ?? StaffRegistryFake(),
+  ),
   sendQueueStoreProvider.overrideWithValue(store ?? SendQueueStoreFake()),
   deviceVideosProvider.overrideWithValue(videos ?? DeviceVideosFake()),
   videoPlaybackFactoryProvider.overrideWithValue(

@@ -28,6 +28,7 @@ import 'features/auth/data/file_last_session_store.dart';
 import 'features/auth/data/secure_session_storage.dart';
 import 'features/auth/data/supabase_auth_repository.dart';
 import 'features/chat/application/chat_controllers.dart';
+import 'features/chat/application/staff_registry_controller.dart';
 import 'features/chat/application/link_preview_controller.dart';
 import 'features/chat/application/encrypted_reply_controller.dart';
 import 'features/chat/application/share_controller.dart';
@@ -71,6 +72,7 @@ import 'features/chat/data/shared_prefs_played_voice_store.dart';
 import 'features/chat/data/shared_prefs_recent_sticker_store.dart';
 import 'features/chat/data/speech_dictation.dart';
 import 'features/chat/data/supabase_admin_chat_repository.dart';
+import 'features/chat/data/supabase_staff_registry_repository.dart';
 import 'features/chat/data/supabase_chat_archive_repository.dart';
 import 'features/chat/data/supabase_chat_delete_repository.dart';
 import 'features/chat/data/supabase_chat_file_repository.dart';
@@ -326,6 +328,9 @@ Future<void> main() async {
           ),
           adminChatRepositoryProvider.overrideWithValue(
             SupabaseAdminChatRepository(client),
+          ),
+          staffRegistryRepositoryProvider.overrideWithValue(
+            SupabaseStaffRegistryRepository(client),
           ),
           pollRepositoryProvider.overrideWithValue(
             SupabasePollRepository(client),

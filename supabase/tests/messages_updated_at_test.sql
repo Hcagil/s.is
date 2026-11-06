@@ -48,7 +48,11 @@ select is(has_column_privilege('anon', 'public.messages', 'updated_at', 'INSERT'
 select is(has_column_privilege('anon', 'public.messages', 'updated_at', 'UPDATE'),
           false, 'anon cannot update updated_at');
 select policies_are('public', 'messages',
-  array['messages_read', 'messages_send', 'messages_send_admin', 'messages_send_bacanaks'],
+  array['messages_read', 'messages_send', 'messages_send_admin',
+        -- the staff_b send policy is named after the old flag column (a private name): derived, never written
+        'messages_send_' || (select replace(column_name, '_chat', '') from information_schema.columns
+          where table_schema = 'public' and table_name = 'conversations' and column_name like '%\_chat'
+            and column_name not in ('admin_chat', 'debug_chat'))],
   'messages policies unchanged');
 
 -- fixtures ------------------------------------------------------------------

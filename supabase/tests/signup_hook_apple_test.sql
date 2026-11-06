@@ -12,8 +12,8 @@ begin;
 select plan(13);
 
 insert into app_private.allowlist(email) values
-  ('apple-ann@integration.test'),
-  ('x7f2k9@privaterelay.appleid.com'),
+  ('apple-ann@sis.test'),
+  ('q4m8z1@privaterelay.appleid.com'),
   ('apple-bot@example.com')
 on conflict do nothing;
 
@@ -29,23 +29,23 @@ create temp table _refused as
   select '{"error":{"http_code":403,"message":"not invited"}}'::jsonb as v;
 
 -- relay refused --------------------------------------------------------------
-select is(pg_temp.hook(pg_temp.ev('x7f2k9@privaterelay.appleid.com')), (select v from _refused),
+select is(pg_temp.hook(pg_temp.ev('q4m8z1@privaterelay.appleid.com')), (select v from _refused),
           'an allowlisted relay address through Apple is refused');
-select is(pg_temp.hook(pg_temp.ev('x7f2k9@privaterelay.appleid.com', 'google')), (select v from _refused),
+select is(pg_temp.hook(pg_temp.ev('q4m8z1@privaterelay.appleid.com', 'google')), (select v from _refused),
           'an allowlisted relay address is refused whatever the provider (google)');
-select is(pg_temp.hook(pg_temp.ev('x7f2k9@privaterelay.appleid.com', 'email')), (select v from _refused),
+select is(pg_temp.hook(pg_temp.ev('q4m8z1@privaterelay.appleid.com', 'email')), (select v from _refused),
           'an allowlisted relay address is refused whatever the provider (email)');
-select is(pg_temp.hook(pg_temp.ev('X7F2K9@PrivateRelay.AppleID.COM')), (select v from _refused),
+select is(pg_temp.hook(pg_temp.ev('Q4M8Z1@PrivateRelay.AppleID.COM')), (select v from _refused),
           'a mixed-case relay domain is refused');
-select is(pg_temp.hook(pg_temp.ev('  x7f2k9@PRIVATERELAY.APPLEID.COM  ')), (select v from _refused),
+select is(pg_temp.hook(pg_temp.ev('  q4m8z1@PRIVATERELAY.APPLEID.COM  ')), (select v from _refused),
           'a padded upper-case relay address is refused');
 
 -- real address through Apple admitted -----------------------------------------
-select is(pg_temp.hook(pg_temp.ev('apple-ann@integration.test')), '{}'::jsonb,
+select is(pg_temp.hook(pg_temp.ev('apple-ann@sis.test')), '{}'::jsonb,
           'an allowlisted real address signing up with Apple is admitted');
-select is(pg_temp.hook(pg_temp.ev(' Apple-Ann@Integration.TEST ')), '{}'::jsonb,
+select is(pg_temp.hook(pg_temp.ev(' Apple-Ann@Sis.TEST ')), '{}'::jsonb,
           'mixed case and padding of an allowlisted address through Apple are normalised');
-select is(pg_temp.hook(pg_temp.ev('apple-ann@integration.test', 'google')), '{}'::jsonb,
+select is(pg_temp.hook(pg_temp.ev('apple-ann@sis.test', 'google')), '{}'::jsonb,
           'the same address through Google is still admitted');
 
 -- earlier refusals hold through Apple ----------------------------------------
@@ -53,9 +53,9 @@ select is(pg_temp.hook(pg_temp.ev(null)), (select v from _refused),
           'an Apple event with a null email is refused');
 select is(pg_temp.hook('{"user":{"app_metadata":{"provider":"apple"}},"metadata":{}}'::jsonb),
           (select v from _refused), 'an Apple event without an email key is refused');
-select is(pg_temp.hook(pg_temp.ev('apple-stranger@integration.test')), (select v from _refused),
+select is(pg_temp.hook(pg_temp.ev('apple-stranger@sis.test')), (select v from _refused),
           'an uninvited real address through Apple is refused');
-select is(pg_temp.hook(pg_temp.ev('apple-ann+x@integration.test')), (select v from _refused),
+select is(pg_temp.hook(pg_temp.ev('apple-ann+x@sis.test')), (select v from _refused),
           'plus-addressing of an invited address through Apple is refused');
 select is(pg_temp.hook(pg_temp.ev('apple-bot@example.com')), (select v from _refused),
           'an allowlisted example.com address through Apple is refused');

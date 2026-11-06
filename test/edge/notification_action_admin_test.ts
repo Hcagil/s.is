@@ -108,7 +108,7 @@ Deno.test({
     const before = await adminRows();
     const id = crypto.randomUUID();
     const rep = await post({
-      token: await mint(adminConv), conversation_id: adminConv, action: 'reply', id, body: '/listtesters',
+      token: await mint(adminConv), conversation_id: adminConv, action: 'reply', id, body: '/list',
     });
     assertEquals(rep.status, 403, rep.text);
     assert(rep.text.includes('not_permitted'), `body names not_permitted: ${rep.text}`);

@@ -58,7 +58,7 @@ service_key() {
   "${CI[@]}" run --rm supabase status -o env | sed -n 's/^SECRET_KEY="\(.*\)"/\1/p'
 }
 
-layer_rules() { tool/check_pattern.sh && tool/check_release_clean.sh && test/tool/check_pattern_test.sh && test/tool/whats_new_note_test.sh && test/tool/ios_release_test.sh && test/tool/workflow_pipes_test.sh && test/tool/asc_signing_test.py && test/tool/ios_signing_bootstrap_test.py && test/tool/asc_tester_test.py && test/tool/admin_apple_workflow_test.sh && test/tool/sis_bot_watch_test.sh && test/tool/sis_bot_length_test.sh && test/tool/check_pr_body_test.py && test/tool/check_release_clean_test.sh && test/tool/sis_test_send_test.sh; }
+layer_rules() { tool/check_pattern.sh && tool/check_release_clean.sh && test/tool/check_pattern_test.sh && test/tool/whats_new_note_test.sh && test/tool/ios_release_test.sh && test/tool/workflow_pipes_test.sh && test/tool/asc_signing_test.py && test/tool/ios_signing_bootstrap_test.py && test/tool/asc_tester_test.py && test/tool/staff_rows_release_test.py && test/tool/vault_names_test.py && test/tool/admin_apple_workflow_test.sh && test/tool/sis_bot_watch_test.sh && test/tool/sis_bot_length_test.sh && test/tool/check_pr_body_test.py && test/tool/check_release_clean_test.sh && test/tool/sis_test_send_test.sh; }
 
 bundle() {
   test -f android/app/google-services.json \
@@ -83,6 +83,8 @@ edge_tests() {
 integration() {
   local key; key=$(service_key)
   test -n "$key"
+  # Rows no client can write (app_private), for staff_registry_repository_test.dart.
+  docker exec -i supabase_db_s.is psql -U postgres -v ON_ERROR_STOP=1 -qAt < test/integration/fixtures/staff_registry.sql >/dev/null
   "${CI[@]}" run --rm -e TZ=JST-9 -e SUPABASE_TEST_SERVICE_KEY="$key" \
     flutter flutter test --run-skipped --tags integration --concurrency=1 test/integration
 }

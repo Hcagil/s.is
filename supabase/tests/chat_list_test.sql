@@ -5,13 +5,13 @@ select plan(34);
 -- (security invoker, so RLS decides every row).
 --
 -- Fixtures: uma, vic, wes are friends. xan is allowlisted and active but in
--- no chat (the outsider). ada belongs only to an admin chat and a bacanaks
+-- no chat (the outsider). ada belongs only to an admin chat and a staff_b
 -- chat, which uma is NOT in.
 --   D  uma <-> vic     (vic deletes one message)
 --   G  uma, vic, wes   (wes leaves)
 --   H  uma <-> wes     (uma hides it)
 --   W  wes <-> vic     (uma is not in it)
---   A  admin chat, B bacanaks chat: ada only
+--   A  admin chat, B staff_b chat: ada only
 
 insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data) values
   ('00000000-0000-0000-0000-00000000cc01', 'uma@chatlist.test', now(), '{"full_name":"Uma"}'),
@@ -68,14 +68,20 @@ select test_as('00000000-0000-0000-0000-00000000cc03', 'c1000000-0000-0000-0000-
 insert into _c select 'W', public.start_direct_conversation('00000000-0000-0000-0000-00000000cc02');
 reset role;
 
--- admin and bacanaks chats with ada alone, written as the owner
+-- admin and staff_b chats with ada alone, written as the owner
 insert into public.conversations(id) values
   ('c2000000-0000-0000-0000-00000000cc0a'), ('c2000000-0000-0000-0000-00000000cc0b');
 insert into public.conversation_members(conversation_id, user_id) values
   ('c2000000-0000-0000-0000-00000000cc0a', '00000000-0000-0000-0000-00000000cc05'),
   ('c2000000-0000-0000-0000-00000000cc0b', '00000000-0000-0000-0000-00000000cc05');
 update public.conversations set admin_chat = true where id = 'c2000000-0000-0000-0000-00000000cc0a';
-update public.conversations set bacanaks_chat = true where id = 'c2000000-0000-0000-0000-00000000cc0b';
+-- B is a staff_b chat as production makes it: admin_chat, staff_key and the old flag column,
+-- which keeps a private name on the table, so it is found here, never written.
+update public.conversations set admin_chat = true, staff_key = 'staff_b' where id = 'c2000000-0000-0000-0000-00000000cc0b';
+do $o$ begin execute format('update public.conversations set %I = true where id = %L',
+  (select column_name from information_schema.columns where table_schema = 'public' and table_name = 'conversations'
+     and column_name like '%\_chat' and column_name not in ('admin_chat', 'debug_chat')),
+  'c2000000-0000-0000-0000-00000000cc0b'); end $o$;
 
 update public.conversation_members set last_read_at = now() - interval '1 hour'
  where conversation_id in (select id from _c);
@@ -87,7 +93,7 @@ insert into public.messages(conversation_id, sender_id, body, created_at) values
   ((select id from _c where k='H'), '00000000-0000-0000-0000-00000000cc03', 'h wes', now() - interval '12 minutes'),
   ((select id from _c where k='W'), '00000000-0000-0000-0000-00000000cc02', 'w secret', now() - interval '5 minutes'),
   ('c2000000-0000-0000-0000-00000000cc0a', '00000000-0000-0000-0000-00000000cc05', 'admin secret', now()),
-  ('c2000000-0000-0000-0000-00000000cc0b', '00000000-0000-0000-0000-00000000cc05', 'bacanaks secret', now());
+  ('c2000000-0000-0000-0000-00000000cc0b', '00000000-0000-0000-0000-00000000cc05', 'staff_b secret', now());
 
 -- vic deletes one message in D; wes leaves G; uma hides H
 select test_as('00000000-0000-0000-0000-00000000cc02', 'c1000000-0000-0000-0000-00000000cc02');
@@ -124,17 +130,18 @@ select is((select count(*)::int from _r, jsonb_array_elements(j->'previews') e
             where who='uma' and (e->>'conversation_id')::uuid not in (select id from _c where k in ('D','G','H'))),
   0, 'no previews from other chats');
 select is((select count(*)::int from _r, jsonb_array_elements(j->'previews') e
-            where who='uma' and e->>'body' in ('w secret','admin secret','bacanaks secret')), 0,
+            where who='uma' and e->>'body' in ('w secret','admin secret','staff_b secret')), 0,
   'no foreign message text');
 select is((select count(*)::int from _r, jsonb_array_elements(j->'members') e
             where who='uma' and (e->>'conversation_id')::uuid = (select id from _c where k='D')), 2,
   'D has both members');
 
--- admin_chat / bacanaks_chat invisible to non-members ----------------------
+-- admin_chat / staff_b chat invisible to non-members ----------------------
 select is((select count(*)::int from _r, jsonb_array_elements(j->'conversations') e
             where who='uma' and (e->>'admin_chat')::boolean), 0, 'admin chat not in uma list');
 select is((select count(*)::int from _r, jsonb_array_elements(j->'conversations') e
-            where who='uma' and (e->>'bacanaks_chat')::boolean), 0, 'bacanaks chat not in uma list');
+            where who='uma' and (e->>'id' = 'c2000000-0000-0000-0000-00000000cc0b' or e->>'staff_key' = 'staff_b')), 0,
+  'staff_b chat not in uma list');
 select is((select count(*)::int from _r, jsonb_array_elements(j->'members') e
             where who='uma' and e->>'user_id' = '00000000-0000-0000-0000-00000000cc05'), 0,
   'ada is not visible as a member');

@@ -95,7 +95,7 @@ void main() {
         row(
           'cmd',
           from: me.userId,
-          body: '/removetester rob@mail.test',
+          body: '/addios rob@mail.test',
           minutesAgo: 4,
         ),
         card,
@@ -118,7 +118,7 @@ void main() {
           row(
             'cmd',
             from: me.userId,
-            body: '/removetester rob@mail.test',
+            body: '/addios rob@mail.test',
             minutesAgo: 4,
           ),
         ];

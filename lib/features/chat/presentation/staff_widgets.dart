@@ -4,10 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme.dart';
 import '../application/chat_controllers.dart';
 
-/// Avatar widget for Bacanaks with brand colors.
-class BacanaksAvatar extends StatelessWidget {
-  /// Creates a BacanaksAvatar.
-  const BacanaksAvatar({super.key, this.radius = 18});
+/// Avatar of the sales staff chat, in brand colors.
+class SalesAvatar extends StatelessWidget {
+  /// Creates a SalesAvatar.
+  const SalesAvatar({super.key, this.radius = 18});
 
   /// Radius of the avatar.
   final double radius;
@@ -27,10 +27,13 @@ class BacanaksAvatar extends StatelessWidget {
   }
 }
 
-/// Waiting indicator for podium command.
-class PodiumWaiting extends ConsumerWidget {
-  /// Creates a PodiumWaiting.
-  const PodiumWaiting({super.key});
+/// Waiting dots after the sales command [word] was sent.
+class SalesWaiting extends ConsumerWidget {
+  /// Creates a SalesWaiting.
+  const SalesWaiting({super.key, required this.word});
+
+  /// The sales command word of this chat, from the staff registry.
+  final String word;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -38,7 +41,7 @@ class PodiumWaiting extends ConsumerWidget {
     final last = ref.watch(messagesProvider).value?.lastOrNull;
     if (last == null ||
         last.adminMsg != null ||
-        last.body.trim().toLowerCase() != '/podium' ||
+        last.body.trim().toLowerCase() != word ||
         DateTime.now().difference(last.createdAt) >=
             const Duration(minutes: 2)) {
       return const SizedBox.shrink();
@@ -46,7 +49,7 @@ class PodiumWaiting extends ConsumerWidget {
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
-        key: const ValueKey('podium-waiting'),
+        key: const ValueKey('sales-waiting'),
         margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(

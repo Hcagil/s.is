@@ -181,7 +181,7 @@ final class Message {
   /// Old messages, and messages sent before the preview was ready, have none.
   final LinkPreview? linkPreview;
 
-  /// The machine-readable form of a reply from SIS Admin ({k: key, e: email, ...}); the app words it in its own language. Null for every other message.
+  /// The machine-readable form of a reply in a staff chat ({k: key, e: email, ...}); the app words it in its own language. Null for every other message.
   final Map<String, dynamic>? adminMsg;
 
   /// True for a text-only message shown at once, before the server has

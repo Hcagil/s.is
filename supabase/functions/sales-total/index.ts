@@ -1,5 +1,5 @@
-// Fetches the Vega money total for one /podium ask.
-// Called by a DB trigger (pg_net) with {"job_id": "<uuid>"} and header x-podium-secret.
+// Fetches the Vega money total for one sales ask.
+// Called by a DB trigger (pg_net) with {"job_id": "<uuid>"} and header x-job-secret.
 //
 // Deployed with --no-verify-jwt: the shared secret in the header is the credential.
 // Request (POST, JSON):
@@ -25,8 +25,8 @@ const reply = (status: number, body: Record<string, unknown>) =>
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return reply(405, { error: 'method' });
 
-  const secret = Deno.env.get('PODIUM_SHARED_SECRET');
-  const headerSecret = req.headers.get('x-podium-secret');
+  const secret = Deno.env.get('JOB_SHARED_SECRET');
+  const headerSecret = req.headers.get('x-job-secret');
   if (!secret || !headerSecret || headerSecret.length !== secret.length) {
     return reply(401, { error: 'unauthorized' });
   }
@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   );
 
-  const { data: claim } = await db.rpc('podium_job_claim', { job: jobId });
+  const { data: claim } = await db.rpc('sales_job_claim', { job: jobId });
   if (claim === null || claim === undefined) {
     return reply(200, { ok: true, ran: false });
   }
@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
     ]);
   } catch (e) {
     reason = e instanceof VegaError ? e.code : 'other';
-    console.log('podium: fetch failed');
+    console.log('sales: fetch failed');
   } finally {
     clearTimeout(timer);
   }
@@ -82,9 +82,9 @@ Deno.serve(async (req) => {
     reason = 'shape';
   }
 
-  const { error } = await db.rpc('podium_job_finish', { job: jobId, amount, reason: amount === null ? reason : null });
+  const { error } = await db.rpc('sales_job_finish', { job: jobId, amount, reason: amount === null ? reason : null });
   if (error) {
-    console.log('podium: finish failed');
+    console.log('sales: finish failed');
     return reply(500, { error: 'finish' });
   }
   return reply(200, { ok: true, ran: true, result: amount === null ? 'failed' : 'ok' });

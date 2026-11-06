@@ -134,8 +134,8 @@ class TesterTest(unittest.TestCase):
         self.srv.state = {"requests": [], "fail": {}, "testers": {
             "T-OTHER": {"email": OTHER, "apps": {"APP-1"}, "groups": {"G-EXT"}}},
             "apps": [("APP-W", "com.esd.sis.widget"), ("APP-1", "com.esd.sis"), ("APP-X", "com.other.app")],
-            "groups": [("G-INT", "bacanaks", True), ("G-EXT", "bacanaks", False), ("G-OTHER", "other", True),
-                       ("G-OLD", "bacanaks-old", False), ("G-FR", "Friends", False)]}
+            "groups": [("G-INT", "crew", True), ("G-EXT", "crew", False), ("G-OTHER", "other", True),
+                       ("G-OLD", "crew-old", False), ("G-FR", "Friends", False)]}
 
     def run_tool(self, *args, email=EMAIL):
         env = dict(os.environ, API_PRIVATE_KEYS_DIR=self.keys, KEY_ID=base.KEY_ID, ISSUER_ID=base.ISSUER)
@@ -183,19 +183,19 @@ class TesterTest(unittest.TestCase):
         for action in ("add", "remove"):
             for email in (None, ""):
                 self.srv.state["requests"].clear()
-                p = self.run_tool("tester", action, "bacanaks", email=email)
+                p = self.run_tool("tester", action, "crew", email=email)
                 self.assertEqual(p.returncode, 2, "%s with TESTER_EMAIL=%r: %s" % (action, email, p.stderr))
                 self.assertEqual(self.reqs_of(), [], "nothing is called without the email")
 
     def test_the_email_is_never_taken_from_argv(self):
-        p = self.run_tool("tester", "add", "bacanaks", EMAIL, email=None)
+        p = self.run_tool("tester", "add", "crew", EMAIL, email=None)
         self.assertNotEqual(p.returncode, 0)
         self.assertEqual(self.reqs_of("POST"), [], "an email in argv is not used")
 
     # --- add -----------------------------------------------------------------
 
     def test_add_new_tester_looks_up_first_then_creates_in_the_external_group_only(self):
-        p = self.run_tool("tester", "add", "bacanaks")
+        p = self.run_tool("tester", "add", "crew")
         self.assertEqual(p.returncode, 0, p.stderr)
         reqs = self.reqs_of()
         self.assertEqual((reqs[0]["method"], reqs[0]["path"]), ("GET", "/v1/betaTesters"), "the lookup comes first")
@@ -204,19 +204,19 @@ class TesterTest(unittest.TestCase):
         created = [r for r in creates if r["path"] == "/v1/betaTesters"]
         self.assertEqual(len(created), 1, "one create")
         self.assertEqual(created[0]["body"]["data"]["attributes"]["email"], EMAIL)
-        self.assertEqual(self.group_ids_used(), {"G-EXT"}, "only the external group named bacanaks")
+        self.assertEqual(self.group_ids_used(), {"G-EXT"}, "only the external group named crew")
         new = [t for t in self.srv.state["testers"].values() if t["email"] == EMAIL]
         self.assertEqual(len(new), 1)
         self.assertEqual(new[0]["groups"], {"G-EXT"})
 
     def test_add_several_groups_uses_each_external_one(self):
-        p = self.run_tool("tester", "add", "bacanaks,Friends")
+        p = self.run_tool("tester", "add", "crew,Friends")
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertEqual(self.group_ids_used(), {"G-EXT", "G-FR"})
 
     def test_add_existing_tester_attaches_and_does_not_create(self):
         self.add_existing()
-        p = self.run_tool("tester", "add", "bacanaks")
+        p = self.run_tool("tester", "add", "crew")
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertEqual([r for r in self.reqs_of("POST") if r["path"] == "/v1/betaTesters"], [], "no create")
         self.assertEqual(self.group_ids_used(), {"G-EXT"})
@@ -232,7 +232,7 @@ class TesterTest(unittest.TestCase):
     def test_add_never_calls_user_invitations(self):
         for setup in (lambda: None, self.add_existing):
             setup()
-            self.run_tool("tester", "add", "bacanaks")
+            self.run_tool("tester", "add", "crew")
         self.assertEqual([r for r in self.srv.state["requests"]
                           if r["path"].startswith(("/v1/userInvitations", "/v1/users"))], [])
 
@@ -242,14 +242,14 @@ class TesterTest(unittest.TestCase):
             with self.subTest(key=key, status=status):
                 self.setUp()
                 self.srv.state["fail"][key] = status
-                self.assert_error_line(self.run_tool("tester", "add", "bacanaks"), 1)
+                self.assert_error_line(self.run_tool("tester", "add", "crew"), 1)
 
     def test_add_attach_refused_exits_1(self):
         # A 404 while attaching is not "not in this app or group": it escalates.
         self.add_existing()
         self.srv.state["fail"][("POST", "/v1/betaGroups/G-EXT/relationships/betaTesters")] = 404
         self.srv.state["fail"][("POST", "/v1/betaTesters/T-OLD/relationships/betaGroups")] = 404
-        self.assert_error_line(self.run_tool("tester", "add", "bacanaks"), 1)
+        self.assert_error_line(self.run_tool("tester", "add", "crew"), 1)
 
     def test_add_transient_errors_exit_75(self):
         for key, status in ((("GET", "/v1/betaTesters"), 429), (("GET", "/v1/betaTesters"), 500),
@@ -257,7 +257,7 @@ class TesterTest(unittest.TestCase):
             with self.subTest(key=key, status=status):
                 self.setUp()
                 self.srv.state["fail"][key] = status
-                p = self.run_tool("tester", "add", "bacanaks")
+                p = self.run_tool("tester", "add", "crew")
                 self.assert_error_line(p, 75)
                 if status == "drop":
                     self.assertTrue(p.stderr.startswith("HTTP - "), "no status: '-': %r" % p.stderr)
@@ -269,7 +269,7 @@ class TesterTest(unittest.TestCase):
     def test_remove_deletes_the_app_relationship(self):
         self.add_existing()
         self.srv.state["testers"]["T-OLD"].update(apps={"APP-1"}, groups={"G-EXT"})
-        p = self.run_tool("tester", "remove", "bacanaks")
+        p = self.run_tool("tester", "remove", "crew")
         self.assertEqual(p.returncode, 0, p.stderr)
         reqs = self.reqs_of()
         self.assertEqual((reqs[0]["method"], reqs[0]["path"]), ("GET", "/v1/betaTesters"), "the lookup comes first")
@@ -280,13 +280,13 @@ class TesterTest(unittest.TestCase):
         self.assertEqual(self.srv.state["testers"]["T-OTHER"]["apps"], {"APP-1"}, "another tester untouched")
 
     def test_remove_not_a_tester_is_success_without_delete(self):
-        p = self.run_tool("tester", "remove", "bacanaks")
+        p = self.run_tool("tester", "remove", "crew")
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertEqual(self.reqs_of("DELETE"), [])
 
     def test_remove_not_in_this_app_404_is_success(self):
         self.add_existing()  # a tester, but of no group of this app
-        p = self.run_tool("tester", "remove", "bacanaks")
+        p = self.run_tool("tester", "remove", "crew")
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertEqual(len(self.reqs_of("DELETE")), 1)
 
@@ -296,7 +296,7 @@ class TesterTest(unittest.TestCase):
                 self.setUp()
                 self.add_existing()
                 self.srv.state["fail"][("DELETE", "/v1/betaTesters/T-OLD/relationships/apps")] = status
-                p = self.run_tool("tester", "remove", "bacanaks")
+                p = self.run_tool("tester", "remove", "crew")
                 self.assert_error_line(p, 1)
                 self.assertTrue(p.stderr.startswith("HTTP %d " % status), p.stderr)
 
@@ -310,7 +310,7 @@ class TesterTest(unittest.TestCase):
                 self.add_existing()
                 self.srv.state["testers"]["T-OLD"]["apps"] = {"APP-1"}
                 self.srv.state["fail"][key] = status
-                self.assert_error_line(self.run_tool("tester", "remove", "bacanaks"), 75)
+                self.assert_error_line(self.run_tool("tester", "remove", "crew"), 75)
 
 
 if __name__ == "__main__":

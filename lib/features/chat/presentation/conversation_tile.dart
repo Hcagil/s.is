@@ -11,6 +11,7 @@ import '../domain/message.dart';
 import '../domain/poll.dart';
 import '../../presence/application/presence_controllers.dart';
 import '../application/chat_controllers.dart';
+import '../application/staff_registry_controller.dart';
 import '../application/chat_selection_controller.dart';
 import '../application/message_opener.dart';
 import '../domain/conversation.dart';
@@ -89,6 +90,15 @@ class ConversationTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l = AppLocalizations.of(context);
+    // A staff chat is named by the server; until it answers, a neutral name.
+    final name =
+        ref
+            .watch(staffRegistryProvider)
+            .titleFor(
+              conversation.staffKey,
+              Localizations.localeOf(context).languageCode,
+            ) ??
+        conversationLabel(l, conversation);
     // Whose messages are "mine" comes from the session, as on the message
     // screen.
     final me = switch (ref.watch(sessionControllerProvider).value) {
@@ -155,7 +165,7 @@ class ConversationTile extends ConsumerWidget {
         leading: _CheckBadge(
           selected: selected,
           child: PersonAvatar(
-            label: conversationLabel(l, conversation),
+            label: name,
             // A person keeps one tint everywhere; a group has its own.
             seed: conversation.other?.userId ?? conversation.id,
             online:
@@ -169,7 +179,7 @@ class ConversationTile extends ConsumerWidget {
           ),
         ),
         title: Text(
-          conversationLabel(l, conversation),
+          name,
           key: left ? ValueKey('left-${conversation.id}') : null,
           style: TextStyle(
             fontWeight: unread ? FontWeight.w800 : FontWeight.w700,
@@ -309,7 +319,7 @@ class ConversationTile extends ConsumerWidget {
                 context,
                 ref,
                 conversation.id,
-                title: conversationLabel(l, conversation),
+                title: name,
                 otherUserId: conversation.other?.userId,
                 group: conversation.isGroup,
               ),

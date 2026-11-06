@@ -309,8 +309,8 @@ class AscSigningTest(unittest.TestCase):
         self.srv.state = {"requests": [], "fail": {}, "cert_der": self.cert_der,
                           "apps": [("APP-W", "com.esd.sis.widget"), ("APP-1", "com.esd.sis"), ("APP-X", "com.other.app")],
                           "version": "412", "builds": ["VALID"], "locs": [("L-DE", "de-DE"), ("L-EN", "en-US")],
-                          "groups": [("G-INT", "bacanaks", True), ("G-EXT", "bacanaks", False), ("G-OTHER", "other", True),
-                                     ("G-OLD", "bacanaks-old", False), ("G-FR", "Friends", False)],
+                          "groups": [("G-INT", "crew", True), ("G-EXT", "crew", False), ("G-OTHER", "other", True),
+                                     ("G-OLD", "crew-old", False), ("G-FR", "Friends", False)],
                           "review": False, "profiles": [], "gone": set(), "pattrs": {}, "cattrs": {}, "caps": {}}
 
     def prog(self, code):
@@ -457,8 +457,8 @@ class AscSigningTest(unittest.TestCase):
     def test_bad_usage(self):
         for args in ([], ["create", self.csr, "com.esd.sis", "n"], ["delete", "C"], ["revoke", "C", "P"],
                      ["release", "com.esd.sis", "412", "C", "P"], ["release", "com.esd.sis", "412", "C"],
-                     ["distribute", "com.esd.sis", "412", "bacanaks"],
-                     ["distribute", "com.esd.sis", "412", "bacanaks", "note", "extra"]):
+                     ["distribute", "com.esd.sis", "412", "crew"],
+                     ["distribute", "com.esd.sis", "412", "crew", "note", "extra"]):
             self.setUp()
             p = self.tool(*args)
             self.assertNotEqual(p.returncode, 0, "usage %s accepted" % args)
@@ -569,7 +569,7 @@ class AscSigningTest(unittest.TestCase):
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
         s.close()
-        p = self.tool("distribute", "com.esd.sis", "412", "bacanaks", "n", api="http://127.0.0.1:%d/v1" % port)
+        p = self.tool("distribute", "com.esd.sis", "412", "crew", "n", api="http://127.0.0.1:%d/v1" % port)
         self.assertNotEqual(p.returncode, 0)
         self.assertIn("GET", p.stderr)
         self.assertIn("/apps", p.stderr)
@@ -578,7 +578,7 @@ class AscSigningTest(unittest.TestCase):
 
     def test_dropped_connection_is_reported_without_body(self):
         self.srv.state["fail"][("PATCH", "/v1/betaBuildLocalizations/L-EN")] = "drop"
-        p = self.tool("distribute", "com.esd.sis", "412", "bacanaks", "SECRET-NOTE-BODY", ASC_POLL_SECONDS="0")
+        p = self.tool("distribute", "com.esd.sis", "412", "crew", "SECRET-NOTE-BODY", ASC_POLL_SECONDS="0")
         self.assertNotEqual(p.returncode, 0)
         self.assertIn("PATCH", p.stderr)
         self.assertIn("/betaBuildLocalizations/L-EN", p.stderr)
@@ -586,7 +586,7 @@ class AscSigningTest(unittest.TestCase):
         self.assertNotIn("Traceback", p.stderr)
 
     # ---- distribute ------------------------------------------------------------------
-    def dist(self, groups="bacanaks", note="Note", **extra):
+    def dist(self, groups="crew", note="Note", **extra):
         extra.setdefault("ASC_POLL_SECONDS", "0")
         extra.setdefault("ASC_POLL_LIMIT_SECONDS", "30")
         return self.tool("distribute", "com.esd.sis", "412", groups, note, **extra)
@@ -605,19 +605,23 @@ class AscSigningTest(unittest.TestCase):
         rx = re.compile(r"(?<![\w-])%s(?![\w-])" % re.escape(name))
         return [l for l in (p.stdout + p.stderr).splitlines() if rx.search(l)]
 
+    GROUP_LINE = re.compile(r"^group #\d+: (internal|external), added=(\S+) testers=(\S+)$")
+
+    def group_line_matches(self, p):
+        return [m for m in map(self.GROUP_LINE.match, (p.stdout + p.stderr).splitlines()) if m]
+
     def assert_group_line(self, p, name, internal, testers):
-        """Contract: one line per group with its name, internal/external, the added state and a tester count."""
+        """Contract: one line per group with internal/external, the added state and a tester count.
+        Group names are private: the name itself is never printed."""
+        self.assertEqual(self.group_lines(p, name), [], "the group name %r was printed" % name)
         kind = "internal" if internal else "external"
-        lines = [l for l in self.group_lines(p, name) if re.search(r"\b%s\b" % kind, l)]
-        self.assertEqual(len(lines), 1, "want one %s line for %s, got %r" % (kind, name, p.stdout + p.stderr))
-        line = lines[0]
-        self.assertNotRegex(line, r"\b%s\b" % ("external" if internal else "internal"))
-        if internal:
-            self.assertIn("auto", line, "an internal group must be logged as added automatically")
-        else:
-            self.assertNotIn("auto", line)
-            self.assertRegex(line, r"(?i)\b(yes|added|already)\b", "no added state on the external line")
-        self.assertRegex(line, r"(?<![\w.-])%d(?![\w.-])" % testers, "tester count %d missing: %r" % (testers, line))
+        lines = [m for m in self.group_line_matches(p) if m.group(1) == kind and m.group(3) == str(testers)]
+        self.assertGreaterEqual(len(lines), 1, "want a %s line with testers=%d, got %r" % (kind, testers, p.stdout + p.stderr))
+        for m in lines:
+            if internal:
+                self.assertEqual(m.group(2), "auto", "an internal group must be logged as added automatically")
+            else:
+                self.assertIn(m.group(2), ("yes", "already"), "no added state on the external line")
 
     def whats_new(self):
         writes = [r for r in self.reqs() if r["path"].startswith("/v1/betaBuildLocalizations") and r["method"] in ("PATCH", "POST")]
@@ -647,9 +651,9 @@ class AscSigningTest(unittest.TestCase):
         lg = self.find("GET", "/v1/apps/APP-1/betaGroups")
         self.assertEqual(len(lg), 1)
         self.assertEqual(lg[0]["query"].get("limit"), ["200"])
-        self.assertEqual(self.group_adds(), ["G-EXT"], "only the external bacanaks group, nothing else")
-        self.assert_group_line(p, "bacanaks", True, 0)
-        self.assert_group_line(p, "bacanaks", False, 0)
+        self.assertEqual(self.group_adds(), ["G-EXT"], "only the external crew group, nothing else")
+        self.assert_group_line(p, "crew", True, 0)
+        self.assert_group_line(p, "crew", False, 0)
         for r in self.reqs("POST"):
             if r["path"].endswith("/relationships/builds"):
                 self.assertEqual(r["body"], {"data": [{"type": "builds", "id": "BUILD-1"}]})
@@ -704,10 +708,9 @@ class AscSigningTest(unittest.TestCase):
     def test_distribute_no_matching_group(self):
         p = self.dist(groups="nobody,ghost")
         self.assertNotEqual(p.returncode, 0)
-        self.assertIn("no TestFlight group named", p.stderr)
-        self.assertIn("the app has", p.stderr)
-        for name in ("nobody", "ghost", "bacanaks", "other", "Friends"):
-            self.assertIn(name, p.stderr, "the error must list wanted and available names")
+        self.assertIn("no TestFlight group matched the configured names (2 configured, the app has 5 groups)", p.stderr)
+        for name in ("nobody", "ghost", "crew", "other", "Friends"):
+            self.assertEqual(self.group_lines(p, name), [], "the error must give counts, never a group name: %r" % name)
         self.assertEqual(self.group_adds(), [])
         self.assertEqual(self.review_reqs(), [])
 
@@ -722,13 +725,13 @@ class AscSigningTest(unittest.TestCase):
         self.assertEqual(self.find("POST", "/v1/betaAppReviewSubmissions"), [], "a second submission was posted")
 
     def test_distribute_group_names_ignore_case(self):
-        for groups in ("bacanaks", " BaCaNaKs "):
+        for groups in ("crew", " CrEw "):
             self.setUp()
-            self.srv.state["groups"] = [("G-INT", "BACANAKS", True), ("G-EXT", "Bacanaks", False), ("G-FR", "Friends", False)]
+            self.srv.state["groups"] = [("G-INT", "CREW", True), ("G-EXT", "Crew", False), ("G-FR", "Friends", False)]
             p = self.dist(groups=groups)
             self.assertEqual(p.returncode, 0, "%r: %s" % (groups, p.stderr))
             self.assertEqual(self.group_adds(), ["G-EXT"], groups)
-            self.assert_group_line(p, "BACANAKS", True, 0)
+            self.assert_group_line(p, "CREW", True, 0)
             self.assertEqual(len(self.find("POST", "/v1/betaAppReviewSubmissions")), 1, groups)
 
     def test_fake_refuses_internal_group_like_apple(self):
@@ -838,9 +841,9 @@ class AscSigningTest(unittest.TestCase):
             p = self.star()
             self.assertEqual(p.returncode, 0, "%d on a tester count stopped the run: %s" % (status, p.stderr))
             for name in ("Beta Club", "Alpha"):
-                lines = self.group_lines(p, name)
-                self.assertEqual(len(lines), 1, (status, name, lines))
-                self.assertRegex(lines[0], r"testers=\?(?!\S)", "%d: %s does not show an unknown count" % (status, name))
+                self.assertEqual(self.group_lines(p, name), [], (status, name))
+            unknown = [m for m in self.group_line_matches(p) if m.group(3) == "?"]
+            self.assertEqual(len(unknown), 2, "%d: the two failed counts must show testers=?: %r" % (status, p.stdout))
             self.assertEqual(self.group_adds(), ["G-B", "G-C"], "%d: a group was skipped" % status)
             self.assert_group_line(p, "Gamma", False, 0)
             self.assert_group_line(p, "Delta", True, 1)

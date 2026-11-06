@@ -131,7 +131,7 @@ jobs:
       - name: Resolve dependencies
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter flutter pub get
       - name: Layer rules
-        run: tool/check_pattern.sh && tool/check_release_clean.sh && test/tool/check_pattern_test.sh && test/tool/whats_new_note_test.sh && test/tool/ios_release_test.sh && test/tool/workflow_pipes_test.sh && test/tool/asc_signing_test.py && test/tool/ios_signing_bootstrap_test.py && test/tool/asc_tester_test.py && test/tool/admin_apple_workflow_test.sh && test/tool/sis_bot_watch_test.sh && test/tool/check_pr_body_test.py && test/tool/release_scope_test.sh && test/tool/check_release_clean_test.sh && test/tool/sis_test_send_test.sh
+        run: tool/check_pattern.sh && tool/check_release_clean.sh && test/tool/check_pattern_test.sh && test/tool/whats_new_note_test.sh && test/tool/ios_release_test.sh && test/tool/workflow_pipes_test.sh && test/tool/asc_signing_test.py && test/tool/ios_signing_bootstrap_test.py && test/tool/asc_tester_test.py && test/tool/staff_rows_release_test.py && test/tool/vault_names_test.py && test/tool/admin_apple_workflow_test.sh && test/tool/sis_bot_watch_test.sh && test/tool/check_pr_body_test.py && test/tool/release_scope_test.sh && test/tool/check_release_clean_test.sh && test/tool/sis_test_send_test.sh
 
       - name: Check formatting
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter dart format --output=none --set-exit-if-changed lib test
@@ -267,6 +267,11 @@ jobs:
         run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter cargo build --release --manifest-path rust/Cargo.toml
       - name: Wait until Realtime delivers
         run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter flutter test --run-skipped --tags warmup test/integration/realtime_warmup_test.dart
+      # Rows no client can write (app_private), for test/integration/staff_registry_repository_test.dart.
+      # The CLI names the stack's database container supabase_db_<project_id> (s.is, supabase/config.toml),
+      # the same one tool/sis_bot_admin.sh reaches in the SIS Bot tool test below.
+      - name: Load the integration test fixtures
+        run: docker exec -i supabase_db_s.is psql -U postgres -v ON_ERROR_STOP=1 -qAt < test/integration/fixtures/staff_registry.sql >/dev/null
       - name: Repository integration tests
         # TZ as for the unit tests: a timestamp parsed without its offset only
         # fails outside UTC, and the runner is UTC. The local stack's

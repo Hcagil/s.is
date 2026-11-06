@@ -1426,9 +1426,9 @@ the runner. Now:
 
 **Amended 2026-10-01 (automatic group distribution).** Every TestFlight upload
 now reaches the testers without a manual step. App
-Store Connect has two groups named `bacanaks`, one internal and one external;
-the repository variable `TESTFLIGHT_GROUPS` (comma-separated names, unset =
-`bacanaks`) names the targets, and every group with a matching name gets the
+Store Connect has two tester groups with the same private name, one internal and one
+external; the secret `TF_GROUPS` (comma-separated names; amended 2026-11-06, it was
+a repository variable) names the targets, and every group with a matching name gets the
 build.
 
 - A separate job, `distribute`, needs `ios`, runs on Linux and is not needed

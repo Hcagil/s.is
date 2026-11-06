@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../app/theme.dart';
 import '../../../l10n/app_localizations.dart';
-import '../domain/bot_command.dart';
+import '../domain/staff_registry.dart';
 
 /// A row displaying a bot command with its badge and description.
 class CommandRow extends StatelessWidget {
@@ -10,7 +10,7 @@ class CommandRow extends StatelessWidget {
   const CommandRow({super.key, required this.command, required this.onTap});
 
   /// The bot command to display.
-  final BotCommand command;
+  final StaffCommand command;
 
   /// The callback to invoke when the row is tapped.
   final VoidCallback onTap;
@@ -20,15 +20,7 @@ class CommandRow extends StatelessWidget {
     final brand = SisBrand.of(context);
     final l = AppLocalizations.of(context);
 
-    final meaning = switch (command.kind) {
-      BotCommandKind.addIos => l.adminHelpIos,
-      BotCommandKind.addAndroid => l.adminHelpAnd,
-      BotCommandKind.removeTester => l.adminHelpRm,
-      BotCommandKind.listTesters => l.adminHelpList,
-      BotCommandKind.podiumOn => l.cmdPodOnMeaning,
-      BotCommandKind.podiumOff => l.cmdPodOffMeaning,
-      BotCommandKind.podium => l.cmdPodMeaning,
-    };
+    final meaning = command.help(Localizations.localeOf(context).languageCode);
 
     final badge = Container(
       width: 32,

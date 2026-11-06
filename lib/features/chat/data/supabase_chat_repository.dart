@@ -179,9 +179,9 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
         for (final row in conversationRows)
           row['id'] as String: row['admin_chat'] == true,
       };
-      final bacanaksById = {
+      final staffKeyById = {
         for (final row in conversationRows)
-          row['id'] as String: row['bacanaks_chat'] == true,
+          row['id'] as String: row['staff_key'] as String?,
       };
       final closedById = {
         for (final row in conversationRows)
@@ -284,7 +284,7 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
                       ? (row['body'] as String).split('\n').first
                       : adminPreviewPrefix +
                             jsonEncode(
-                              // a podium reply never puts its amount in the list
+                              // a sales reply never puts its amount in the list
                               '${row['admin_msg']['k']}'.startsWith('pod')
                                   ? {'k': row['admin_msg']['k']}
                                   : row['admin_msg'],
@@ -322,7 +322,7 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
             isClosed: closedById[id] ?? false,
             isSystem: systemById[id] ?? false,
             isAdminChat: adminChatById[id] ?? false,
-            isBacanaks: bacanaksById[id] ?? false,
+            staffKey: staffKeyById[id],
             settings: settingsById[id] ?? const GroupSettings(),
             archived: archivedIds.contains(id),
             pinned: pinnedIds.contains(id),

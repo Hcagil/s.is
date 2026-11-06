@@ -174,8 +174,8 @@ void main() {
 
   group('hidden (relay) email: refused on the phone, no request', () {
     for (final email in [
-      'x7f2k9@privaterelay.appleid.com',
-      'X7F2K9@PrivateRelay.AppleID.com',
+      'q4m8z1@privaterelay.appleid.com',
+      'Q4M8Z1@PrivateRelay.AppleID.com',
     ]) {
       test(email, () async {
         apple.tokenEmail = email;
@@ -189,7 +189,7 @@ void main() {
     }
 
     test('read from the token, not the credential\'s email field', () async {
-      apple.tokenEmail = 'x7f2k9@privaterelay.appleid.com';
+      apple.tokenEmail = 'q4m8z1@privaterelay.appleid.com';
       apple.credentialEmail = 'ann@mail.test';
       final r = await repo().signInWithApple();
 
@@ -297,7 +297,7 @@ void main() {
     }
 
     test('relay email -> SignedOut(hiddenEmail)', () async {
-      apple.tokenEmail = 'x7f2k9@privaterelay.appleid.com';
+      apple.tokenEmail = 'q4m8z1@privaterelay.appleid.com';
       final (_, s) = await viaController();
       expect(s, isA<SignedOut>());
       expect((s as SignedOut).hiddenEmail, isTrue);

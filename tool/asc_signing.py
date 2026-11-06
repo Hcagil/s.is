@@ -382,10 +382,10 @@ def distribute(bundle_identifier, build_number, groups, note):
     else:
         matched = [g for g in every if g["attributes"]["name"].strip().lower() in wanted]
         if not matched:
-            sys.exit("no TestFlight group named %s; the app has: %s" % (
-                ", ".join(groups), ", ".join(g["attributes"]["name"] for g in every) or "none"))
-    for g in matched:
-        name = g["attributes"]["name"]
+            sys.exit("no TestFlight group matched the configured names (%d configured, the app has %d groups)" % (
+                len(groups), len(every)))
+    for n, g in enumerate(matched, 1):
+        name = "#%d" % n  # names are private: counts only
         # Counts only, never tester details.
         try:
             resp = call("GET", "/betaGroups/%s/betaTesters?limit=200" % g["id"], ok_missing=True)

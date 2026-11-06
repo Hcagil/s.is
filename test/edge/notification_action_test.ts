@@ -422,6 +422,44 @@ Deno.test({
   },
 });
 
+// An iPhone's plain message in a chat that once held a locked message: the
+// ticket signs mark_read only, so the push must offer the locked category (no
+// Reply button), not SIS_MESSAGE.
+Deno.test({
+  ...opts,
+  name: 'encrypted chat: a plain message push to an iPhone carries the locked category and a mark_read-only ticket',
+  fn: async () => {
+    const key = async (s: string, alg = 'SHA-256') =>
+      btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest(alg, new TextEncoder().encode(s)))))
+        .replace(/=+$/, '');
+    for (const x of [p.bob, p.ivy]) {
+      const [i, sk, g, o, f] = await Promise.all([key(`${x.email}I`), key(`${x.email}S`), key(x.email, 'SHA-512'),
+        key(`${x.email}1`), key(`${x.email}F`)]);
+      await as(x.id, x.email, x.session, (tx) => tx`select public.publish_olm_keys(${i}, ${sk}, ${g}, ${[o]}::text[], ${f})`);
+    }
+    const [{ id: dm }] = await as(p.bob.id, p.bob.email, p.bob.session,
+      (tx) => tx`select public.start_direct_conversation(${p.ivy.id}) as id`);
+    await as(p.bob.id, p.bob.email, p.bob.session,
+      (tx) => tx`insert into public.messages(conversation_id, sender_id, body, ciphertext, olm_type)
+                 values (${dm}, ${p.bob.id}, '🔒 Encrypted message', 'QUFBQUFB', 1)`);
+    const [{ at }] = await sql`select encrypted_at as at from public.conversations where id = ${dm}`;
+    assert(at !== null, 'fixture: the chat is marked encrypted');
+    // A plain row written by the server (service role skips the member guard).
+    const [{ id: plain }] = await sql.begin(async (tx) => {
+      await tx`set local role service_role`;
+      return await tx`insert into public.messages(conversation_id, sender_id, body)
+                      values (${dm}, ${p.bob.id}, ${'plain ' + run}) returning id`;
+    });
+    await deliver(plain);
+    const toIvy = sent.find((m) => m.token === p.ivy.token);
+    assert(toIvy, `ivy was sent a push: ${JSON.stringify(sent)}`);
+    const data = toIvy.data as Record<string, string>;
+    assert(data.encrypted !== 'true', 'fixture: the message itself is plain');
+    assertEquals((toIvy.apns as any)?.payload?.aps?.category, 'SIS_MESSAGE_LOCKED');
+    assertEquals((await verifyActionToken(data.action_token, serviceKey))?.a, ['mark_read']);
+  },
+});
+
 Deno.test({
   ...opts,
   name: 'teardown',

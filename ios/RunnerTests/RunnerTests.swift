@@ -329,3 +329,114 @@ class RunnerTests: XCTestCase {
     return topViewController() as? PHPickerViewController
   }
 }
+
+// MARK: - A notification action always completes
+
+// NotificationActionRun.run, driven through its BackgroundTime seam. Contract:
+// the system completion handler and time.end each run exactly once, whichever
+// comes first (work ok, work failed, background time expired); later calls are
+// ignored; an .invalid task id is never ended.
+
+/// Background time as iOS gives it: begin hands out an id and keeps the expiry
+/// handler, which the test fires whenever "time runs out".
+final class FakeBackgroundTime: BackgroundTime {
+  var nextId = UIBackgroundTaskIdentifier(rawValue: 42)
+  /// Fire the expiry handler inside begin, before run() has the id.
+  var expireDuringBegin = false
+  private(set) var begins = 0
+  private(set) var ended: [UIBackgroundTaskIdentifier] = []
+  private var expiry: (() -> Void)?
+
+  func begin(expired: @escaping () -> Void) -> UIBackgroundTaskIdentifier {
+    begins += 1
+    expiry = expired
+    if expireDuringBegin { expired() }
+    return nextId
+  }
+
+  func end(_ id: UIBackgroundTaskIdentifier) { ended.append(id) }
+
+  func expire() { expiry?() }
+}
+
+final class NotificationActionRunTests: XCTestCase {
+  private var time: FakeBackgroundTime!
+  private var completions = 0
+  private var finishWork: ((Bool) -> Void)?
+
+  override func setUp() {
+    super.setUp()
+    time = FakeBackgroundTime()
+    completions = 0
+    finishWork = nil
+  }
+
+  /// Starts a run whose work stays open until the test calls finishWork.
+  private func startSlowRun() {
+    NotificationActionRun.run(
+      time: time, work: { self.finishWork = $0 }, completion: { self.completions += 1 })
+    XCTAssertEqual(time.begins, 1)
+    XCTAssertNotNil(finishWork, "the work must be started")
+    XCTAssertEqual(completions, 0, "no completion while the work is still running")
+    XCTAssertEqual(time.ended, [])
+  }
+
+  func testWorkThatSucceedsCompletesOnceAndEndsTheTaskOnce() {
+    startSlowRun()
+    finishWork?(true)
+    XCTAssertEqual(completions, 1)
+    XCTAssertEqual(time.ended, [time.nextId])
+  }
+
+  func testWorkThatFailsCompletesOnceAndEndsTheTaskOnce() {
+    startSlowRun()
+    finishWork?(false)
+    XCTAssertEqual(completions, 1)
+    XCTAssertEqual(time.ended, [time.nextId])
+  }
+
+  func testExpiryCompletesOnceAndTheLateWorkDoesNotCompleteAgain() {
+    startSlowRun()
+    time.expire()
+    XCTAssertEqual(completions, 1, "time ran out: the action must still complete")
+    XCTAssertEqual(time.ended, [time.nextId])
+    finishWork?(true)
+    XCTAssertEqual(completions, 1, "the late work must not complete a second time")
+    XCTAssertEqual(time.ended, [time.nextId])
+  }
+
+  func testALateExpiryAfterTheWorkFinishedChangesNothing() {
+    startSlowRun()
+    finishWork?(true)
+    time.expire()
+    finishWork?(false)
+    XCTAssertEqual(completions, 1)
+    XCTAssertEqual(time.ended, [time.nextId])
+  }
+
+  func testWorkThatFinishesAtOnceCompletesOnce() {
+    NotificationActionRun.run(
+      time: time, work: { $0(false) }, completion: { self.completions += 1 })
+    time.expire()
+    XCTAssertEqual(completions, 1)
+    XCTAssertEqual(time.ended, [time.nextId])
+  }
+
+  func testAnInvalidTaskIsNeverEndedButTheActionStillCompletes() {
+    time.nextId = .invalid
+    startSlowRun()
+    finishWork?(true)
+    time.expire()
+    XCTAssertEqual(completions, 1)
+    XCTAssertEqual(time.ended, [])
+  }
+
+  func testExpiryBeforeTheIdIsKnownStillEndsThatTaskOnce() {
+    time.expireDuringBegin = true
+    NotificationActionRun.run(
+      time: time, work: { self.finishWork = $0 }, completion: { self.completions += 1 })
+    finishWork?(true)
+    XCTAssertEqual(completions, 1)
+    XCTAssertEqual(time.ended, [time.nextId])
+  }
+}

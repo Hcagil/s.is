@@ -243,10 +243,19 @@ object InstantPush {
         builder.addAction(NotificationCompat.Action.Builder(0, context.getString(R.string.action_reply), reply).setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_REPLY).setShowsUserInterface(true).setAuthenticationRequired(true).addRemoteInput(androidx.core.app.RemoteInput.Builder(NotificationActionReceiver.KEY_REPLY).setLabel(context.getString(R.string.action_reply_hint)).build()).build())
     }
 
+    /** Whether the push's action token allows the plain Reply. The token is `v1.<base64url JSON {u,c,d,a,e}>.<sig>`; the phone cannot check the signature (the server does), it only reads `a`. Anything unreadable means no (fail closed). */
+    fun tokenAllowsReply(token: String): Boolean = try {
+        val a = JSONObject(String(android.util.Base64.decode(token.split(".")[1], android.util.Base64.URL_SAFE or android.util.Base64.NO_PADDING or android.util.Base64.NO_WRAP))).getJSONArray("a")
+        (0 until a.length()).any { a.optString(it) == "reply" }
+    } catch (e: Exception) {
+        false
+    }
+
     /** The two buttons (Mark as read, Reply with a text box) for a chat's notification. The request code is the notification id; the intents differ by data, so chats and buttons never share a PendingIntent. The reply one is mutable because the system fills in the typed text. */
-    fun addActions(context: Context, builder: NotificationCompat.Builder, conversationId: String, id: Int, token: String, url: String) {
+    fun addActions(context: Context, builder: NotificationCompat.Builder, conversationId: String, id: Int, token: String, url: String, canReply: Boolean) {
         val read = PendingIntent.getBroadcast(context, id, NotificationActionReceiver.intentFor(context, conversationId, token, url, false), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         builder.addAction(NotificationCompat.Action.Builder(0, context.getString(R.string.action_mark_read), read).setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_MARK_AS_READ).setShowsUserInterface(false).build())
+        if (!canReply) return
         // Reply needs an unlocked phone: enforced by the system from API 31; below that it is simply not offered on a phone with a secure lock.
         if (!replyOffered(Build.VERSION.SDK_INT, (context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager).isDeviceSecure)) return
         val reply = PendingIntent.getBroadcast(context, id, NotificationActionReceiver.intentFor(context, conversationId, token, url, true), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)
@@ -502,10 +511,16 @@ object InstantPush {
                     // The buttons need the action token the push carried; an older server sends none.
                     val token = extras.getString("action_token")
                     val url = extras.getString("action_url")
-                    if (!locked && !token.isNullOrEmpty() && url != null && url.startsWith("https://")) addActions(context, this, conversationId, id, token, url)
-                    // A private chat: Reply only, handed to the app (never the function, never encrypted here).
                     val userId = extras.getString("user_id")
-                    if (locked && !userId.isNullOrEmpty()) addEncryptedReply(context, this, conversationId, userId, id)
+                    // A plain push whose token does not allow `reply` is a chat that ever held a private message: the server refuses a plain reply there, so draw the locked Reply instead (the app locks and sends it).
+                    var privateReply = locked
+                    if (!locked && !token.isNullOrEmpty() && url != null && url.startsWith("https://")) {
+                        val canReply = tokenAllowsReply(token)
+                        addActions(context, this, conversationId, id, token, url, canReply)
+                        privateReply = !canReply
+                    }
+                    // A private chat: Reply only, handed to the app (never the function, never encrypted here).
+                    if (privateReply && !userId.isNullOrEmpty()) addEncryptedReply(context, this, conversationId, userId, id)
                 }
                 .build()
 

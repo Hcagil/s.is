@@ -18,6 +18,7 @@
 		7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */; };
 		A10000000000000000000A12 /* PickedImageProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000A11 /* PickedImageProcessor.swift */; };
 		A10000000000000000000A32 /* StickerCutout.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000A31 /* StickerCutout.swift */; };
+		A10000000000000000000C02 /* NotificationActionRun.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000C01 /* NotificationActionRun.swift */; };
 		A10000000000000000000A14 /* ExternalPickerPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000A13 /* ExternalPickerPlugin.swift */; };
 		78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */ = {isa = PBXBuildFile; productRef = 78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */; };
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
@@ -101,6 +102,7 @@
 		7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		A10000000000000000000A11 /* PickedImageProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickedImageProcessor.swift; sourceTree = "<group>"; };
 		A10000000000000000000A31 /* StickerCutout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StickerCutout.swift; sourceTree = "<group>"; };
+		A10000000000000000000C01 /* NotificationActionRun.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationActionRun.swift; sourceTree = "<group>"; };
 		A10000000000000000000A13 /* ExternalPickerPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalPickerPlugin.swift; sourceTree = "<group>"; };
 		78E0A7A72DC9AD7400C4905E /* FlutterGeneratedPluginSwiftPackage */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = FlutterGeneratedPluginSwiftPackage; path = Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage; sourceTree = "<group>"; };
 		7AFA3C8E1D35360C0083082E /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = Flutter/Release.xcconfig; sourceTree = "<group>"; };
@@ -225,6 +227,7 @@
 				7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */,
 				A10000000000000000000A11 /* PickedImageProcessor.swift */,
 				A10000000000000000000A31 /* StickerCutout.swift */,
+				A10000000000000000000C01 /* NotificationActionRun.swift */,
 				A10000000000000000000A13 /* ExternalPickerPlugin.swift */,
 				B2000000000000000000B005 /* ShareIntakePlugin.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
@@ -502,6 +505,7 @@
 				7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */,
 				A10000000000000000000A12 /* PickedImageProcessor.swift in Sources */,
 				A10000000000000000000A32 /* StickerCutout.swift in Sources */,
+				A10000000000000000000C02 /* NotificationActionRun.swift in Sources */,
 				A10000000000000000000A14 /* ExternalPickerPlugin.swift in Sources */,
 				B2000000000000000000B015 /* ShareIntakePlugin.swift in Sources */,
 			);

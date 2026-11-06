@@ -158,7 +158,7 @@ object InstantPush {
 
     /** Whether the native side draws this push now: high-priority pushes are drawn here too (the Dart handler no longer draws on Android). */
     fun shouldPostNow(hasNotificationBlock: Boolean, appInForeground: Boolean, owner: String?, targetUser: String?, notificationsEnabled: Boolean, hasFields: Boolean): Boolean {
-        return !hasNotificationBlock && !appInForeground && owner != null && (targetUser == null || targetUser == owner) && notificationsEnabled && hasFields
+        return !hasNotificationBlock && !appInForeground && owner != null && !targetUser.isNullOrBlank() && targetUser == owner && notificationsEnabled && hasFields
     }
 
     private fun resolve(defaultsJson: String?, chatsJson: String?, conversationId: String, key: String): Boolean {

@@ -398,7 +398,8 @@ class NativeReceiver {
     final c = str('conversation_id');
     final title = str('title');
     final body = str('body');
-    if (owner == null || (to != null && to != owner)) return false;
+    if (owner == null || to == null || to.trim().isEmpty || to != owner)
+      return false;
     if (!notificationsOn || c == null || title == null || body == null) {
       return false;
     }

@@ -4040,6 +4040,30 @@ abstract class AppLocalizations {
   /// **'Canceled'**
   String get adminConfCancelled;
 
+  /// Button on a server-written confirm card. Does the action the card asks about.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm'**
+  String get adminCardConfirm;
+
+  /// Button on a server-written confirm card. Closes it without doing anything.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get adminCardCancel;
+
+  /// State line on a confirm card after Confirm was tapped.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get adminCardDone;
+
+  /// State line on a confirm card that is no longer valid.
+  ///
+  /// In en, this message translates to:
+  /// **'Expired'**
+  String get adminCardExpired;
+
   /// Admin chat reply text
   ///
   /// In en, this message translates to:

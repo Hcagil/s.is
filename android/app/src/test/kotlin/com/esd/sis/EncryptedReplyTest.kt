@@ -86,7 +86,7 @@ class EncryptedReplyTest {
     private fun locked(on: Boolean) =
         shadowOf(app.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager).setIsDeviceLocked(on)
 
-    private fun draw(chat: String, encrypted: String? = "true", user: String? = OWNER): Notification {
+    private fun drawOrNull(chat: String, encrypted: String? = "true", user: String? = OWNER): Notification? {
         val b = Bundle().apply {
             putString("message_id", "00000000-0000-4000-8000-%012d".format(++seq))
             putString("conversation_id", chat)
@@ -102,8 +102,10 @@ class EncryptedReplyTest {
             if (encrypted != null) putString("encrypted", encrypted)
         }
         PushArrivalReceiver().onReceive(app, Intent("com.google.android.c2dm.intent.RECEIVE").apply { putExtras(b) })
-        return shadowOf(manager).getNotification(InstantPush.notificationId(chat))!!
+        return shadowOf(manager).getNotification(InstantPush.notificationId(chat))
     }
+
+    private fun draw(chat: String, encrypted: String? = "true", user: String? = OWNER) = drawOrNull(chat, encrypted, user)!!
 
     private fun titles(n: Notification) = n.actions.orEmpty().map { it.title.toString() }
 
@@ -173,8 +175,8 @@ class EncryptedReplyTest {
     }
 
     @Test
-    fun `no user_id - no Reply on an encrypted push`() =
-        assertEquals(emptyList<String>(), titles(draw("c-er-nouser", user = null)))
+    fun `no user_id - nothing is drawn at all`() =
+        assertNull(drawOrNull("c-er-nouser", user = null))
 
     @Test
     @Config(sdk = [30])

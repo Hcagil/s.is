@@ -163,7 +163,7 @@ void main() {
             'm3',
             from: me.userId,
             body: 'old',
-            createdAt: DateTime.now().subtract(_ago7h),
+            createdAt: _yesterdayOver6h(),
           ),
         ];
       await pump(tester, chat);
@@ -235,7 +235,7 @@ void main() {
             'm1',
             from: me.userId,
             body: 'old',
-            createdAt: DateTime.now().subtract(_ago7h),
+            createdAt: _yesterdayOver6h(),
           ),
         ];
       await pump(tester, chat);

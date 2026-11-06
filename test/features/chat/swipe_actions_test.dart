@@ -49,6 +49,15 @@ Future<TestGesture> holdAt(WidgetTester t, String id, double travel) async {
   return g;
 }
 
+/// Over 6 h old and always on the previous local day, so the day header
+/// shows at every hour and in every time zone.
+DateTime yesterdayOver6h() {
+  final now = DateTime.now();
+  final lateYesterday = DateTime(now.year, now.month, now.day, 0, -30);
+  final ago7h = now.subtract(const Duration(hours: 7));
+  return ago7h.isBefore(lateYesterday) ? ago7h : lateYesterday;
+}
+
 void main() {
   group('swipe left to reply', () {
     testWidgets('the bubble follows the finger in the same frame, px for '
@@ -336,7 +345,7 @@ void main() {
       t,
     ) async {
       final handle = t.ensureSemantics();
-      final old = DateTime.now().subtract(const Duration(hours: 7));
+      final old = yesterdayOver6h();
       await openChat(
         t,
         messages: [

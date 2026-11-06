@@ -216,6 +216,15 @@ void drained(String description, WidgetTesterCallback body) =>
       await t.pump(const Duration(milliseconds: 50));
     });
 
+/// Over 6 h old and always on the previous local day, so the day header
+/// shows at every hour and in every time zone.
+DateTime yesterdayOver6h() {
+  final now = DateTime.now();
+  final lateYesterday = DateTime(now.year, now.month, now.day, 0, -30);
+  final ago7h = now.subtract(const Duration(hours: 7));
+  return ago7h.isBefore(lateYesterday) ? ago7h : lateYesterday;
+}
+
 void main() {
   group('the tap toggle', () {
     drained('a tap opens the message; a second tap closes it', (t) async {
@@ -507,7 +516,7 @@ void main() {
       return [for (final f in found) f.$1];
     }
 
-    final old = DateTime.now().subtract(const Duration(hours: 7));
+    final old = yesterdayOver6h();
     final kinds = <String, (Message, List<String>)>{
       'my fresh text': (
         mine('k'),

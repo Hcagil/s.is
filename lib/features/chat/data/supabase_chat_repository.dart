@@ -589,7 +589,7 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
           .order('created_at', ascending: false)
           .limit(_historyLimit)
           .retriedOnce();
-      return Ok(rows.map(_toMessage).toList());
+      return Ok(await _open(rows.map(_toMessage).toList()));
     } catch (e) {
       return Err(_asFailure(e));
     }
@@ -607,7 +607,7 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
           .order('created_at', ascending: false)
           .limit(_historyLimit)
           .retriedOnce();
-      return Ok(rows.map(_toMessage).toList());
+      return Ok(await _open(rows.map(_toMessage).toList()));
     } catch (e) {
       return Err(_asFailure(e));
     }
@@ -1340,7 +1340,9 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
         'search_messages',
         params: {'query': query, 'conversation': conversationId},
       ) as List<dynamic>;
-      return Ok(rows.cast<Map<String, dynamic>>().map(_toMessage).toList());
+      return Ok(
+        await _open(rows.cast<Map<String, dynamic>>().map(_toMessage).toList()),
+      );
     } catch (e) {
       return Err(_asFailure(e));
     }

@@ -288,40 +288,40 @@ void main() {
   });
 
   group('reconcilePage', () {
-    test(
-      'reachedStart: keeps exactly the page, sets a complete block',
-      () async {
-        final s = store();
-        await s.upsertAll([
-          for (var i = 1; i <= 5; i++) msg('m$i', t: i),
-          msg('other', conv: 'c2', t: 1),
-        ]);
-        await s.reconcilePage('c1', [
-          msg('m2', t: 2),
-          msg('m4', t: 4),
-        ], reachedStart: true);
-        expect(ids(await s.newest('c1')), ['m2', 'm4']);
-        // Another chat is never touched.
-        expect(ids(await s.newest('c2')), ['other']);
-        final sync = (await s.syncState('c1'))!;
-        expect(sync.complete, isTrue);
-        expect(sync.contiguousFrom!.isAtSameMomentAs(at(2)), isTrue);
-        expect(sync.newestAt!.isAtSameMomentAs(at(4)), isTrue);
-      },
-    );
+    test('reachedStart: drops in-range rows, keeps the page and newer rows', () async {
+      final s = store();
+      await s.upsertAll([
+        for (var i = 1; i <= 5; i++) msg('m$i', t: i),
+        msg('other', conv: 'c2', t: 1),
+      ]);
+      await s.reconcilePage('c1', [
+        msg('m2', t: 2),
+        msg('m4', t: 4),
+      ], reachedStart: true);
+      // m1 is below the page (reachedStart lifts the lower bound) and m3 is in
+      // range: both go. m5 is newer than the page: kept.
+      expect(ids(await s.newest('c1')), ['m2', 'm4', 'm5']);
+      // Another chat is never touched.
+      expect(ids(await s.newest('c2')), ['other']);
+      final sync = (await s.syncState('c1'))!;
+      expect(sync.complete, isTrue);
+      expect(sync.contiguousFrom!.isAtSameMomentAs(at(2)), isTrue);
+      expect(sync.newestAt!.isAtSameMomentAs(at(4)), isTrue);
+    });
 
     test(
-      'not reachedStart: deletes only rows at or after the page oldest',
+      'not reachedStart: deletes only in-range rows, keeps older and newer',
       () async {
         final s = store();
         await s.upsertAll([for (var i = 1; i <= 6; i++) msg('m$i', t: i)]);
-        // The server no longer has m4 and m6 (deleted or hidden).
+        // The server no longer has m4 (in range: deleted); m6 is newer than the
+        // page, so it is kept.
         await s.reconcilePage('c1', [
           msg('m3', t: 3, body: 'edited'),
           msg('m5', t: 5),
         ], reachedStart: false);
         final got = await s.newest('c1');
-        expect(ids(got), ['m1', 'm2', 'm3', 'm5']);
+        expect(ids(got), ['m1', 'm2', 'm3', 'm5', 'm6']);
         expect(got[2].body, 'edited');
         final sync = (await s.syncState('c1'))!;
         expect(sync.complete, isFalse);

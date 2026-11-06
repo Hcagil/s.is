@@ -8,6 +8,7 @@
 // replayed call can at most send a notification that was due anyway, once.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { ACTION_TTL_SECONDS, sha256Hex, signActionToken } from '../_shared/action_token.ts';
+import { apnsCategory } from './apns_category.ts';
 
 // Who is told, and what each recipient may see, is decided in SQL
 // (app_private.push_targets_for_message): their own preview setting, mutes,
@@ -278,7 +279,7 @@ async function send(id: string): Promise<void> {
                         // The buttons AppDelegate.swift registers for this
                         // category; an older build has none and shows none.
                         // SIS_MESSAGE_LOCKED has only a foreground Reply (AppDelegate.swift hands the text to the app, which locks and sends it); no Mark as read.
-                        category: t.encrypted ? 'SIS_MESSAGE_LOCKED' : 'SIS_MESSAGE',
+                        category: apnsCategory(!!t.encrypted, chatEncrypted),
                         sound: 'default',
                         // Runs the iPhone's notification service extension: it fetches the picture, decrypts ct into the real text, or sets the one locked text of an encrypted chat.
                         ...(thumbUrl || withCt || t.encrypted ? { 'mutable-content': 1 } : {}),

@@ -71,6 +71,10 @@ class MutesController extends AsyncNotifier<List<Mute>> {
     };
   }
 
+  /// The saved mutes once loaded; empty if the load failed.
+  Future<List<Mute>> _loaded() =>
+      future.then((v) => v, onError: (_) => const <Mute>[]);
+
   /// Mutes a conversation or person for the given length.
   Future<Result<void>> mute(
     MuteKind kind,
@@ -81,9 +85,11 @@ class MutesController extends AsyncNotifier<List<Mute>> {
     final result = await ref
         .read(notificationSettingsRepositoryProvider)
         .mute(kind, target, until);
-    if (result case Ok() when ref.mounted) {
+    if (result case Ok()) {
+      final saved = await _loaded();
+      if (!ref.mounted) return result;
       state = AsyncData([
-        for (final m in state.value ?? const <Mute>[])
+        for (final m in saved)
           if (m.kind != kind || m.target != target) m,
         Mute(kind: kind, target: target, until: until),
       ]);
@@ -96,9 +102,11 @@ class MutesController extends AsyncNotifier<List<Mute>> {
     final result = await ref
         .read(notificationSettingsRepositoryProvider)
         .unmute(kind, target);
-    if (result case Ok() when ref.mounted) {
+    if (result case Ok()) {
+      final saved = await _loaded();
+      if (!ref.mounted) return result;
       state = AsyncData([
-        for (final m in state.value ?? const <Mute>[])
+        for (final m in saved)
           if (m.kind != kind || m.target != target) m,
       ]);
     }

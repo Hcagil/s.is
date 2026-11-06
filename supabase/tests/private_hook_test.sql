@@ -1,5 +1,5 @@
 begin;
-select plan(138);
+select plan(152);
 
 -- Generic private hook. Written from the contract, not the migrations. The
 -- private functions are NOT part of the public code; here each one is a tiny
@@ -449,6 +449,48 @@ select is((select count(*) from public.messages where admin_msg->>'k' = 'card' a
 select ok(exists (select 1 from information_schema.columns where table_schema = 'app_private' and table_name = 'admin_pending' and column_name = 'kind')
           and not has_column_privilege(r, 'app_private.admin_pending', 'kind', p), r || ' has no ' || p || ' on admin_pending.kind')
   from unnest(array['anon', 'authenticated']) r, unnest(array['SELECT', 'INSERT', 'UPDATE']) p;
+
+-- R6: a removed tester also loses command-chat access and bot contact (yes on a
+-- normal conf card only); other users' rows stay; cancel changes nothing.
+insert into auth.users (id, email, email_confirmed_at) values
+  ('00000000-0000-0000-0000-0000006f0b01', 'tst11@mail.test', now()),
+  ('00000000-0000-0000-0000-0000006f0b02', 'tst12@mail.test', now()),
+  ('00000000-0000-0000-0000-0000006f0b03', 'fakebot@sis.test', now());
+insert into app_private.bot_accounts(user_id, debug_conversation) values ('00000000-0000-0000-0000-0000006f0b03', ca());
+insert into app_private.command_admins(user_id) values ('00000000-0000-0000-0000-0000006f0b01'), ('00000000-0000-0000-0000-0000006f0b02');
+insert into app_private.bot_contacts(bot_id, contact_id) values
+  ('00000000-0000-0000-0000-0000006f0b03', '00000000-0000-0000-0000-0000006f0b01'),
+  ('00000000-0000-0000-0000-0000006f0b03', '00000000-0000-0000-0000-0000006f0b02');
+create function r6(who text) returns text language sql as $$
+  select (select count(*) from app_private.command_admins where user_id = ('00000000-0000-0000-0000-0000006f0b' || who)::uuid)
+   || '/' || (select count(*) from app_private.bot_contacts where contact_id = ('00000000-0000-0000-0000-0000006f0b' || who)::uuid) $$;
+select is(r6('01') || ' ' || r6('02'), '1/1 1/1', 'R6 fixture: both testers have access and a contact');
+select typed('own', ca(), '/remove tst11@mail.test');
+create table r6a as select id from public.messages
+  where conversation_id = ca() and admin_msg->>'k' = 'conf' and id not in (select id from seen);
+select ks(ca());
+select typed('own', ca(), '/remove tst12@mail.test');
+create table r6b as select id from public.messages
+  where conversation_id = ca() and admin_msg->>'k' = 'conf' and id not in (select id from seen) and id not in (select id from r6a);
+select ks(ca());
+select is(ans('own', (select id from r6b), false), 'ok', 'R6 cancel');
+select is(r6('02'), '1/1', 'R6 cancel keeps the access and the contact');
+select is(ans('own', (select id from r6a), true), 'ok', 'R6 yes on a normal conf card');
+select is(listed('tst11@mail.test'), 0::bigint, 'R6 the tester is removed');
+select is(r6('01'), '0/0', 'R6 the removed tester has no access row and no contact row');
+select is((select count(*) from app_private.command_admins where user_id = '00000000-0000-0000-0000-0000006f0b01'), 0::bigint, 'R6 access row gone');
+select is((select count(*) from app_private.bot_contacts where contact_id = '00000000-0000-0000-0000-0000006f0b01'), 0::bigint, 'R6 contact row gone');
+select is(r6('02'), '1/1', 'R6 another user keeps both rows');
+select is((select count(*) from app_private.command_admins where user_id = u('own')), 1::bigint, 'R6 the owner keeps the access row');
+
+-- A private word after leading whitespace (tab, newline): still only the private reply in the second chat.
+create table ws as select scmd() s, ncalls() c;
+select typed('own', cb('own'), E'\t/fb');
+select is(ks(cb('own')), 'note', 'second chat: a private word after a tab gets exactly the private reply');
+select typed('own', cb('own'), E'\n/fb tst2@mail.test');
+select is(ks(cb('own')), 'note', 'second chat: a private word after a newline, with an argument, gets exactly one reply');
+select is(scmd(), (select s from ws), 'second chat: leading whitespace makes no sales_commands row');
+select is(ncalls(), (select c from ws) + 2, 'second chat: private_handler ran for both');
 
 select * from finish();
 rollback;

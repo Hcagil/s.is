@@ -53,8 +53,8 @@ String? adminReplyText(
     'podOff' => l.salesOff,
     'podUnk' => cmd == null ? l.adminUnk : l.salesUnknown(cmd),
     'podRate' => l.salesRate,
-    'podSwOn' => cmd == null ? null : l.salesSwOn(cmd),
-    'podSwOff' => cmd == null ? null : l.salesSwOff(cmd),
+    'podSwOn' => l.salesSwOn(cmd ?? l.salesTitle),
+    'podSwOff' => l.salesSwOff(cmd ?? l.salesTitle),
     _ => null,
   };
   if (text == null || m['help'] != true) return text;

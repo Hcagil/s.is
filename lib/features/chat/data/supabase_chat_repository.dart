@@ -700,7 +700,7 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
           })
           .select(_messageColumns)
           .single();
-      return Ok(_toMessage(row));
+      return Ok((await _open([_toMessage(row)])).first);
     } on PostgrestException catch (e) {
       if (e.code == 'LNKP1' && preview != null) {
         // The server refused the card: send the text with the card minus its
@@ -739,7 +739,7 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
               row['body'] == trimmed &&
               (replyTo == null || row['reply_to'] == replyTo);
           if (!isOurs) return const Err(DeniedFailure());
-          return Ok(_toMessage(row));
+          return Ok((await _open([_toMessage(row)])).first);
         } catch (e2) {
           return Err(_asFailure(e2));
         }
@@ -974,7 +974,7 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
           .single();
       // The sender already has the photo: never download it back.
       await _cache.write(path, image.bytes);
-      return Ok(_toMessage(row));
+      return Ok((await _open([_toMessage(row)])).first);
     } catch (e) {
       return Err(_asFailure(e));
     }
@@ -1312,7 +1312,7 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
         'edit_message',
         params: {'message': message.id, 'body': body.trim()},
       );
-      return Ok(_toMessage(row as Map<String, dynamic>));
+      return Ok((await _open([_toMessage(row as Map<String, dynamic>)])).first);
     } catch (e) {
       return Err(_asFailure(e));
     }

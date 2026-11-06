@@ -98,6 +98,10 @@ Future<ProviderContainer> pump(
 
 /// Long-presses message [id]: the action card opens.
 Future<void> openCard(WidgetTester tester, String id) async {
+  // A tall history (media bubbles, day headers) can push an old bubble under
+  // the app bar; a member would scroll to it first.
+  await tester.ensureVisible(find.byKey(ValueKey('message-$id')));
+  await tester.pumpAndSettle();
   await tester.longPress(find.byKey(ValueKey('message-$id')));
   await tester.pumpAndSettle();
   expect(find.byKey(const ValueKey('message-menu')), findsOneWidget);
@@ -122,6 +126,16 @@ Future<void> confirmBox(WidgetTester tester, {bool tick = false}) async {
 }
 
 final _ago7h = Duration(hours: 7);
+
+/// Over 6 h old and always on the previous local day, so the day header
+/// (and the taller list) shows at every hour and in every time zone.
+DateTime _yesterdayOver6h() {
+  final now = DateTime.now();
+  final lateYesterday = DateTime(now.year, now.month, now.day, 0, -30);
+  final ago7h = now.subtract(_ago7h);
+  return ago7h.isBefore(lateYesterday) ? ago7h : lateYesterday;
+}
+
 const alsoBob = 'Also delete for Bob';
 const allMembers = 'Delete for all members';
 const mediaNote =
@@ -149,7 +163,7 @@ void main() {
             'm3',
             from: me.userId,
             body: 'old',
-            createdAt: DateTime.now().subtract(_ago7h),
+            createdAt: _yesterdayOver6h(),
           ),
         ];
       await pump(tester, chat);
@@ -221,7 +235,7 @@ void main() {
             'm1',
             from: me.userId,
             body: 'old',
-            createdAt: DateTime.now().subtract(_ago7h),
+            createdAt: _yesterdayOver6h(),
           ),
         ];
       await pump(tester, chat);
@@ -308,7 +322,7 @@ void main() {
             from: me.userId,
             body: 'old pic',
             attachmentPath: 'c1/2.png',
-            createdAt: DateTime.now().subtract(_ago7h),
+            createdAt: _yesterdayOver6h(),
           ),
         ];
       await pump(tester, chat);

@@ -413,6 +413,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
   /// Writes [list] to the on-phone store (best effort, fire and forget). A
   /// legacy `vanished` row leaves the store; a pending send is skipped by it.
   void _persist(Iterable<Message> list) {
+    if (!ref.mounted) return; // chat closed while a write was in flight
     final store = _storeOf(ref);
     if (store == null) return;
     final keep = <Message>[];
@@ -875,7 +876,7 @@ class MessagesController extends AsyncNotifier<List<Message>> {
       ]);
     }
     final result = await ref.read(chatRepositoryProvider).hideForMe(message);
-    if (result is Ok) {
+    if (result is Ok && ref.mounted) {
       final store = _storeOf(ref);
       // The opener must not bring the hidden row back from its waiting list.
       ref.read(messageOpenerProvider).forget(message.id);

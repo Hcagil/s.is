@@ -173,7 +173,11 @@ class RunnerTests: XCTestCase {
       plugin.picker(picker, didFinishPicking: [])
       wait(for: [answered], timeout: 10)
       XCTAssertNil(answer, "a cancelled \(method) must answer nil")
-      XCTAssertTrue(waitUntil { !(self.topViewController() is PHPickerViewController) },
+      // Wait for the dismissal transition to end too, so the next present starts clean.
+      XCTAssertTrue(waitUntil {
+                      let top = self.topViewController()
+                      return !(top is PHPickerViewController) && top?.transitionCoordinator == nil
+                    },
                     "the picker stayed on screen after \(method) was cancelled")
     }
   }
@@ -316,7 +320,12 @@ class RunnerTests: XCTestCase {
   }
 
   private func waitForPicker() -> PHPickerViewController? {
-    _ = waitUntil { self.topViewController() is PHPickerViewController }
+    // presentedViewController is set when the present starts; UIKit drops a dismiss
+    // sent while that transition still runs, so wait until it has finished.
+    _ = waitUntil {
+      let top = self.topViewController()
+      return top is PHPickerViewController && top?.transitionCoordinator == nil
+    }
     return topViewController() as? PHPickerViewController
   }
 }

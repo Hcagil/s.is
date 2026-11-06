@@ -34,7 +34,7 @@ enum NotificationActionRun {
       if id != .invalid { time.end(id) }
     }
 
-    let id = time.begin(expired: { finishOnce() })
+    let id = time.begin(expired: { })
     lock.lock()
     task = id
     let already = finished

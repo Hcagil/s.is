@@ -120,7 +120,7 @@ final class SupabaseChatPinRepository implements ChatPinRepository {
           .select(
             'id, conversation_id, sender_id, body, created_at, '
             'attachment_path, deleted, sticker_id, sticker_album, sticker_album_id, '
-            'ciphertext, olm_type',
+            'has_ciphertext, olm_type',
           )
           .eq('id', messageId)
           .eq('conversation_id', conversationId)
@@ -135,7 +135,7 @@ final class SupabaseChatPinRepository implements ChatPinRepository {
           conversationId: row['conversation_id'] as String,
           senderId: row['sender_id'] as String,
           // Exactly one of the two set is a forged row: show it locked.
-          body: (row['ciphertext'] == null) != (row['olm_type'] == null)
+          body: (row['has_ciphertext'] != true) != (row['olm_type'] == null)
               ? lockedBodyPlaceholder
               : row['body'] as String,
           createdAt: DateTime.parse(row['created_at'] as String).toLocal(),

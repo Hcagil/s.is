@@ -1,4 +1,5 @@
 import 'conversation.dart';
+import 'message.dart';
 
 /// Where the conversation list's last snapshot lives on the phone, so the
 /// list can show instantly on a cold start, before the server answers.
@@ -20,4 +21,12 @@ abstract interface class ChatListSnapshotStore {
 
   /// Removes the snapshot, if any.
   Future<void> clear();
+}
+
+/// A snapshot store that also returns the notification-saved rows (push inbox) in the same read, so a cold start pays one store call, not two.
+abstract interface class ChatListWithPushStore {
+  /// Same rules as [ChatListSnapshotStore.load] (null when nothing usable is saved), plus the push-inbox messages, oldest first.
+  Future<({List<Conversation> list, List<Message> push})?> loadWithPush(
+    String ownerId,
+  );
 }

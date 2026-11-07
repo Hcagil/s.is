@@ -203,45 +203,61 @@ Future<void> main() async {
   // Read before runApp (like the session marker), so the first frame already
   // has the member's theme, font, text size and language: no flash.
   const appearanceStore = SharedPrefsAppearanceStore();
-  final appearanceOverrides = [
-    appearanceStoreProvider.overrideWithValue(appearanceStore),
-    initialAppearanceProvider.overrideWithValue(await appearanceStore.load()),
-    wallpaperPhotosProvider.overrideWithValue(
-      const PickerWallpaperPhotos(ExternalPickerChannel()),
-    ),
-  ];
+  final appearanceOverridesLoad = appearanceStore.load().then(
+    (initial) => [
+      appearanceStoreProvider.overrideWithValue(appearanceStore),
+      initialAppearanceProvider.overrideWithValue(initial),
+      wallpaperPhotosProvider.overrideWithValue(
+        const PickerWallpaperPhotos(ExternalPickerChannel()),
+      ),
+    ],
+  );
   // Same reason: the member's auto-download choices are known at the first
   // frame, so a photo's gate never flickers.
   const autoDownloadStore = SharedPrefsAutoDownloadStore();
-  final autoDownloadOverrides = [
-    autoDownloadStoreProvider.overrideWithValue(autoDownloadStore),
-    initialAutoDownloadProvider.overrideWithValue(
-      await autoDownloadStore.load(),
-    ),
-    networkProbeProvider.overrideWithValue(ConnectivityNetworkProbe()),
-  ];
+  final autoDownloadOverridesLoad = autoDownloadStore.load().then(
+    (initial) => [
+      autoDownloadStoreProvider.overrideWithValue(autoDownloadStore),
+      initialAutoDownloadProvider.overrideWithValue(initial),
+      networkProbeProvider.overrideWithValue(ConnectivityNetworkProbe()),
+    ],
+  );
   if (!config.isComplete) {
+    autoDownloadOverridesLoad.ignore();
     runApp(
-      ProviderScope(overrides: appearanceOverrides, child: const SisApp()),
+      ProviderScope(
+        overrides: await appearanceOverridesLoad,
+        child: const SisApp(),
+      ),
     );
     return;
   } // SessionController yields SetupRequired
   try {
     // Read-only prefetch of the store key in parallel with Supabase; the store open finds it in memory (falls back to the lazy read on any error).
+    // Then opens the existing store file early with that key (no owner needed; the owner check stays in the first read).
     unawaited(
       DriftMessageStore.prefetchKey(
         () => StoreKey.inGroup(keychainGroup).peek(),
-      ),
+      ).then((_) => DriftMessageStore.warmOpen(storeFile)),
     );
-    await Supabase.initialize(
-      url: config.supabaseUrl,
-      publishableKey: config.supabasePublishableKey,
-      authOptions: const FlutterAuthClientOptions(
-        authFlowType: AuthFlowType.pkce,
-        localStorage: SecureSessionStorage(),
+    // The two preference reads and the Supabase start run together.
+    final (appearanceOverrides, autoDownloadOverrides, _) = await (
+      appearanceOverridesLoad,
+      autoDownloadOverridesLoad,
+      Supabase.initialize(
+        url: config.supabaseUrl,
+        publishableKey: config.supabasePublishableKey,
+        authOptions: const FlutterAuthClientOptions(
+          authFlowType: AuthFlowType.pkce,
+          localStorage: SecureSessionStorage(),
+        ),
       ),
-    );
+    ).wait;
     StartupMarks.mark('supabase-ready');
+    // No session: nobody will take the early store open, so close it now.
+    if (Supabase.instance.client.auth.currentSession == null) {
+      unawaited(DriftMessageStore.dropEarly());
+    }
     // Test builds only (SIS_TEST_LOGIN define): sign in once from a handed-over token.
     if (kTestLogin && Supabase.instance.client.auth.currentSession == null) {
       await consumeTestSession(
@@ -549,11 +565,19 @@ Future<void> main() async {
   } catch (e) {
     // Malformed config or a broken secure store must show a reason, not a
     // blank screen. Error text can hold config or IDs: only its type is kept.
-    log('Startup failed: ${e.runtimeType}', name: 'sis.startup');
+    // The parallel start wraps the real error: log its type, not the wrapper's.
+    var type = '${e.runtimeType}';
+    if (e is ParallelWaitError) {
+      final errs = e.errors;
+      if (errs is (AsyncError?, AsyncError?, AsyncError?)) {
+        type = '${(errs.$3 ?? errs.$1 ?? errs.$2)?.error.runtimeType}';
+      }
+    }
+    log('Startup failed: $type', name: 'sis.startup');
     runApp(
       ProviderScope(
         overrides: [
-          ...appearanceOverrides,
+          ...await appearanceOverridesLoad,
           startupErrorProvider.overrideWithValue(StartupFailure.bootstrap),
         ],
         child: const SisApp(),

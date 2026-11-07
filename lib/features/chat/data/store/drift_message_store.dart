@@ -39,11 +39,18 @@ final class DriftMessageStore
   static String? _prefetchedKey;
   static bool _keyTaken = false;
 
+  /// The early open (see [warmOpen]): a database opened with the prefetched key before any owner is known; its path, key and the erase count it began under.
+  static Future<StoreDatabase>? _early;
+  static String? _earlyPath;
+  static String? _earlyKey;
+  static int _earlyErasures = 0;
+
   /// Test seam: forgets the prefetched key and the "first open ran" flag.
   @visibleForTesting
   static void resetPrefetchForTest() {
     _prefetchedKey = null;
     _keyTaken = false;
+    unawaited(_discardEarly());
   }
 
   /// Cold start: reads the on-phone store key (read-only, via [read]) while Supabase starts, so the first open finds it in memory. Dropped if an erase happens meanwhile, if the first open already ran, or on any error or null.
@@ -56,6 +63,83 @@ final class DriftMessageStore
         _prefetchedKey = key;
       }
     } catch (_) {}
+  }
+
+  /// Cold start: opens the EXISTING store file with the prefetched key ahead of the first read, in parallel with Supabase, so the isolate, sqlite3mc and PRAGMAs are ready. It reads only the owner_id meta row (dropped, never returned) and never creates a file or a key: no prefetched key, a key already taken, or no file means nothing happens (the lazy open runs as before). An erase meanwhile drops it. The owner check still runs in [_create].
+  static Future<void> warmOpen(Future<File> Function() file) async {
+    final key = _prefetchedKey;
+    if (key == null || _keyTaken || _early != null) return;
+    final erasuresAtStart = _erasures;
+    try {
+      final f = await file();
+      if (!await f.exists() || _keyTaken || erasuresAtStart != _erasures) {
+        return;
+      }
+      StartupMarks.mark('early-open-start');
+      final opening = _serial(f.path, () async {
+        // An erase that began meanwhile wins: never create or re-create the file.
+        if (erasuresAtStart != _erasures) throw const _ErasedWhileOpening();
+        final db = StoreDatabase(
+          NativeDatabase.createInBackground(f, setup: _keyed(key)),
+        );
+        var ok = false;
+        try {
+          await (db.select(
+            db.meta,
+          )..where((t) => t.key.equals('owner_id'))).getSingleOrNull();
+          ok = true;
+          return db;
+        } finally {
+          if (!ok) await db.close();
+        }
+      });
+      _early = opening;
+      _earlyPath = f.path;
+      _earlyKey = key;
+      _earlyErasures = erasuresAtStart;
+      await opening;
+      StartupMarks.mark('early-open-end');
+    } catch (_) {
+      _early = null;
+    }
+  }
+
+  /// The early open, if it is still valid for [path] and [key] (no erase since it began); otherwise it is closed and null is returned. Single use.
+  static Future<StoreDatabase?> _takeEarly(String path, String key) async {
+    final pending = _early;
+    if (pending == null) return null;
+    _early = null;
+    final StoreDatabase db;
+    try {
+      db = await pending;
+    } catch (_) {
+      return null;
+    }
+    final valid =
+        _earlyPath == path && _earlyKey == key && _earlyErasures == _erasures;
+    _earlyPath = null;
+    _earlyKey = null;
+    if (!valid) {
+      await db.close();
+      return null;
+    }
+    return db;
+  }
+
+  /// Drops the early open and its remembered path and key: the returned future completes once its database is closed (a failed open completes too).
+  static Future<void> _discardEarly() {
+    final pending = _early;
+    _early = null;
+    _earlyKey = null;
+    _earlyPath = null;
+    if (pending == null) return Future<void>.value();
+    return pending.then<void>((db) => db.close(), onError: (Object _) {});
+  }
+
+  /// Start without a session: nobody will take the early open, so close it and forget the prefetched key.
+  static Future<void> dropEarly() {
+    _prefetchedKey = null;
+    return _discardEarly();
   }
 
   /// Per file path: opens in this process run one after another, so a new file's schema is created by one opener while the others wait (no create-vs-create race).
@@ -304,9 +388,12 @@ final class DriftMessageStore
     StartupMarks.mark('store-key');
 
     Future<StoreDatabase> attempt() async {
-      final db = StoreDatabase(
-        NativeDatabase.createInBackground(file, setup: _keyed(key)),
-      );
+      StartupMarks.mark('store-spawn');
+      final db =
+          await _takeEarly(file.path, key) ??
+          StoreDatabase(
+            NativeDatabase.createInBackground(file, setup: _keyed(key)),
+          );
       var ok = false;
       try {
         final owner = await (db.select(
@@ -617,21 +704,7 @@ final class DriftMessageStore
   }
 
   @override
-  Future<List<Message>> pushInbox() => _run(const [], (db) async {
-    final rows = await (db.select(
-      db.pushInbox,
-    )..orderBy([(t) => OrderingTerm.asc(t.receivedAt)])).get();
-    return [
-      for (final r in rows)
-        Message(
-          id: r.messageId,
-          conversationId: r.conversationId,
-          senderId: r.senderId,
-          body: r.body,
-          createdAt: DateTime.fromMicrosecondsSinceEpoch(r.receivedAt),
-        ),
-    ];
-  });
+  Future<List<Message>> pushInbox() => _run(const [], readPushInbox);
 
   @override
   Future<void> sweepPushInbox(DateTime before) => _run<void>(null, (db) async {
@@ -647,18 +720,20 @@ final class DriftMessageStore
   Future<void> clear() {
     _erasures++;
     _prefetchedKey = null;
+    final earlyClosed = _discardEarly();
     _closed = true;
     final running = _inflight.toList();
     final pending = _db;
     _db = null;
     final previous = _clearing;
-    return _clearing = _clearOnce(previous, running, pending);
+    return _clearing = _clearOnce(previous, running, pending, earlyClosed);
   }
 
   Future<void> _clearOnce(
     Future<void>? previous,
     List<Future<void>> running,
     Future<StoreDatabase>? pending,
+    Future<void> earlyClosed,
   ) async {
     if (previous != null) {
       await previous;
@@ -670,6 +745,10 @@ final class DriftMessageStore
     await Future.wait(running);
     try {
       if (pending != null) await (await pending).close();
+    } catch (_) {}
+    // Never delete a file the early open may still hold or re-create.
+    try {
+      await earlyClosed;
     } catch (_) {}
     try {
       final file = await _file();
@@ -770,6 +849,23 @@ bool _unusable(Object e) {
   return e is SqliteException &&
       (e.resultCode == SqlError.SQLITE_NOTADB ||
           e.resultCode == SqlError.SQLITE_CORRUPT);
+}
+
+/// Reads the notification-saved rows, oldest first. Shared by [DriftMessageStore.pushInbox] and the chat list snapshot's combined read.
+Future<List<Message>> readPushInbox(StoreDatabase db) async {
+  final rows = await (db.select(
+    db.pushInbox,
+  )..orderBy([(t) => OrderingTerm.asc(t.receivedAt)])).get();
+  return [
+    for (final r in rows)
+      Message(
+        id: r.messageId,
+        conversationId: r.conversationId,
+        senderId: r.senderId,
+        body: r.body,
+        createdAt: DateTime.fromMicrosecondsSinceEpoch(r.receivedAt),
+      ),
+  ];
 }
 
 /// An erase since an open began won against it (see [DriftMessageStore._lostToErase]).

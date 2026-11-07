@@ -254,6 +254,10 @@ Future<void> main() async {
       ),
     ).wait;
     StartupMarks.mark('supabase-ready');
+    // No session: nobody will take the early store open, so close it now.
+    if (Supabase.instance.client.auth.currentSession == null) {
+      unawaited(DriftMessageStore.dropEarly());
+    }
     // Test builds only (SIS_TEST_LOGIN define): sign in once from a handed-over token.
     if (kTestLogin && Supabase.instance.client.auth.currentSession == null) {
       await consumeTestSession(
@@ -561,7 +565,15 @@ Future<void> main() async {
   } catch (e) {
     // Malformed config or a broken secure store must show a reason, not a
     // blank screen. Error text can hold config or IDs: only its type is kept.
-    log('Startup failed: ${e.runtimeType}', name: 'sis.startup');
+    // The parallel start wraps the real error: log its type, not the wrapper's.
+    var type = '${e.runtimeType}';
+    if (e is ParallelWaitError) {
+      final errs = e.errors;
+      if (errs is (AsyncError?, AsyncError?, AsyncError?)) {
+        type = '${(errs.$3 ?? errs.$1 ?? errs.$2)?.error.runtimeType}';
+      }
+    }
+    log('Startup failed: $type', name: 'sis.startup');
     runApp(
       ProviderScope(
         overrides: [

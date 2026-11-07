@@ -4,6 +4,7 @@ import '../../../core/failure.dart';
 import '../../../data/failures.dart';
 import '../../../data/postgrest_retry.dart';
 import '../domain/chat_pin_repository.dart';
+import '../domain/encrypted_message_repository.dart';
 import '../domain/group_event.dart';
 import '../domain/message.dart';
 
@@ -118,7 +119,8 @@ final class SupabaseChatPinRepository implements ChatPinRepository {
           .from('messages')
           .select(
             'id, conversation_id, sender_id, body, created_at, '
-            'attachment_path, deleted, sticker_id, sticker_album, sticker_album_id',
+            'attachment_path, deleted, sticker_id, sticker_album, sticker_album_id, '
+            'ciphertext, olm_type',
           )
           .eq('id', messageId)
           .eq('conversation_id', conversationId)
@@ -132,7 +134,10 @@ final class SupabaseChatPinRepository implements ChatPinRepository {
           id: row['id'] as String,
           conversationId: row['conversation_id'] as String,
           senderId: row['sender_id'] as String,
-          body: row['body'] as String,
+          // Exactly one of the two set is a forged row: show it locked.
+          body: (row['ciphertext'] == null) != (row['olm_type'] == null)
+              ? lockedBodyPlaceholder
+              : row['body'] as String,
           createdAt: DateTime.parse(row['created_at'] as String).toLocal(),
           attachmentPath: row['attachment_path'] as String?,
           stickerId: row['sticker_id'] as String?,

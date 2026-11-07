@@ -13,6 +13,7 @@ import '../../auth/domain/member.dart';
 import '../domain/attachment.dart';
 import '../domain/chat_repository.dart';
 import '../domain/conversation.dart';
+import '../domain/encrypted_message_repository.dart';
 import '../domain/group_colors.dart';
 import '../domain/join_cancellable.dart';
 import '../domain/group_event.dart';
@@ -260,7 +261,10 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
           row['conversation_id'] as String: (
             // An image may be sent without a caption, and an empty preview
             // would read as "no messages" while hiding a real one.
-            body: row['deleted'] != null
+            // Exactly one of the two set is a forged row: show it locked.
+            body: (row['has_ciphertext'] == true) != (row['olm_type'] != null)
+                ? lockedBodyPlaceholder
+                : row['deleted'] != null
                 ? deletedPreviewText
                 : row['sticker_id'] != null
                 ? stickerPreviewText

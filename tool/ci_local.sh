@@ -16,9 +16,22 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # Gradle keys cached artifacts by repository, so a fresh per-worktree cache re-downloads from Maven Central (HTTP 429). Share gradle and m2 across worktrees through one host dir; pub stays per worktree. Created as the user before any docker call so Docker never makes them root-owned.
-shared="${SIS_CI_CACHE:-$HOME/.cache/sis-ci}"
-mkdir -p .ci-cache/pub "$shared/gradle" "$shared/m2"
-for d in gradle m2; do [ -e ".ci-cache/$d" ] || ln -s "$shared/$d" ".ci-cache/$d"; done
+prepare_ci_cache() {
+  local shared="${SIS_CI_CACHE:-$HOME/.cache/sis-ci}" d t
+  mkdir -p .ci-cache/pub "$shared/gradle" "$shared/m2"
+  [ -w .ci-cache/pub ] || docker run --rm -v "$PWD/.ci-cache/pub:/c" alpine chown -R "$(id -u):$(id -g)" /c
+  for d in gradle m2; do
+    t=.ci-cache/$d
+    [ -L "$t" ] && continue
+    if [ -e "$t" ]; then
+      [ -w "$t" ] || docker run --rm -v "$PWD/$t:/c" alpine chown -R "$(id -u):$(id -g)" /c
+      if [ -n "$(ls -A "$t")" ]; then echo "ci_local: $t has files and is not the shared cache link; left as is" >&2; continue; fi
+      rmdir "$t"
+    fi
+    ln -s "$shared/$d" "$t"
+  done
+}
+prepare_ci_cache
 
 # Fresh worktrees lack the git-ignored Firebase config: take the owner's copy from the main checkout.
 if [ ! -f android/app/google-services.json ]; then
@@ -58,7 +71,7 @@ service_key() {
   "${CI[@]}" run --rm supabase status -o env | sed -n 's/^SECRET_KEY="\(.*\)"/\1/p'
 }
 
-layer_rules() { tool/check_pattern.sh && tool/check_release_clean.sh && test/tool/check_pattern_test.sh && test/tool/whats_new_note_test.sh && test/tool/ios_release_test.sh && test/tool/workflow_pipes_test.sh && test/tool/asc_signing_test.py && test/tool/ios_signing_bootstrap_test.py && test/tool/asc_tester_test.py && test/tool/staff_rows_release_test.py && test/tool/vault_names_test.py && test/tool/admin_apple_workflow_test.sh && test/tool/sis_bot_watch_test.sh && test/tool/sis_bot_length_test.sh && test/tool/check_pr_body_test.py && test/tool/check_release_clean_test.sh && test/tool/sis_test_send_test.sh && test/tool/mask_words_test.sh; }
+layer_rules() { tool/check_pattern.sh && tool/check_release_clean.sh && test/tool/check_pattern_test.sh && test/tool/whats_new_note_test.sh && test/tool/ios_release_test.sh && test/tool/workflow_pipes_test.sh && test/tool/asc_signing_test.py && test/tool/ios_signing_bootstrap_test.py && test/tool/asc_tester_test.py && test/tool/staff_rows_release_test.py && test/tool/vault_names_test.py && test/tool/admin_apple_workflow_test.sh && test/tool/sis_bot_watch_test.sh && test/tool/sis_bot_length_test.sh && test/tool/check_pr_body_test.py && test/tool/check_release_clean_test.sh && test/tool/sis_test_send_test.sh && test/tool/mask_words_test.sh && test/tool/ci_local_cache_test.sh; }
 
 bundle() {
   test -f android/app/google-services.json \

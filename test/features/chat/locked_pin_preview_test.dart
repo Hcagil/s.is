@@ -1,6 +1,6 @@
 // A half-set row (exactly one of ciphertext and olm_type) must never show as
-// plain text: the pinned bar and the chat-list preview show the locked
-// placeholder instead. Plain and fully locked rows keep today's behaviour.
+// plain text: the chat-list preview shows the locked placeholder instead (the
+// pinned bar is covered in pinned_lock_flag_test.dart). Plain and fully locked rows keep today's behaviour.
 // The chat_list previews carry `olm_type` and `has_ciphertext` (the ciphertext
 // itself is not sent); a preview without them (an older server) is plain.
 import 'dart:convert';
@@ -10,10 +10,8 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/chat/domain/encrypted_message_repository.dart';
-import 'package:sis/features/chat/data/supabase_chat_pin_repository.dart';
 import 'package:sis/features/chat/data/supabase_chat_repository.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
-import 'package:sis/features/chat/domain/message.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 const _me = '00000000-0000-4000-8000-000000000001';
@@ -43,17 +41,6 @@ String _session() => jsonEncode({
   },
 });
 
-Map<String, Object?> _msg({String body = _forged, String? cipher, int? olm}) =>
-    {
-      'id': 'm1',
-      'conversation_id': 'c1',
-      'sender_id': _me,
-      'body': body,
-      'created_at': '2026-11-06T10:00:00Z',
-      'ciphertext': cipher,
-      'olm_type': olm,
-    };
-
 http.Response _json(http.BaseRequest req, int code, Object body) =>
     http.Response(
       jsonEncode(body),
@@ -75,29 +62,6 @@ void main() {
     );
     await client.auth.recoverSession(_session());
     expect(client.auth.currentUser?.id, _me);
-  });
-
-  group('pinned bar', () {
-    Future<Message?> pinned(Map<String, Object?> row) async {
-      serve = (_) => [row];
-      final r = await SupabaseChatPinRepository(client)
-          .pinnedMessage('c1', 'm1');
-      return (r as Ok<Message?>).value;
-    }
-
-    test('ciphertext without olm type: placeholder', () async {
-      expect((await pinned(_msg(cipher: 'Y3Q=')))!.body, lockedBodyPlaceholder);
-    });
-    test('olm type without ciphertext: placeholder', () async {
-      expect((await pinned(_msg(olm: 1)))!.body, lockedBodyPlaceholder);
-    });
-    test('control: plain row keeps its text', () async {
-      expect((await pinned(_msg()))!.body, _forged);
-    });
-    test('control: fully locked row stays locked', () async {
-      final row = _msg(body: lockedBodyPlaceholder, cipher: 'Y3Q=', olm: 1);
-      expect((await pinned(row))!.body, lockedBodyPlaceholder);
-    });
   });
 
   group('chat-list preview', () {

@@ -101,7 +101,7 @@ jobs:
           PRIVATE_WORDS: ${{ secrets.PRIVATE_WORDS }}
         run: |
           set +x
-          printf '%s\n' "$PRIVATE_WORDS" | while IFS= read -r w; do [ -n "$w" ] && echo "::add-mask::$w"; done
+          printf '%s\n' "$PRIVATE_WORDS" | while IFS= read -r w; do if [ -n "$w" ]; then echo "::add-mask::$w"; fi; done
           exit 0
       - name: Check the private secrets
         env:

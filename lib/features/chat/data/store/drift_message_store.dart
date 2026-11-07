@@ -39,11 +39,18 @@ final class DriftMessageStore
   static String? _prefetchedKey;
   static bool _keyTaken = false;
 
+  /// The early open (see [warmOpen]): a database opened with the prefetched key before any owner is known; its path, key and the erase count it began under.
+  static Future<StoreDatabase>? _early;
+  static String? _earlyPath;
+  static String? _earlyKey;
+  static int _earlyErasures = 0;
+
   /// Test seam: forgets the prefetched key and the "first open ran" flag.
   @visibleForTesting
   static void resetPrefetchForTest() {
     _prefetchedKey = null;
     _keyTaken = false;
+    _early = null;
   }
 
   /// Cold start: reads the on-phone store key (read-only, via [read]) while Supabase starts, so the first open finds it in memory. Dropped if an erase happens meanwhile, if the first open already ran, or on any error or null.
@@ -56,6 +63,68 @@ final class DriftMessageStore
         _prefetchedKey = key;
       }
     } catch (_) {}
+  }
+
+  /// Cold start: opens the EXISTING store file with the prefetched key ahead of the first read, in parallel with Supabase, so the isolate, sqlite3mc and PRAGMAs are ready. It reads no rows and never creates a file or a key: no prefetched key, a key already taken, or no file means nothing happens (the lazy open runs as before). An erase meanwhile drops it. The owner check still runs in [_create].
+  static Future<void> warmOpen(Future<File> Function() file) async {
+    final key = _prefetchedKey;
+    if (key == null || _keyTaken || _early != null) return;
+    final erasuresAtStart = _erasures;
+    try {
+      final f = await file();
+      if (!await f.exists() || _keyTaken || erasuresAtStart != _erasures) {
+        return;
+      }
+      StartupMarks.mark('early-open-start');
+      final opening = _serial(f.path, () async {
+        final db = StoreDatabase(
+          NativeDatabase.createInBackground(f, setup: _keyed(key)),
+        );
+        var ok = false;
+        try {
+          await (db.select(
+            db.meta,
+          )..where((t) => t.key.equals('owner_id'))).getSingleOrNull();
+          ok = true;
+          return db;
+        } finally {
+          if (!ok) await db.close();
+        }
+      });
+      _early = opening;
+      _earlyPath = f.path;
+      _earlyKey = key;
+      _earlyErasures = erasuresAtStart;
+      await opening;
+      StartupMarks.mark('early-open-end');
+    } catch (_) {
+      _early = null;
+    }
+  }
+
+  /// The early open, if it is still valid for [path] and [key] (no erase since it began); otherwise it is closed and null is returned. Single use.
+  static Future<StoreDatabase?> _takeEarly(String path, String key) async {
+    final pending = _early;
+    if (pending == null) return null;
+    _early = null;
+    final StoreDatabase db;
+    try {
+      db = await pending;
+    } catch (_) {
+      return null;
+    }
+    if (_earlyPath != path || _earlyKey != key || _earlyErasures != _erasures) {
+      await db.close();
+      return null;
+    }
+    return db;
+  }
+
+  /// An erase drops the early open: closed as soon as it settles.
+  static void _discardEarly() {
+    final pending = _early;
+    _early = null;
+    pending?.then<void>((db) => db.close(), onError: (Object _) {});
   }
 
   /// Per file path: opens in this process run one after another, so a new file's schema is created by one opener while the others wait (no create-vs-create race).
@@ -305,9 +374,11 @@ final class DriftMessageStore
 
     Future<StoreDatabase> attempt() async {
       StartupMarks.mark('store-spawn');
-      final db = StoreDatabase(
-        NativeDatabase.createInBackground(file, setup: _keyed(key)),
-      );
+      final db =
+          await _takeEarly(file.path, key) ??
+          StoreDatabase(
+            NativeDatabase.createInBackground(file, setup: _keyed(key)),
+          );
       var ok = false;
       try {
         final owner = await (db.select(
@@ -634,6 +705,7 @@ final class DriftMessageStore
   Future<void> clear() {
     _erasures++;
     _prefetchedKey = null;
+    _discardEarly();
     _closed = true;
     final running = _inflight.toList();
     final pending = _db;

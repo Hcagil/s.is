@@ -304,6 +304,7 @@ final class DriftMessageStore
     StartupMarks.mark('store-key');
 
     Future<StoreDatabase> attempt() async {
+      StartupMarks.mark('store-spawn');
       final db = StoreDatabase(
         NativeDatabase.createInBackground(file, setup: _keyed(key)),
       );
@@ -617,21 +618,7 @@ final class DriftMessageStore
   }
 
   @override
-  Future<List<Message>> pushInbox() => _run(const [], (db) async {
-    final rows = await (db.select(
-      db.pushInbox,
-    )..orderBy([(t) => OrderingTerm.asc(t.receivedAt)])).get();
-    return [
-      for (final r in rows)
-        Message(
-          id: r.messageId,
-          conversationId: r.conversationId,
-          senderId: r.senderId,
-          body: r.body,
-          createdAt: DateTime.fromMicrosecondsSinceEpoch(r.receivedAt),
-        ),
-    ];
-  });
+  Future<List<Message>> pushInbox() => _run(const [], readPushInbox);
 
   @override
   Future<void> sweepPushInbox(DateTime before) => _run<void>(null, (db) async {
@@ -770,6 +757,23 @@ bool _unusable(Object e) {
   return e is SqliteException &&
       (e.resultCode == SqlError.SQLITE_NOTADB ||
           e.resultCode == SqlError.SQLITE_CORRUPT);
+}
+
+/// Reads the notification-saved rows, oldest first. Shared by [DriftMessageStore.pushInbox] and the chat list snapshot's combined read.
+Future<List<Message>> readPushInbox(StoreDatabase db) async {
+  final rows = await (db.select(
+    db.pushInbox,
+  )..orderBy([(t) => OrderingTerm.asc(t.receivedAt)])).get();
+  return [
+    for (final r in rows)
+      Message(
+        id: r.messageId,
+        conversationId: r.conversationId,
+        senderId: r.senderId,
+        body: r.body,
+        createdAt: DateTime.fromMicrosecondsSinceEpoch(r.receivedAt),
+      ),
+  ];
 }
 
 /// An erase since an open began won against it (see [DriftMessageStore._lostToErase]).

@@ -2,15 +2,18 @@ import 'dart:convert';
 
 import 'package:drift/drift.dart';
 
+import '../../../../core/startup_marks.dart';
 import '../../domain/chat_list_snapshot_store.dart';
 import '../../domain/conversation.dart';
+import '../../domain/message.dart';
 import 'drift_message_store.dart';
 import 'push_feed_writer.dart';
 import 'store_database.dart';
 
 /// Stores the chat list in the [conversations] table of the same encrypted
 /// database as [DriftMessageStore].
-class DriftChatListSnapshotStore implements ChatListSnapshotStore {
+class DriftChatListSnapshotStore
+    implements ChatListSnapshotStore, ChatListWithPushStore {
   DriftChatListSnapshotStore(this._store);
 
   final DriftMessageStore _store;
@@ -19,9 +22,18 @@ class DriftChatListSnapshotStore implements ChatListSnapshotStore {
   final _feed = PushFeedWriter();
 
   @override
-  Future<List<Conversation>?> load(String ownerId) {
+  Future<List<Conversation>?> load(String ownerId) async =>
+      (await loadWithPush(ownerId))?.list;
+
+  @override
+  Future<({List<Conversation> list, List<Message> push})?> loadWithPush(
+    String ownerId,
+  ) {
     if (ownerId != _store.ownerId) return Future.value(null);
-    return _store.run<List<Conversation>?>(null, (db) async {
+    return _store.run<({List<Conversation> list, List<Message> push})?>(null, (
+      db,
+    ) async {
+      StartupMarks.mark('snap-read-start');
       final metaRow = await (db.select(
         db.meta,
       )..where((m) => m.key.equals('chat_list_saved'))).getSingleOrNull();
@@ -30,11 +42,19 @@ class DriftChatListSnapshotStore implements ChatListSnapshotStore {
       final rows = await (db.select(
         db.conversations,
       )..orderBy([(c) => OrderingTerm.asc(c.sortAt)])).get();
+      // Best effort, as before: a failed push read never costs the list.
+      var push = const <Message>[];
       try {
-        return rows.map((row) {
+        push = await readPushInbox(db);
+      } catch (_) {}
+      StartupMarks.mark('snap-read-done');
+      try {
+        final list = rows.map((row) {
           final json = jsonDecode(row.json) as Map<String, Object?>;
           return Conversation.fromJson(json);
         }).toList();
+        StartupMarks.mark('snap-decoded');
+        return (list: list, push: push);
       } catch (_) {
         // Corrupt JSON: clear and return null.
         await clear();

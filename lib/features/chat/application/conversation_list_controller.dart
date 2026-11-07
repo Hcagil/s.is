@@ -76,16 +76,27 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     // UnimplementedError the moment it's read, not just on a failed disk
     // op), so this must be guarded the same as any other best-effort read.
     List<Conversation>? cached;
+    List<Message>? pushRows;
     if (ownerId != null) {
       try {
-        cached = await ref.read(chatListSnapshotStoreProvider).load(ownerId);
+        final snapshot = ref.read(chatListSnapshotStoreProvider);
+        if (snapshot is ChatListWithPushStore) {
+          // One store call returns the list and the notification-saved rows.
+          final both = await (snapshot as ChatListWithPushStore).loadWithPush(
+            ownerId,
+          );
+          cached = both?.list;
+          pushRows = both?.push;
+        } else {
+          cached = await snapshot.load(ownerId);
+        }
       } catch (_) {
         cached = null;
       }
     }
     if (cached != null) {
       // Text the notification saved while the app was closed shows in the first frame too.
-      cached = await _withPushRows(cached);
+      cached = await _withPushRows(cached, pushRows);
     }
     if (cached != null && alive && ref.mounted) {
       state = AsyncData(cached);
@@ -181,12 +192,16 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
   final _pushCounted = <String>{};
 
   /// [list] with the text the notification saved while the app was closed (push_inbox) as previews and unread counts. Best effort: any failure leaves [list] as it is.
-  Future<List<Conversation>> _withPushRows(List<Conversation> list) async {
-    final store = _pushInboxOf(ref);
-    if (store == null) return list;
+  /// [preloaded] are the rows the snapshot read already returned; without them the push inbox is read here.
+  Future<List<Conversation>> _withPushRows(
+    List<Conversation> list, [
+    List<Message>? preloaded,
+  ]) async {
+    final store = preloaded == null ? _pushInboxOf(ref) : null;
+    if (preloaded == null && store == null) return list;
     try {
       var next = list;
-      for (final m in await store.pushInbox()) {
+      for (final m in preloaded ?? await store!.pushInbox()) {
         final applied = _withMessage(next, m);
         if (applied != null) {
           next = applied;

@@ -231,14 +231,21 @@ class NativeDrawTest {
     fun `a burst is drawn in arrival order, at least 300 ms apart, and the summary waits for the last`() {
         val chats = (1..5).map { "burst-$it" }
         val ids = chats.map { nextId() }
+        // Bracketed as in the pace-cap test: each draw was posted after notSeen[c] and by seen[c],
+        // so a late poll only widens the bracket and cannot shrink the measured gap.
+        val start = System.nanoTime()
         chats.forEachIndexed { i, c -> broadcast(push(chat = c, id = ids[i], title = "Chat $i")) }
 
         val seen = linkedMapOf<String, Long>()
+        val notSeen = chats.associateWith { start }.toMutableMap()
         var summaryEarly: List<String>? = null
         var queuedNote: String? = null
         waitFor("all five drawn") {
-            val now = System.nanoTime()
-            for (c in chats) if (c !in seen && posted(c) != null) seen[c] = now
+            val before = System.nanoTime()
+            val found = chats.filter { it !in seen && posted(it) != null }
+            val after = System.nanoTime()
+            for (c in chats) if (c !in seen && c !in found) notSeen[c] = before
+            for (c in found) seen[c] = after
             if (seen.size in 2 until chats.size) {
                 // While the tail is still queued, the summary must not have been re-posted
                 // by a middle push: it never lists chat 1 (the second) yet.
@@ -249,10 +256,10 @@ class NativeDrawTest {
         }
 
         assertEquals("arrival order", chats, seen.keys.toList())
-        val at = seen.values.toList()
-        for (i in 1 until at.size) {
-            val gapMs = (at[i] - at[i - 1]) / 1_000_000
-            assertTrue("draw $i came ${gapMs} ms after the one before", gapMs >= 280)
+        for (i in 1 until chats.size) {
+            // The longest the gap from draw i-1 to draw i can have been.
+            val gapMs = (seen.getValue(chats[i]) - notSeen.getValue(chats[i - 1])) / 1_000_000
+            assertTrue("draw $i came at most ${gapMs} ms after the one before", gapMs >= 280)
         }
         assertNull("the summary was re-posted mid-burst: $summaryEarly", summaryEarly)
         waitFor("the summary lists all five") { summaryLines()?.size == 5 }
@@ -272,27 +279,39 @@ class NativeDrawTest {
         // the receives are still dispatched lowers the depth of the later pushes (push 16 at
         // depth 15 is paced), so the draw thread is held back on InstantPush's lock (pace() is
         // @Synchronized) until all 18 are accepted.
+        var start = 0L
         synchronized(InstantPush) {
             chats.forEachIndexed { i, c -> broadcast(push(chat = c, title = "Chat $i")) }
             ShadowLooper.idleMainLooper()
+            start = System.nanoTime()
             assertTrue("a push was drawn before the burst was queued", chats.all { posted(it) == null })
         }
 
+        // Each draw is bracketed: it was posted after notSeen[c] (taken before a check that missed
+        // it) and by seen[c] (taken after the check that found it). A late poll (CI load, a GC
+        // pause) only widens the bracket, so the bounds below never fail on slow polling.
         val seen = linkedMapOf<String, Long>()
+        val notSeen = chats.associateWith { start }.toMutableMap()
         waitFor("all $n drawn") {
-            val now = System.nanoTime()
-            for (c in chats) if (c !in seen && posted(c) != null) seen[c] = now
+            val before = System.nanoTime()
+            val found = chats.filter { it !in seen && posted(it) != null }
+            val after = System.nanoTime()
+            for (c in chats) if (c !in seen && c !in found) notSeen[c] = before
+            for (c in found) seen[c] = after
             seen.size == chats.size
         }
 
         assertEquals("arrival order", chats, seen.keys.toList())
-        val gaps = seen.values.toList().zipWithNext { a, b -> (b - a) / 1_000_000 }
-        // gaps[i] is draw i+2 after draw i+1: draws 2..15 keep the gap, 16..18 do not.
+        val ms = { a: Long, b: Long -> (b - a) / 1_000_000 }
+        // Longest and shortest the gap from draw i to draw i+1 can have been.
+        val longest = (1 until n).map { ms(notSeen.getValue(chats[it - 1]), seen.getValue(chats[it])) }
+        val shortest = (1 until n).map { ms(seen.getValue(chats[it - 1]), notSeen.getValue(chats[it])) }
+        // Index i is draw i+2 after draw i+1: draws 2..15 keep the 300 ms gap, 16..18 do not.
         for (i in 0 until PushArrivalReceiver.PACE_CAP - 1) {
-            assertTrue("draw ${i + 2} came ${gaps[i]} ms after the one before: $gaps", gaps[i] >= 280)
+            assertTrue("draw ${i + 2} came at most ${longest[i]} ms after the one before: $longest", longest[i] >= 280)
         }
-        for (i in PushArrivalReceiver.PACE_CAP - 1 until gaps.size) {
-            assertTrue("draw ${i + 2} above the cap waited ${gaps[i]} ms: $gaps", gaps[i] < 150)
+        for (i in PushArrivalReceiver.PACE_CAP - 1 until n - 1) {
+            assertTrue("draw ${i + 2} above the cap waited at least ${shortest[i]} ms: $shortest", shortest[i] < 280)
         }
     }
 

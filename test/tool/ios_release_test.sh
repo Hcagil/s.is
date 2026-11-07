@@ -36,10 +36,10 @@
 #     opened by Dependabot (pull_request.user.login, not github.actor: a human
 #     re-run of a Dependabot PR must still skip), and ios-ipa.yml's job ipa is
 #     if: inputs.enabled (input optional, default true; release.yml omits it);
-#   both callers pass exactly the six declared secrets by name (the sixth:
-#   IOS_DISTRIBUTION_KEY), and no workflow uses `secrets: inherit`;
+#   both callers pass exactly the seven declared secrets by name (the sixth:
+#   IOS_DISTRIBUTION_KEY; the seventh, MAPS_API_KEY_IOS, is optional), and no workflow uses `secrets: inherit`;
 #   ios-ipa.yml
-#   - runs on macos-26 (Xcode 26); declares exactly those six secrets, all
+#   - runs on macos-26 (Xcode 26); declares exactly those seven secrets, all
 #     required;
 #   - checkout does not persist the token; no ${{ inputs|vars|secrets }} is
 #     pasted into any run: text (they reach steps through env:);
@@ -147,7 +147,7 @@ with() {
 passed_secrets() {
   awk '/^    secrets:/ { f = 1; next } f && !/^      / { exit } f { sub(/^ +/, ""); print }' "$1" | sort
 }
-SECRETS=(APP_STORE_CONNECT_API_KEY APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID APPLE_TEAM_ID GOOGLE_SERVICE_INFO_PLIST IOS_DISTRIBUTION_KEY)
+SECRETS=(APP_STORE_CONNECT_API_KEY APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID APPLE_TEAM_ID GOOGLE_SERVICE_INFO_PLIST IOS_DISTRIBUTION_KEY MAPS_API_KEY_IOS)
 want_passed=$(for n in "${SECRETS[@]}"; do echo "$n: \${{ secrets.$n }}"; done | sort)
 # step_keys <file> <step name>: the step's lines before its run: block.
 step_keys() {
@@ -247,7 +247,7 @@ done
 [ "$(with "$tmp/ios" build-number)" = '${{ needs.scope.outputs.code }}' ] || fail "ios build number is not scope's code"
 [ "$(with "$tmp/ios" build-name)" = '${{ needs.scope.outputs.name }}' ] || fail "ios build name is not scope's name"
 [ "$(with "$tmp/ios" ref)" = '${{ needs.scope.outputs.sha }}' ] || fail "ios does not build the commit scope picked"
-[ "$(passed_secrets "$tmp/ios")" = "$want_passed" ] || fail "ios must pass exactly the six secrets by name, got [$(passed_secrets "$tmp/ios")]"
+[ "$(passed_secrets "$tmp/ios")" = "$want_passed" ] || fail "ios must pass exactly the seven secrets by name, got [$(passed_secrets "$tmp/ios")]"
 
 # 3b distribute: shape. It waits for publish only for the note.
 dneeds=$(key "$tmp/distribute" needs | tr -d '[] ' | tr , '\n' | sort | paste -sd,)
@@ -300,7 +300,7 @@ done
 [ "$(key "$tmp/ios-signed" uses)" = ./.github/workflows/ios-ipa.yml ] || fail "ios-signed does not call ios-ipa.yml"
 [ -z "$(with "$tmp/ios" enabled)" ] || fail "release ios must not pass enabled (the signed build always runs on release): [$(with "$tmp/ios" enabled)]"
 [ "$(with "$tmp/ios-signed" upload)" = false ] || fail "a pull request must never upload to TestFlight"
-[ "$(passed_secrets "$tmp/ios-signed")" = "$want_passed" ] || fail "ios-signed must pass exactly the six secrets by name, got [$(passed_secrets "$tmp/ios-signed")]"
+[ "$(passed_secrets "$tmp/ios-signed")" = "$want_passed" ] || fail "ios-signed must pass exactly the seven secrets by name, got [$(passed_secrets "$tmp/ios-signed")]"
 if grep -nE 'secrets: *inherit' .github/workflows/*.yml; then fail "secrets: inherit hands every repository secret to the callee"; fi
 
 # ---- ios-ipa.yml: shape ------------------------------------------------------
@@ -320,10 +320,11 @@ grep -q '^ *required: true$' "$tmp/input" && fail "input enabled must be optiona
 job "$ipa_wf" ipa > "$tmp/ipa"
 [ "$(key "$tmp/ipa" name)" = "Signed iPhone build" ] || fail "job ipa must be the Signed iPhone build"
 [ "$(norm "$(key "$tmp/ipa" if)")" = "inputs.enabled" ] || fail "job ipa must be if: inputs.enabled, got [$(key "$tmp/ipa" if)]"
-# Exactly the five secrets are declared, each required.
+# Exactly the seven secrets are declared; all required except the optional Maps key.
 declared=$(awk '/^    secrets:$/ { f = 1; next } f && /^    [^ ]/ { exit } f && /^      [A-Z_]+:$/ { sub(/^ +/, ""); sub(/:$/, ""); print }' "$ipa_wf" | sort)
-[ "$declared" = "$(printf '%s\n' "${SECRETS[@]}" | sort)" ] || fail "ios-ipa.yml must declare exactly the six secrets, got [$declared]"
+[ "$declared" = "$(printf '%s\n' "${SECRETS[@]}" | sort)" ] || fail "ios-ipa.yml must declare exactly the seven secrets, got [$declared]"
 for n in "${SECRETS[@]}"; do
+  [ "$n" = MAPS_API_KEY_IOS ] && continue # optional: empty builds with OpenStreetMap
   grep -q '^ *required: true$' <<<"$(awk -v i="      $n:" '$0 == i { f = 1; next } f && /^ {0,6}[A-Za-z]/ { exit } f' "$ipa_wf")" \
     || fail "secret $n is not required"
 done

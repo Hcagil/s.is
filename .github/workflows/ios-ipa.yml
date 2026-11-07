@@ -50,6 +50,9 @@ on:
       IOS_DISTRIBUTION_KEY:
         description: Private key (PEM) of the long-lived Apple Distribution certificate
         required: true
+      MAPS_API_KEY_IOS:
+        description: Google Maps SDK key for iOS (optional; empty = OpenStreetMap)
+        required: false
 
 permissions:
   contents: read

@@ -8,6 +8,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:imcodec/imcodec.dart' as img;
 import 'package:sis/app/theme.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
@@ -900,5 +901,157 @@ void main() {
         container.dispose();
       },
     );
+  });
+
+  // The small copy `<path>.s` (written from the contract): sendImage stores it
+  // next to the photo, owned by the sender; a member reads it through real RLS;
+  // an older photo without one is Ok(null) from storage's real 404; forward
+  // copies it as the forwarder (the new chat may read only the forwarder's
+  // copies). (deleteDirectChat is not covered: the server refuses every
+  // delete_direct_chat since 20261111 rule 9; removal is in small_photo_copy_test.sql.)
+  group('the small copy <path>.s against real storage', () {
+    late SupabaseClient service;
+
+    // A photo big enough to be shrunk; noise, so the copy cannot be the
+    // original by accident.
+    PickedImage bigImage(int seed) {
+      final px = Uint8List(900 * 600 * 4);
+      var x = seed;
+      for (var i = 0; i < px.length; i++) {
+        x = (x * 1103515245 + 12345) & 0x7fffffff;
+        px[i] = i % 4 == 3 ? 255 : x >> 16 & 0xff;
+      }
+      final png = img.encodePng(
+        img.Image.fromBytes(
+          width: 900,
+          height: 600,
+          bytes: px.buffer,
+          numChannels: 4,
+          order: img.ChannelOrder.rgba,
+        ),
+      );
+      return PickedImage(
+        bytes: png,
+        contentType: 'image/png',
+        extension: 'png',
+      );
+    }
+
+    Future<Message> send(
+      SupabaseChatRepository who,
+      String chat,
+      int seed,
+    ) async {
+      final sent = await who.sendImage(
+        conversationId: chat,
+        image: bigImage(seed),
+      );
+      expect(sent, isA<Ok<Message>>(), reason: '$sent');
+      return (sent as Ok<Message>).value;
+    }
+
+    // [path] and its copies in its folder, by name, as the service role sees it.
+    Future<Map<String, FileObject>> folder(String path) async {
+      final dir = path.substring(0, path.lastIndexOf('/'));
+      // the chat folder fills up over reruns: search for this photo's name only
+      final listed = await service.storage
+          .from('attachments')
+          .list(
+            path: dir,
+            searchOptions: SearchOptions(
+              search: path.substring(dir.length + 1),
+            ),
+          );
+      return {for (final f in listed) '$dir/${f.name}': f};
+    }
+
+    Future<String> dmWith(
+      SupabaseClient a,
+      SupabaseChatRepository repo,
+      SupabaseClient b,
+    ) async {
+      try {
+        await findByTag(a, [b]);
+      } on PostgrestException catch (e) {
+        if (e.code != 'RLMT1') rethrow;
+      }
+      final started = await repo.startDirectConversation(
+        b.auth.currentUser!.id,
+      );
+      expect(started, isA<Ok<String>>(), reason: '$started');
+      return (started as Ok<String>).value;
+    }
+
+    setUpAll(() {
+      service = SupabaseClient(
+        _url,
+        serviceKey(),
+        authOptions: const AuthClientOptions(
+          authFlowType: AuthFlowType.implicit,
+        ),
+      );
+    });
+    tearDownAll(() => service.dispose());
+
+    test(
+      'sendImage stores <p> and a smaller JPEG <p>.s, both stored',
+      () async {
+        final path = (await send(liam, conversationId, 1)).attachmentPath!;
+        final objects = await folder(path);
+        expect(objects.keys, containsAll([path, '$path.s']));
+        final small = await service.storage
+            .from('attachments')
+            .download('$path.s');
+        final full = await service.storage.from('attachments').download(path);
+        expect(small.sublist(0, 3), [0xff, 0xd8, 0xff], reason: 'a JPEG');
+        expect(small.length, lessThan(full.length));
+      },
+    );
+
+    test(
+      'the other member gets exactly the <p>.s bytes through real RLS',
+      () async {
+        final path = (await send(liam, conversationId, 2)).attachmentPath!;
+        final small = await service.storage
+            .from('attachments')
+            .download('$path.s');
+        final got = await mia.attachmentThumbBytes(path);
+        expect(got, isA<Ok<Uint8List?>>(), reason: '$got');
+        expect((got as Ok<Uint8List?>).value, small);
+      },
+    );
+
+    test('a photo with no <p>.s (an older photo) is Ok(null), from storage\'s real 404', () async {
+      final path = (await send(liam, conversationId, 3)).attachmentPath!;
+      await service.storage.from('attachments').remove(['$path.s']);
+      expect((await folder(path)).keys, isNot(contains('$path.s')));
+      final got = await mia.attachmentThumbBytes(path);
+      expect(got, isA<Ok<Uint8List?>>(), reason: '$got');
+      expect((got as Ok<Uint8List?>).value, isNull);
+    });
+
+    test('forward copies <p>.s as the forwarder, so the new chat can read it', () async {
+      final original = await send(liam, conversationId, 4);
+      final miaNoah = await dmWith(miaClient!, mia, noahClient!);
+      final forwarded = await mia.forward(original, [miaNoah]);
+      expect(forwarded, isA<Ok<void>>(), reason: '$forwarded');
+      final listed = await noah.messages(miaNoah);
+      final copyPath = (listed as Ok<List<Message>>).value
+          .lastWhere((m) => m.attachmentPath != null)
+          .attachmentPath!;
+      expect(copyPath, startsWith('$miaNoah/'));
+      expect((await folder(copyPath)).keys, contains('$copyPath.s'));
+      // Storage's list/info APIs carry no owner; real RLS does: noah may read
+      // a .s only when its owner is the message's sender (mia), so these
+      // bytes prove `copy` made mia, not liam (the source's owner), the owner.
+      final got = await noah.attachmentThumbBytes(copyPath);
+      expect(got, isA<Ok<Uint8List?>>(), reason: '$got');
+      expect(
+        (got as Ok<Uint8List?>).value,
+        await service.storage
+            .from('attachments')
+            .download('${original.attachmentPath}.s'),
+      );
+    });
   });
 }

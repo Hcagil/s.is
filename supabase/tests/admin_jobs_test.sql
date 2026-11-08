@@ -30,7 +30,8 @@ do $fx$ begin perform app_private.staff_load($j${
 --    with r = reason, admin_push) need the run_id; finishing nulls the email
 --    in the same update that ends the job. Unknown reasons become timeout.
 -- 7. sweep: pending/running jobs older than 15 minutes fail with timeout, on
---    claim and on every owner command.
+--    claim and when admin_jobs_sweep runs (the private pack runs it on every
+--    owner command).
 -- 8. app_private.admin_write is '' after a reply is written.
 
 create or replace function test_as(uid uuid, sid text) returns void language plpgsql as $$
@@ -93,36 +94,16 @@ end $$;
 
 create temp table j(name text primary key, id uuid);
 
--- The owner types [t] in the admin chat, as the app does. The command log is
--- then aged an hour so this file's many commands stay under the rate limit.
-create function cmd(t text) returns void language plpgsql as $$
-begin
-  perform test_as('00000000-0000-0000-0000-0000000ab001', 'ab000000-0000-0000-0000-000000000001');
-  insert into public.messages(conversation_id, sender_id, body)
-    values ((select id from adm), '00000000-0000-0000-0000-0000000ab001', t);
-  execute 'reset role';
-  perform set_config('request.jwt.claims', '', true);
-  update app_private.admin_commands set at = at - interval '1 hour';
-end $$;
-
--- A job queued the production way: /addios for add; for remove the
--- tester is on the list, the owner sends /remove and answers yes.
+-- A job as the private pack queues it (the tester commands live there now):
+-- a pending admin_jobs row with the raw and the masked email, then its first
+-- progress reply in the admin chat (p1 for add, r1 for remove) bound to the job.
 create function job(k text, e text) returns uuid language plpgsql as $$
-declare r uuid; card uuid;
+declare r uuid;
 begin
-  if k = 'add' then
-    perform cmd('/addios ' || e);
-  else
-    insert into app_private.allowlist(email) values (e) on conflict do nothing;
-    perform cmd('/remove ' || e);
-    select card_message_id into card from app_private.admin_pending where email = e and state = 'pending';
-    perform test_as('00000000-0000-0000-0000-0000000ab001', 'ab000000-0000-0000-0000-000000000001');
-    perform public.admin_answer(card, true);
-    execute 'reset role';
-    perform set_config('request.jwt.claims', '', true);
-  end if;
-  select id into r from app_private.admin_jobs where email = e and kind = k and state = 'pending';
-  if r is null then raise exception 'fixture: no pending % job for %', k, e; end if;
+  insert into app_private.admin_jobs(kind, email, email_masked) values (k, e, app_private.admin_mask(e)) returning id into r;
+  update app_private.admin_jobs set progress_message_id = app_private.admin_reply((select id from adm),
+    jsonb_build_object('k', case k when 'add' then 'p1' else 'r1' end, 'e', app_private.admin_mask(e)))
+   where id = r;
   return r;
 end $$;
 create function aged(n text, a interval) returns void language sql as $$
@@ -331,7 +312,6 @@ select svc(format('select public.admin_job_finish(%L, 404, false, null)::text', 
 select is(st((select id from j where name = 'add4')), 'failed:timeout:null:closed', 'a null reason becomes timeout');
 
 -- 7 sweep -------------------------------------------------------------------------------
--- (every owner command sweeps too, so the jobs are made first and aged after)
 insert into j values ('stale', job('add', 'stale@mail.test'));
 insert into j values ('oldpend', job('add', 'oldpend@mail.test'));
 insert into j values ('oldrun', job('remove', 'oldrun@mail.test'));
@@ -359,10 +339,10 @@ select is(st((select id from j where name = 'oldok')), 'ok:-:null:closed', 'swee
 select is(svc(format('select public.admin_job_claim(%L, 503)::text', (select id from j where name = 'oldpend'))), 'null',
           'a timed-out job cannot be claimed');
 
--- any owner command sweeps too
+-- the sweep itself (the private pack runs it on every owner command)
 select aged('cmdold', '30 minutes');
-select cmd('/nosuchcommand');
-select is(st((select id from j where name = 'cmdold')), 'failed:timeout:null:closed', 'an owner command sweeps a job past 15 minutes');
+select app_private.admin_jobs_sweep();
+select is(st((select id from j where name = 'cmdold')), 'failed:timeout:null:closed', 'the sweep fails a job past 15 minutes');
 select is(st((select id from j where name = 'young')), 'pending:-:young@mail.test:open', 'and leaves a young one');
 
 -- 8 admin_write ------------------------------------------------------------------------

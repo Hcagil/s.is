@@ -603,7 +603,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
     final isGroup = widget.group || (listed?.isGroup ?? false);
     final isSystem = listed?.isSystem ?? false;
     final isAdminChat = listed?.isAdminChat ?? false;
-    final salesWord = registry.wordFor(listed?.staffKey, 'sales_total');
+    final salesWord = registry.wordForUi(listed?.staffKey, 'total');
     final isSales = salesWord != null;
     final otherUserId = widget.otherUserId ?? listed?.other?.userId;
     final status = _status(ref, AppLocalizations.of(context), otherUserId);

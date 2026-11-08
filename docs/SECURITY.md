@@ -812,7 +812,9 @@ when a collaborator leaves or a dependency is suspected compromised.
 
 ### Staff chats and their command words
 
-- The names of the two staff chats and their command words are not in the code or the app. They are rows in `app_private.staff_chats` and `app_private.staff_commands` (no policy, no grant), loaded by `app_private.staff_load` from the secret `STAFF_ROWS_JSON` in each release.
-- The app reads them only through `public.staff_registry()`: the caller needs an active session and an allowlisted account, must not be the bot account, and must still be a member of the staff chat. Anyone else gets zero rows.
-- Who may run which command is fixed in the database functions by neutral handler keys, never by the loaded rows. An unknown word gets the "unknown command" reply and changes nothing.
+- The names of the two staff chats and their command words are not in the code or the app. They live only in a private function pack that is installed outside git by `tool/private_install.sh` at each release (gzip secret, content-hash version, checked by `tool/private_check.sql`). The older staff tables and their loader stay in the schema, unused, until a follow-up change drops them.
+- The app reads the words only through `public.staff_registry()`, a thin wrapper over the pack's panel function: the caller needs an active session and an allowlisted account, must not be the bot account, and must still be a member of the staff chat. Anyone else, and any pack error, gives zero rows.
+- Each staff chat has one gate (`admin_on_message`, `sales_on_message`) that checks the sender (the owner, or for the second chat the owner or a command admin) and calls the one generic hook `app_private.private_dispatch` exactly once. A missing hook is silent; a hook error gives one generic error reply. The hook maps each word to its chat and role from a fixed table and re-checks the role; an unknown word changes nothing.
+- A confirmation card is answered only by `public.admin_answer`, which keeps the card's life (key and kind must match, owner and membership are checked) and hands private cards to the pack; any other card is stale.
+- The release checks the pack on a throwaway database and on the live one: pack version equals the secret's version, the public functions it relies on are unchanged (hash list in `tool/private_check.sql`), and every `private_*` function is owned like the gate, definer, empty search_path and not executable by any API role.
 - Deployment details and the real names are kept in the private notes.

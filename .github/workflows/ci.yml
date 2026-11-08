@@ -238,6 +238,13 @@ jobs:
         run: docker compose run --rm -e SUPABASE_INTERNAL_IMAGE_REGISTRY=ghcr.io/${{ github.repository_owner }} -e DOCKER_CONFIG=/docker-config -v "$HOME/.docker:/docker-config:ro" supabase start -x imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
       - name: Lint database
         run: docker compose run --rm supabase db lint --level error
+      # The public side alone: a changed function body with a forgotten hash fails here, not at release.
+      - name: Check the private function hashes
+        run: |
+          f=$(mktemp); trap 'rm -f "$f"' EXIT
+          # shellcheck disable=SC2016
+          { printf 'do $pk$ begin perform set_config(%s, %s, false); execute $pkw_$' "'private.expected'" "''"; cat tool/private_check.sql; printf '$pkw_$; end $pk$;\n'; } > "$f"
+          docker compose run --rm -e SUPABASE_INTERNAL_IMAGE_REGISTRY=ghcr.io/${{ github.repository_owner }} -e DOCKER_CONFIG=/docker-config -v "$HOME/.docker:/docker-config:ro" -v "$f:/tmp/private_check.sql:ro" supabase db query --local -f /tmp/private_check.sql
       - name: Test database
         run: docker compose run --rm -e SUPABASE_INTERNAL_IMAGE_REGISTRY=ghcr.io/${{ github.repository_owner }} -e DOCKER_CONFIG=/docker-config -v "$HOME/.docker:/docker-config:ro" supabase test db
       # Against the real local stack (Deno's own test runner, not Flutter's):

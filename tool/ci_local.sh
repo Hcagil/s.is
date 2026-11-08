@@ -105,7 +105,7 @@ integration() {
 # The private functions and their tests live outside git, in the main checkout's .private/ops (found through the git common dir, so a worktree sees them).
 # No private-sql folder: skipped, unless the marker file EXPECT_PRIVATE says this machine must have them; then it FAILS.
 private_scripts() {
-  local main priv f n=0
+  local main priv f n=0 sup='docker compose run --rm supabase' sqlb64 ver harm big
   main=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
   priv="$main/.private/ops"
   shopt -s nullglob
@@ -114,10 +114,20 @@ private_scripts() {
     echo 'no private scripts on this machine: skipped'
     return 0
   fi
-  for f in "$priv"/private-sql/*.sql; do
-    docker exec -i supabase_db_s.is psql -U postgres -v ON_ERROR_STOP=1 -q < "$f" >/dev/null 2>&1 || { echo 'private install failed' >&2; return 1; }
-  done
-  docker compose run --rm supabase db query --local -f tool/private_check.sql || return 1
+  ver_of() { printf 'v%s' "$(printf '%s\n' "$1" | head -n -2 | sha256sum | cut -c1-16)"; }
+  b64_of() { printf '%s\n' "$1" | gzip -9n | base64 -w0; }
+  # Deliberate failures: each wrong pack must make the install script exit non-zero.
+  harm=$(printf 'select 1;\nselect 2;\nselect 3;')
+  if env PRIVATE_EXPECTED=1 PRIVATE_SUPABASE="$sup" PRIVATE_SQL_B64="" PRIVATE_PACK_VERSION="$(ver_of "$harm")" tool/private_install.sh local >/dev/null 2>&1; then echo 'private install must fail: empty' >&2; return 1; fi
+  if env PRIVATE_EXPECTED=1 PRIVATE_SUPABASE="$sup" PRIVATE_SQL_B64="$(printf "not gzip" | base64 -w0)" PRIVATE_PACK_VERSION="$(ver_of "$harm")" tool/private_install.sh local >/dev/null 2>&1; then echo 'private install must fail: corrupt gzip' >&2; return 1; fi
+  big=$(head -c 82500 /dev/urandom | base64 -w0; printf '\nx\ny')
+  if env PRIVATE_EXPECTED=1 PRIVATE_SUPABASE="$sup" PRIVATE_SQL_B64="$(b64_of "$big")" PRIVATE_PACK_VERSION="$(ver_of "$big")" tool/private_install.sh local >/dev/null 2>&1; then echo 'private install must fail: oversize' >&2; return 1; fi
+  if env PRIVATE_EXPECTED=1 PRIVATE_SUPABASE="$sup" PRIVATE_SQL_B64="$(b64_of "$harm")" PRIVATE_PACK_VERSION="$(ver_of "$harm")" tool/private_install.sh local >/dev/null 2>&1; then echo 'private install must fail: no pack in the database' >&2; return 1; fi
+  sqlb64=$(cat "$priv"/private-sql/0*.sql | gzip -9n | base64 -w0)
+  ver=$(sed -n "s/.*return '\(v[0-9a-f]\{16\}\)'.*/\1/p" "$priv"/private-sql/09_version.sql)
+  env PRIVATE_EXPECTED=1 PRIVATE_SUPABASE="$sup" PRIVATE_SQL_B64="$sqlb64" PRIVATE_PACK_VERSION="$ver" tool/private_install.sh local || return 1
+  harm=$(printf 'select 4;\nselect 5;\nselect 6;')
+  if env PRIVATE_EXPECTED=1 PRIVATE_SUPABASE="$sup" PRIVATE_SQL_B64="$(b64_of "$harm")" PRIVATE_PACK_VERSION="$(ver_of "$harm")" tool/private_install.sh local >/dev/null 2>&1; then echo 'private install must fail: stale pack' >&2; return 1; fi
   for f in "$priv"/private-tests/*.sql; do n=$((n + 1)); done
   [ "$n" -gt 0 ] || { echo 'no private tests found' >&2; return 1; }
   rm -rf supabase/tests/private && mkdir -p supabase/tests/private && cp "$priv"/private-tests/*.sql supabase/tests/private/
@@ -151,12 +161,13 @@ job_database() {
   step "Start Supabase and replay migrations" docker compose run --rm supabase start -x "$SKIP" || return 1
   step "Lint database" docker compose run --rm supabase db lint --level error || return 1
   step "Test database" docker compose run --rm supabase test db || return 1
-  step "Private functions and tests" private_scripts || return 1
-  step "Edge function tests" edge_tests || return 1
   step "Build development image" "${CI[@]}" build flutter || return 1
   step "Build the Rust library for the Dart tests" "${CI[@]}" run --rm flutter cargo build --release --manifest-path rust/Cargo.toml || return 1
   step "Wait until Realtime delivers" "${CI[@]}" run --rm flutter flutter test --run-skipped --tags warmup test/integration/realtime_warmup_test.dart || return 1
   step "Repository integration tests" integration || return 1
+  # The integration tests run before the private pack: the registry fixture adds a stand-in panel only when none exists.
+  step "Private functions and tests" private_scripts || return 1
+  step "Edge function tests" edge_tests || return 1
   step "SIS Bot tool test" env SIS_BOT_TEST_COMPOSE="${CI[*]}" test/tool/sis_bot_tool_test.sh || return 1
   step "Test sender admin tool test" env SIS_BOT_TEST_COMPOSE="${CI[*]}" test/tool/sis_test_account_admin_test.sh
 }

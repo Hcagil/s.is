@@ -336,17 +336,21 @@ class StoreMessageOpener implements MessageOpener {
       _wait(m);
       return fallback;
     }
-    // The engine saves the opened text with the session advance; it only updates a row that is already stored (a row not stored yet still depends on the upsertAll below).
     final result = await engine.decrypt(
       peerUserId: m.senderId,
       peerIdentityKey: peerKey.identityKey,
       ciphertext: cipher,
       olmType: m.olmType!,
-      save: PlaintextSave.of(m.id, (decrypted) {
-        final env = decodeEnvelope(decrypted, m.id);
-        // Same rules as below: an unreadable envelope or a hidden row is never saved.
-        return env == null || _forgotten.contains(m.id) ? null : env.text;
-      }),
+      // Written inside the engine's transaction (the store and the engine share one database), so the session never advances without the text; a throw rolls the step back. An unreadable envelope or a hidden row is never written.
+      save: store == null
+          ? null
+          : PlaintextSave.write((decrypted) async {
+              final env = decodeEnvelope(decrypted, m.id);
+              if (env == null || _forgotten.contains(m.id)) return;
+              await store.upsertAll([
+                m.withPlain(env.text, env.card, sealed: hash),
+              ]);
+            }),
     );
     switch (result) {
       case Ok(:final value):
@@ -361,7 +365,7 @@ class StoreMessageOpener implements MessageOpener {
         _pending.remove(m.id);
         _publish();
         _remember(slot, plain);
-        // The ratchet moved, so this message can never be opened again: saved before it is shown, kept in memory even if the write fails.
+        // The ratchet moved, so this message can never be opened again: the engine saved the text with it (see save above); this write repeats it for an engine that does not run the save, and keeps it in memory even if it fails.
         try {
           await store?.upsertAll([plain]);
           // A deletion that landed while decrypting wins over the text.

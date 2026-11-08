@@ -169,12 +169,16 @@ final class DriftSessionEngine implements SessionEngine {
     PlaintextSave? save,
     String decrypted,
   ) async {
-    final text = save?.textFor(decrypted);
-    if (save == null || text == null) return;
+    if (save == null) return;
+    final writer = save.writer;
+    if (writer != null) return writer(decrypted);
     await (db.update(
       db.messages,
     )..where((t) => t.id.equals(save.messageId))).write(
-      MessagesCompanion(body: Value(text), bodyFolded: Value(foldSearch(text))),
+      MessagesCompanion(
+        body: Value(save.plaintext),
+        bodyFolded: Value(foldSearch(save.plaintext)),
+      ),
     );
   }
 

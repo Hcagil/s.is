@@ -336,11 +336,17 @@ class StoreMessageOpener implements MessageOpener {
       _wait(m);
       return fallback;
     }
+    // The engine saves the opened text with the session advance; it only updates a row that is already stored (a row not stored yet still depends on the upsertAll below).
     final result = await engine.decrypt(
       peerUserId: m.senderId,
       peerIdentityKey: peerKey.identityKey,
       ciphertext: cipher,
       olmType: m.olmType!,
+      save: PlaintextSave.of(m.id, (decrypted) {
+        final env = decodeEnvelope(decrypted, m.id);
+        // Same rules as below: an unreadable envelope or a hidden row is never saved.
+        return env == null || _forgotten.contains(m.id) ? null : env.text;
+      }),
     );
     switch (result) {
       case Ok(:final value):

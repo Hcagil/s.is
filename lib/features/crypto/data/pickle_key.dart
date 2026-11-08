@@ -6,7 +6,7 @@ import '../domain/key_directory.dart';
 
 /// The key that encrypts the olm account pickle: 32 random bytes as 64 hex characters, made once and kept in the platform's secure storage (Keystore / Keychain).
 final class PickleKey implements PickleKeyStore {
-  const PickleKey({
+  PickleKey({
     this._storage = const FlutterSecureStorage(
       // This device only: the key must never travel in an iCloud or Finder
       // backup together with the database file.
@@ -38,9 +38,18 @@ final class PickleKey implements PickleKeyStore {
   static const _name = 'sis.olm.pickle.key';
   static final _hex64 = RegExp(r'^[0-9a-f]{64}$');
 
-  /// The saved key, or a new one saved first.
+  Future<List<int>>? _inFlight;
+
+  /// The saved key, or a new one saved first. Callers that overlap share one read-or-create, so they all get the same key; a later call reads again.
   @override
-  Future<List<int>> loadOrCreate() async {
+  Future<List<int>> loadOrCreate() {
+    final running = _inFlight;
+    if (running != null) return running;
+    final f = _loadOrCreate().whenComplete(() => _inFlight = null);
+    return _inFlight = f;
+  }
+
+  Future<List<int>> _loadOrCreate() async {
     final key = await _read(_storage) ?? await _read(_legacy);
     if (key != null) {
       return List.generate(

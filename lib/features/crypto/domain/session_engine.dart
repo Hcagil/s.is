@@ -3,10 +3,22 @@ import 'key_directory.dart';
 
 /// Plaintext that is written to the stored message row [messageId] (body and search copy) in the same transaction as the session. If no such row is stored, nothing is written for it.
 final class PlaintextSave {
-  const PlaintextSave(this.messageId, this.plaintext);
+  const PlaintextSave(this.messageId, this.plaintext) : _from = null;
+
+  /// The text is only known after the engine decrypts: [from] gets the decrypted text and returns what to write, or null to write nothing.
+  PlaintextSave.of(this.messageId, String? Function(String decrypted) from)
+    : plaintext = '',
+      _from = from;
 
   final String messageId;
   final String plaintext;
+  final String? Function(String decrypted)? _from;
+
+  /// What to write once [decrypted] (the text just opened or just locked) is known; null = nothing.
+  String? textFor(String decrypted) {
+    final from = _from;
+    return from == null ? plaintext : from(decrypted);
+  }
 }
 
 /// A locked message: [ciphertext] is base64 of the Olm message bytes, [olmType] 0 pre-key or 1 normal, [sessionId] the session that locked it.

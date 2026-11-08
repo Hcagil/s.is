@@ -164,15 +164,17 @@ final class DriftSessionEngine implements SessionEngine {
         );
   }
 
-  Future<void> _savePlaintext(StoreDatabase db, PlaintextSave? save) async {
-    if (save == null) return;
+  Future<void> _savePlaintext(
+    StoreDatabase db,
+    PlaintextSave? save,
+    String decrypted,
+  ) async {
+    final text = save?.textFor(decrypted);
+    if (save == null || text == null) return;
     await (db.update(
       db.messages,
     )..where((t) => t.id.equals(save.messageId))).write(
-      MessagesCompanion(
-        body: Value(save.plaintext),
-        bodyFolded: Value(foldSearch(save.plaintext)),
-      ),
+      MessagesCompanion(body: Value(text), bodyFolded: Value(foldSearch(text))),
     );
   }
 
@@ -245,7 +247,7 @@ final class DriftSessionEngine implements SessionEngine {
         peerUserId: peerUserId,
         peerIdentityKey: row.peerIdentityKey,
       );
-      await _savePlaintext(db, save);
+      await _savePlaintext(db, save, plaintext);
       if (queue != null) {
         await (db.update(db.sendQueueRows)..where(
               (r) => r.userId.equals(queue.userId) & r.id.equals(queue.queueId),
@@ -309,7 +311,7 @@ final class DriftSessionEngine implements SessionEngine {
         peerUserId: row.peerUserId,
         peerIdentityKey: row.peerIdentityKey,
       );
-      await _savePlaintext(db, save);
+      await _savePlaintext(db, save, text);
       return Ok(text);
     }
     return const Err(UnreadableMessageFailure());
@@ -362,7 +364,7 @@ final class DriftSessionEngine implements SessionEngine {
         peerIdentityKey: peerIdentityKey,
       );
       await _putAccount(db, key, account);
-      await _savePlaintext(db, save);
+      await _savePlaintext(db, save, text);
       return Ok(text);
     });
   }

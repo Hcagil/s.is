@@ -11,6 +11,7 @@ import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
+import 'package:sis/features/chat/domain/group_member.dart';
 import 'package:sis/features/notifications/application/notification_settings_controller.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
@@ -72,7 +73,7 @@ Future<World> pumpList(WidgetTester t, {bool tr = false}) async {
     t.platformDispatcher.localesTestValue = [const Locale('tr')];
     addTearDown(t.platformDispatcher.clearLocalesTestValue);
   }
-  final chat = ChatFake()..conversationsResult = Ok(rows());
+  final chat = ChatFake(self: me.userId)..conversationsResult = Ok(rows());
   final del = ChatDeleteFake(chat: chat);
   final groups = GroupSettingsFake();
   await t.pumpWidget(
@@ -132,11 +133,7 @@ Future<void> openDelete(WidgetTester t, List<String> ids) async {
   await t.pumpAndSettle();
 }
 
-Future<void> confirm(WidgetTester t, {bool tick = false}) async {
-  if (tick) {
-    await t.tap(byKey('delete-chat-check'));
-    await t.pump();
-  }
+Future<void> confirm(WidgetTester t) async {
   await t.tap(byKey('delete-chat-ok'));
   await t.pump();
   await t.pump(const Duration(milliseconds: 400));
@@ -160,6 +157,10 @@ String count(WidgetTester t) =>
         )
         .data ??
     '';
+
+/// The delete dialog never offers a delete-for-the-other-side box (owner
+/// rule 2026-11-01: a 1:1 goes from your own phone only).
+void noBox() => expect(find.byType(Checkbox), findsNothing);
 
 Finder rich(String s) => find.byWidgetPredicate(
   (w) => w is RichText && w.text.toPlainText().contains(s),
@@ -283,20 +284,23 @@ void main() {
   });
 
   testWidgets('4. Dialog B contents and cancel', (t) async {
-    await pumpList(t);
+    final w = await pumpList(t);
     await openDelete(t, ['c1']);
     expect(find.text('Delete chat'), findsWidgets);
     expect(boldShown(t, 'Bob Stone'), isTrue);
     expect(rich('Permanently delete the chat with Bob Stone?'), findsOneWidget);
-    expect(find.text('Also delete for Bob'), findsOneWidget);
-    expect(byKey('delete-chat-check'), findsOneWidget);
+    noBox();
     await t.tap(byKey('delete-chat-cancel'));
     await t.pumpAndSettle();
     expect(byKey('delete-chat-ok'), findsNothing);
     expect(count(t), '1');
+    expect(byKey('conversation-c1'), findsOneWidget);
+    expect(byKey('chat-undo-bar'), findsNothing, reason: 'cancel started it');
+    await runOut(t);
+    expect(w.del.calls, isEmpty, reason: 'cancel reached the server');
   });
 
-  testWidgets('5. B OK unticked', (t) async {
+  testWidgets('5. B OK hides the 1:1 for me only', (t) async {
     final w = await pumpList(t);
     await openDelete(t, ['c1']);
     await confirm(t);
@@ -311,34 +315,45 @@ void main() {
     expect(byKey('chat-undo-bar'), findsNothing);
   });
 
-  testWidgets('6. B OK ticked', (t) async {
+  testWidgets('6. a 1:1 with a group: no box, the 1:1 is only hidden', (
+    t,
+  ) async {
     final w = await pumpList(t);
-    await openDelete(t, ['c1']);
-    await confirm(t, tick: true);
+    // A roster with me in it, so the leave succeeds as on the server.
+    w.chat.groupRosters['g1'] = [
+      const GroupMember(member: me, isAdmin: false),
+      const GroupMember(member: cem, isAdmin: false),
+    ];
+    await openDelete(t, ['c1', 'g1']);
+    noBox();
+    await confirm(t);
     await runOut(t);
-    expect(w.del.calls, ['deleteDirect:c1']);
+    expect(w.del.calls..sort(), ['hide:c1', 'hide:g1']);
+    expect(w.chat.groupWrites, ['leave:g1']);
   });
 
   testWidgets('7. Dialog A users', (t) async {
-    await pumpList(t);
+    final w = await pumpList(t);
     await openDelete(t, ['c1', 'c2']);
     expect(find.text('Delete 2 chats'), findsOneWidget);
     expect(
       rich('Are you sure you want to delete these chats?'),
       findsOneWidget,
     );
-    expect(find.text('Delete for everyone where possible'), findsOneWidget);
+    noBox();
     await confirm(t);
     expect(byKey('conversation-c1'), findsNothing);
     expect(byKey('conversation-c2'), findsNothing);
     expect(find.text('Chats deleted'), findsOneWidget);
+    await runOut(t);
+    expect(w.del.calls..sort(), ['hide:c1', 'hide:c2']);
   });
 
   testWidgets('8. Dialog A groups only', (t) async {
     await pumpList(t);
     await openDelete(t, ['g1', 'g2']);
     expect(find.text('Delete 2 chats'), findsOneWidget);
-    expect(byKey('delete-chat-check'), findsNothing);
+    noBox();
   });
 
   testWidgets('9. Dialog C leave group', (t) async {
@@ -350,7 +365,7 @@ void main() {
       findsOneWidget,
     );
     expect(boldShown(t, 'Trip'), isTrue);
-    expect(byKey('delete-chat-check'), findsNothing);
+    noBox();
     await confirm(t);
     expect(find.text('You left the group'), findsOneWidget);
   });
@@ -362,7 +377,7 @@ void main() {
     await openDelete(t, ['g2']);
     expect(find.text('Leave group?'), findsWidgets);
     expect(find.text('Delete the group for all members'), findsNothing);
-    expect(byKey('delete-chat-check'), findsNothing);
+    noBox();
     await confirm(t);
     expect(find.text('Group deleted'), findsNothing);
     expect(find.text('You left the group'), findsOneWidget);
@@ -370,7 +385,7 @@ void main() {
     expect(w.groups.calls.where((c) => c.startsWith('delete')), isEmpty);
   });
 
-  testWidgets('11. Dialog D unticked', (t) async {
+  testWidgets('11. Dialog D OK', (t) async {
     await pumpList(t);
     await openDelete(t, ['g2']);
     await confirm(t);
@@ -436,7 +451,7 @@ void main() {
     expect(find.text('Sohbeti sil'), findsWidgets);
     expect(rich('ile olan sohbet kalıcı olarak silinsin mi?'), findsOneWidget);
     expect(boldShown(t, 'Bob Stone'), isTrue);
-    expect(find.text('Bob için de sil'), findsOneWidget);
+    noBox();
     expect(find.text('İptal et'), findsOneWidget);
     await confirm(t);
     expect(find.text('Sohbet silindi'), findsOneWidget);
@@ -447,7 +462,7 @@ void main() {
     await pumpList(t, tr: true);
     await openDelete(t, ['c1', 'c2']);
     expect(find.text('2 sohbet sil'), findsOneWidget);
-    expect(find.text('Mümkünse herkesten sil'), findsOneWidget);
+    noBox();
     await t.tap(byKey('delete-chat-cancel'));
     await t.pumpAndSettle();
     await t.tap(byKey('selection-back'));
@@ -455,7 +470,7 @@ void main() {
     await openDelete(t, ['g2']);
     expect(find.text('Gruptan ayrılmak ister misiniz?'), findsWidgets);
     expect(find.text('Grubu tüm üyeler için sil'), findsNothing);
-    expect(byKey('delete-chat-check'), findsNothing);
+    noBox();
     await confirm(t);
     expect(find.text('Grup silindi'), findsNothing);
     expect(byKey('chat-undo-bar'), findsOneWidget);

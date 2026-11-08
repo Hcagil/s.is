@@ -163,24 +163,22 @@ void main() {
     ) async {
       final w = await start(t, [d1, d2, g1]);
       w.c.read(chatSelectionProvider.notifier).toggle('d2');
-      w.c.read(chatDeleteProvider.notifier).start([d2], alsoForOthers: false);
+      w.c.read(chatDeleteProvider.notifier).start([d2]);
       expect(ids(w.c), ['d1', 'g1'], reason: 'not hidden synchronously');
       expect(w.c.read(chatSelectionProvider), isEmpty);
       expect(writes(w), isEmpty, reason: 'a server call inside the window');
       await runOut(t);
     });
 
-    for (final (name, chats, also, notice) in [
-      ('one 1:1', [d1], false, ChatDeleteNotice.chat),
-      ('one 1:1 for both', [d1], true, ChatDeleteNotice.chat),
-      ('two chats', [d1, d2], false, ChatDeleteNotice.chats),
-      ('a group, not admin', [g1], false, ChatDeleteNotice.groupLeft),
-      ('an admin group, ticked', [admin], true, ChatDeleteNotice.groupLeft),
-      ('an admin group, unticked', [admin], false, ChatDeleteNotice.groupLeft),
+    for (final (name, chats, notice) in [
+      ('one 1:1', [d1], ChatDeleteNotice.chat),
+      ('two chats', [d1, d2], ChatDeleteNotice.chats),
+      ('a group, not admin', [g1], ChatDeleteNotice.groupLeft),
+      ('an admin group', [admin], ChatDeleteNotice.groupLeft),
     ]) {
       testWidgets('notice for $name is ${notice.name}', (t) async {
         final w = await start(t, [d1, d2, g1, admin]);
-        w.c.read(chatDeleteProvider.notifier).start(chats, alsoForOthers: also);
+        w.c.read(chatDeleteProvider.notifier).start(chats);
         expect(st(w.c).notice, notice);
         await runOut(t);
       });
@@ -188,7 +186,7 @@ void main() {
 
     testWidgets('secondsLeft is 5 at start and counts down to 1', (t) async {
       final w = await start(t, [d1]);
-      w.c.read(chatDeleteProvider.notifier).start([d1], alsoForOthers: false);
+      w.c.read(chatDeleteProvider.notifier).start([d1]);
       expect(st(w.c).secondsLeft, 5);
       for (final n in [4, 3, 2, 1]) {
         await t.pump(const Duration(seconds: 1));
@@ -201,10 +199,7 @@ void main() {
     testWidgets('undo puts the rows back in order and asks the server '
         'nothing', (t) async {
       final w = await start(t, [d1, d2, g1, admin]);
-      w.c.read(chatDeleteProvider.notifier).start([
-        d2,
-        admin,
-      ], alsoForOthers: true);
+      w.c.read(chatDeleteProvider.notifier).start([d2, admin]);
       expect(ids(w.c), ['d1', 'g1']);
       await t.pump(const Duration(seconds: 3));
       w.c.read(chatDeleteProvider.notifier).undo();
@@ -216,28 +211,22 @@ void main() {
       expect(ids(w.c), ['d1', 'd2', 'g1', 'ga']);
     });
 
-    for (final (name, chats, also, expected) in [
-      ('a 1:1, ticked', [d1], true, ['deleteDirect:d1']),
-      ('a 1:1, unticked', [d1], false, ['hide:d1']),
-      ('the one admin group, ticked', [admin], true, ['hide:ga', 'leave:ga']),
+    // A 1:1 is only ever hidden for the caller (owner rule 2026-11-01): the
+    // exact list proves no other server write, for a 1:1 alone or mixed.
+    for (final (name, chats, expected) in [
+      ('a 1:1', [d1], ['hide:d1']),
+      ('the one admin group', [admin], ['hide:ga', 'leave:ga']),
+      ('a group, not admin', [g1], ['hide:g1', 'leave:g1']),
+      ('a group already left', [left], ['hide:gl']),
       (
-        'the one admin group, unticked',
-        [admin],
-        false,
-        ['hide:ga', 'leave:ga'],
-      ),
-      ('a group, not admin', [g1], true, ['hide:g1', 'leave:g1']),
-      ('a group already left', [left], false, ['hide:gl']),
-      (
-        'two chats with an admin group, ticked',
+        'two chats with an admin group',
         [d1, admin],
-        true,
-        ['deleteDirect:d1', 'hide:ga', 'leave:ga'],
+        ['hide:d1', 'hide:ga', 'leave:ga'],
       ),
     ]) {
       testWidgets('at 0 s $name commits ${expected.join(', ')}', (t) async {
         final w = await start(t, [d1, g1, admin, left]);
-        w.c.read(chatDeleteProvider.notifier).start(chats, alsoForOthers: also);
+        w.c.read(chatDeleteProvider.notifier).start(chats);
         await t.pump(const Duration(milliseconds: 4900));
         expect(writes(w), isEmpty, reason: 'committed before 5 s');
         await runOut(t);
@@ -251,7 +240,7 @@ void main() {
 
     testWidgets('a group is left before it is hidden', (t) async {
       final w = await start(t, [g1], journal: true);
-      w.c.read(chatDeleteProvider.notifier).start([g1], alsoForOthers: false);
+      w.c.read(chatDeleteProvider.notifier).start([g1]);
       await runOut(t);
       expect(w.chat.groupWrites, ['leave:g1', 'hide:g1']);
     });
@@ -261,7 +250,7 @@ void main() {
     ) async {
       final w = await start(t, [d1, g1]);
       w.chat.leaveResult = const Err(NetworkFailure('offline'));
-      w.c.read(chatDeleteProvider.notifier).start([g1], alsoForOthers: false);
+      w.c.read(chatDeleteProvider.notifier).start([g1]);
       await runOut(t);
       expect(w.del.calls, isEmpty, reason: 'hidden although still a member');
       expect(st(w.c).failure, isA<NetworkFailure>());
@@ -271,16 +260,16 @@ void main() {
     testWidgets('a new delete commits the pending one at once', (t) async {
       final w = await start(t, [d1, d2]);
       final n = w.c.read(chatDeleteProvider.notifier);
-      n.start([d1], alsoForOthers: false);
+      n.start([d1]);
       await t.pump(const Duration(seconds: 2));
-      n.start([d2], alsoForOthers: true);
+      n.start([d2]);
       await t.pump(const Duration(milliseconds: 200));
       await hop(t);
       expect(w.del.calls, ['hide:d1'], reason: 'first not committed early');
       expect(st(w.c).notice, ChatDeleteNotice.chat);
       expect(st(w.c).secondsLeft, 5);
       await runOut(t);
-      expect(w.del.calls, ['hide:d1', 'deleteDirect:d2']);
+      expect(w.del.calls, ['hide:d1', 'hide:d2']);
     });
 
     testWidgets('a refusal reports a failure and the row comes back', (
@@ -288,7 +277,7 @@ void main() {
     ) async {
       final w = await start(t, [d1, d2]);
       w.del.hideResult = const Err(NetworkFailure('offline'));
-      w.c.read(chatDeleteProvider.notifier).start([d1], alsoForOthers: false);
+      w.c.read(chatDeleteProvider.notifier).start([d1]);
       expect(ids(w.c), ['d2']);
       await runOut(t);
       expect(w.del.calls, ['hide:d1']);

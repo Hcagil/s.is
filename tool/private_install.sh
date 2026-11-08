@@ -12,6 +12,7 @@ fail() {
   exit 1
 }
 
+[ "$#" -eq 1 ] || fail 'usage: exactly one argument, local or linked'
 mode=${1:-}
 case "$mode" in
   local|linked) ;;

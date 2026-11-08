@@ -117,7 +117,7 @@ end $$;
 create function jobs() returns bigint language sql as $$ select count(*) from app_private.sales_jobs $$;
 create function cmds() returns bigint language sql as $$ select count(*) from app_private.sales_commands $$;
 -- Run the edge function's part for every pending job: claim, then finish.
-create function vega(amount text, reason text) returns int language plpgsql as $$
+create function fetcher(amount text, reason text) returns int language plpgsql as $$
 declare j uuid; n int := 0;
 begin
   for j in select id from app_private.sales_jobs where state = 'pending' loop
@@ -285,18 +285,18 @@ select fresh(bc('own'));
 
 -- 8, 12 one ask: claim hands out the day and prev once --------------------------------------------
 select ask(bc('own'));
-select is(fresh(bc('own')), '[]'::jsonb, 'no reply before Vega answers');
+select is(fresh(bc('own')), '[]'::jsonb, 'no reply before the fetcher answers');
 
 -- 9 asks while the fetch runs wait and get the same answer -----------------------------------------
 select ask(bc('own'));
-select is((select count(*) from app_private.sales_jobs where state = 'pending'), 1::bigint, 'fixture: one job goes to Vega, one ask waits');
+select is((select count(*) from app_private.sales_jobs where state = 'pending'), 1::bigint, 'fixture: one job goes to the fetcher, one ask waits');
 create table claimed as select public.sales_job_claim((select id from app_private.sales_jobs where state = 'pending')) as c;
 select is((select c from claimed), jsonb_build_object('day', want_day(), 'prev', want_prev()), 'claim returns the day and prev');
 select is(public.sales_job_claim((select id from app_private.sales_jobs where state = 'running')), null, 'a second claim of the same job gets nothing');
 select is(public.sales_job_claim(gen_random_uuid()), null, 'claiming an unknown job gets nothing');
 select is(public.sales_job_claim((select id from app_private.sales_jobs where state = 'waiting' limit 1)), null, 'a waiting ask cannot be claimed');
 select ask(bc('own'));
-select is((select count(*) from app_private.sales_jobs where state in ('pending', 'running')), 1::bigint, 'still one job at Vega');
+select is((select count(*) from app_private.sales_jobs where state in ('pending', 'running')), 1::bigint, 'still one job at the fetcher');
 select public.sales_job_finish((select id from app_private.sales_jobs where state = 'running'), '4815162342', null);
 create table r1 as select fresh(bc('own')) as v;
 select is(jsonb_array_length((select v from r1)), 3, 'every waiting ask gets an answer');
@@ -321,7 +321,7 @@ select is((select count(*) from public.messages where conversation_id in (select
 select isnt(vault.create_secret('https://bd-test.local/notify', 'notify_on_message_url'), null, 'fixture: a notify URL is configured');
 create table q0 as select coalesce(max(id), 0) as n from net.http_request_queue;
 select ask(bc('own'));
-select vega('7770001', null);
+select fetcher('7770001', null);
 select is(jsonb_array_length(fresh(bc('own'))), 1, 'fixture: a reply was written');
 select is((select count(*) from net.http_request_queue where id > (select n from q0) and url = 'https://bd-test.local/notify'), 0::bigint,
           'an ask and its reply queue no push');
@@ -353,7 +353,7 @@ create table chat2 as select c.id from public.conversations c join public.conver
    where c.staff_key = 'staff_b' and m.user_id = u('adm');
 select fresh((select id from chat2));
 select ask(bc('own')); select ask((select id from chat2));
-select vega('7770002', null);
+select fetcher('7770002', null);
 select is(fresh(bc('own'))->0->>'amt' || '/' || (fresh((select id from chat2))->0->>'amt'), '7770002/7770002',
           'a waiting ask in another admin''s chat gets the same answer in that chat');
 
@@ -366,7 +366,7 @@ do $$ declare r record; begin
   for r in select a from bad loop
     update app_private.sales_state set fetched_at = now() - interval '31 seconds', fail_count = 0, off = false where only_row;
     perform ask(bc('own'));
-    perform vega(r.a, null);
+    perform fetcher(r.a, null);
     insert into badr values (r.a, fresh(bc('own')), (select amount from app_private.sales_state));
   end loop;
 end $$;
@@ -384,7 +384,7 @@ create function fail_once(reason text) returns void language plpgsql as $$
 begin
   update app_private.sales_state set fetched_at = now() - interval '31 seconds';
   perform ask(bc('own'));
-  perform vega(null, reason);
+  perform fetcher(null, reason);
   perform fresh(bc('own'));
 end $$;
 update app_private.sales_state set fail_count = 0, off = false where only_row;
@@ -394,7 +394,7 @@ select is((select fail_count from app_private.sales_state), 0, 'a config failure
 select fail_once('timeout'); select fail_once('shape');
 select is((select off from app_private.sales_state), false, 'two failures: still on');
 update app_private.sales_state set fetched_at = now() - interval '31 seconds' where only_row;
-select ask(bc('own')); select vega('7770004', null); select fresh(bc('own'));
+select ask(bc('own')); select fetcher('7770004', null); select fresh(bc('own'));
 select fail_once('login');
 select is((select off from app_private.sales_state), false, 'timeout, shape, success, login: not three in a row, still on');
 select fail_once('shape'); select fail_once('other');
@@ -418,7 +418,7 @@ select is((select headers->>'x-job-secret' from net.http_request_queue where id 
           'bd-shared-value', 'with the shared secret header');
 
 -- round 2 ------------------------------------------------------------------------------------------
-select vega('7770007', null); select fresh(bc('own'));
+select fetcher('7770007', null); select fresh(bc('own'));
 insert into audit_log select c::text from app_private.sales_commands c; delete from app_private.sales_commands;
 
 -- amount rule (same in edge and SQL): <= 25 chars and
@@ -438,7 +438,7 @@ do $$ declare r record; begin
     update app_private.sales_state set amount = 'before', fetched_at = now() - interval '31 seconds',
       fail_count = case when r.good then 2 else 0 end, off = false where only_row;
     perform ask(bc('own'));
-    perform vega(r.a, null);
+    perform fetcher(r.a, null);
     insert into amt_res select r.a, r.good, fresh(bc('own')), amount, fail_count from app_private.sales_state;
   end loop;
 end $$;

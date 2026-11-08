@@ -4006,7 +4006,9 @@ class StaffRegistryFake implements StaffRegistryRepository {
 }
 
 /// A neutral registry: staff_a has four commands (one takes an email),
-/// staff_b has one. Words and titles are fixtures, never real ones.
+/// staff_b has one (a total). Words and titles are fixtures, never real ones.
+/// The legacy handler is empty, as the server sends it for private commands:
+/// the app reads only arg and ui.
 StaffRegistry neutralRegistry() => const StaffRegistry({
   'staff_a': StaffChat(
     'staff_a',
@@ -4015,25 +4017,26 @@ StaffRegistry neutralRegistry() => const StaffRegistry({
     commands: [
       StaffCommand(
         '/addios',
-        'tester_add_ios',
+        '',
+        arg: 'email',
         helpEn: 'Add a phone tester',
         helpTr: 'Telefon testcisi ekle',
       ),
       StaffCommand(
         '/list',
-        'tester_list',
+        '',
         helpEn: 'Show testers',
         helpTr: 'Testcileri göster',
       ),
       StaffCommand(
         '/reporton',
-        'sales_on',
+        '',
         helpEn: 'Turn the report on',
         helpTr: 'Raporu aç',
       ),
       StaffCommand(
         '/reportoff',
-        'sales_off',
+        '',
         helpEn: 'Turn the report off',
         helpTr: 'Raporu kapat',
       ),
@@ -4046,7 +4049,8 @@ StaffRegistry neutralRegistry() => const StaffRegistry({
     commands: [
       StaffCommand(
         '/report',
-        'sales_total',
+        '',
+        ui: 'total',
         helpEn: 'Show the total',
         helpTr: 'Toplamı göster',
       ),

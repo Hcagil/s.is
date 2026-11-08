@@ -129,6 +129,7 @@ jobs:
         run: |
           case "$PRIVATE_EXPECTED" in ''|1) ;; *) echo '::error::PRIVATE_EXPECTED must be empty or 1'; exit 1 ;; esac
           f=$(mktemp); trap 'rm -f "$f"' EXIT
+          # shellcheck disable=SC2016
           { printf 'do $pk$ begin perform set_config(%s, %s, false); execute $pkw_$' "'private.expected'" "'$PRIVATE_EXPECTED'"; cat tool/private_check.sql; printf '$pkw_$; end $pk$;\n'; } > "$f"
           out=$(supabase db query --local -f "$f" 2>&1) || { echo "::error::$(printf '%s\n' "$out" | grep -o 'error: .*' | head -1)"; exit 1; }
       - name: Run the private tests
@@ -292,6 +293,7 @@ jobs:
         run: |
           case "$PRIVATE_EXPECTED" in ''|1) ;; *) echo '::error::PRIVATE_EXPECTED must be empty or 1'; exit 1 ;; esac
           f=$(mktemp); trap 'rm -f "$f"' EXIT
+          # shellcheck disable=SC2016
           { printf 'do $pk$ begin perform set_config(%s, %s, false); execute $pkw_$' "'private.expected'" "'$PRIVATE_EXPECTED'"; cat tool/private_check.sql; printf '$pkw_$; end $pk$;\n'; } > "$f"
           supabase db query --linked -f "$f" >/dev/null 2>&1 || { echo '::error::private check failed'; exit 1; }
       # storage-sweeper removes queued files from Storage for the cleanup jobs; optional like the sales function: a failure must never block the Play upload.

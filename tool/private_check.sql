@@ -28,7 +28,9 @@ begin
     ('app_private.is_member(uuid)','d249f5b785ab8c5738f36b1efe43f230'),
     ('app_private.is_owner()','0e86cae9ef71c26f5f664970d74e3cad'),
     ('public.admin_answer(uuid,boolean)','406da7275ec5e86200ad34908d8c8c1a'),
-    ('public.staff_registry()','8ead9d6fcac7e20137f29ba48ab4282c')
+    ('public.staff_registry()','8ead9d6fcac7e20137f29ba48ab4282c'),
+    ('app_private.is_allowed_user()','eb1e3c6bbbd6639db0b157b6f8d41940'),
+    ('app_private.jwt_session_id()','9b1cad55e5e3f5bf3070aba83460a5d4')
   ) as t(sig, h) loop
     select md5(p.prosrc) into v from pg_proc p where p.oid = to_regprocedure(rec.sig);
     if v is null or v <> rec.h then

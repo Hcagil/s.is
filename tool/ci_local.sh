@@ -137,6 +137,8 @@ job_android() {
   step "Cargokit build tool tests" "${CI[@]}" run --rm flutter sh -c 'cd rust_builder/cargokit/build_tool && dart pub get && for t in test/*_test.dart; do dart run "$t" || exit 1; done' || return 1
   step "Test" "${CI[@]}" run --rm -e TZ=JST-9 flutter flutter test || return 1
   step "Firebase config present" test -f android/app/google-services.json || return 1
+  # Gradle refuses to repair a transforms workspace that lacks its metadata file; recomputing costs ~1-2 min.
+  step "Drop Gradle transforms cache" sh -c 'rm -rf .ci-cache/gradle/caches/*/transforms' || return 1
   step "Android unit tests" "${CI[@]}" run --rm flutter sh -c 'flutter build apk --config-only && cd android && ./gradlew --no-daemon :app:testDebugUnitTest' || return 1
   step "Build release bundle" bundle
 }

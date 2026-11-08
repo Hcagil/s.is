@@ -538,6 +538,11 @@ widened: no path may write a clock time into `delivered_at` or broadcast one on
 
 No secrets in the app or repository. Service-role keys and signing material
 exist only in GitHub Actions secrets and in the maintainer's offline backup.
+The release reaches the production database only through `SUPABASE_ACCESS_TOKEN`
+(scoped to the SIS project, Database read-write, environment `play-internal`):
+the Supabase CLI mints a short-lived `cli_login_*` role with it and switches to
+`postgres`. That token is the one database credential; no database password is
+stored.
 
 Nothing the app stores on the phone (session, waiting notification previews, the message store)
 leaves it through Android backup or device-to-device transfer: both are

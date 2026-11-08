@@ -26,8 +26,6 @@ class _DeleteChatsDialog extends StatefulWidget {
 }
 
 class _DeleteChatsDialogState extends State<_DeleteChatsDialog> {
-  bool _checked = false;
-
   @override
   Widget build(BuildContext context) {
     final t = SisBrand.of(context);
@@ -36,7 +34,6 @@ class _DeleteChatsDialogState extends State<_DeleteChatsDialog> {
 
     final titleWidget = _buildTitle(context, chats, l);
     final bodyWidget = _buildBody(chats, l);
-    final checkboxWidget = _buildCheckbox(chats, l);
     final okLabel = _buildOkLabel(chats, l);
 
     return Dialog(
@@ -56,10 +53,6 @@ class _DeleteChatsDialogState extends State<_DeleteChatsDialog> {
               titleWidget,
               const SizedBox(height: 16),
               bodyWidget,
-              if (checkboxWidget != null) ...[
-                const SizedBox(height: 16),
-                checkboxWidget,
-              ],
               const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -77,7 +70,7 @@ class _DeleteChatsDialogState extends State<_DeleteChatsDialog> {
                   ),
                   TextButton(
                     key: const ValueKey('delete-chat-ok'),
-                    onPressed: () => Navigator.of(context).pop(_checked),
+                    onPressed: () => Navigator.of(context).pop(true),
                     child: Text(
                       okLabel,
                       style: TextStyle(
@@ -169,49 +162,6 @@ class _DeleteChatsDialogState extends State<_DeleteChatsDialog> {
     return Text.rich(
       _bold(text, TextStyle(fontSize: 15, color: t.text)),
       textAlign: TextAlign.start,
-    );
-  }
-
-  Widget? _buildCheckbox(List<Conversation> chats, AppLocalizations l) {
-    if (chats.length > 1) {
-      final hasOneToOne = chats.any((c) => !c.isGroup);
-      if (!hasOneToOne) return null;
-
-      return _buildCheckboxRow(l.chatDeleteBothSides);
-    }
-
-    final c = chats.first;
-    if (!c.isGroup) {
-      final firstWord =
-          c.other?.displayName.split(' ').firstOrNull ??
-          conversationLabel(l, c);
-      return _buildCheckboxRow(l.chatDeleteAlso(firstWord));
-    }
-
-    return null;
-  }
-
-  Widget _buildCheckboxRow(String label) {
-    final t = SisBrand.of(context);
-    return InkWell(
-      key: const ValueKey('delete-chat-check'),
-      onTap: () => setState(() {
-        _checked = !_checked;
-      }),
-      child: Row(
-        children: [
-          Checkbox(
-            value: _checked,
-            onChanged: (v) => setState(() {
-              _checked = v ?? false;
-            }),
-            activeColor: t.brand,
-          ),
-          Expanded(
-            child: Text(label, style: TextStyle(fontSize: 15, color: t.text)),
-          ),
-        ],
-      ),
     );
   }
 

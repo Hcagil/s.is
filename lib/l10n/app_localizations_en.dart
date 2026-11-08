@@ -1479,11 +1479,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String chatDeleteAlso(String name) {
-    return 'Also delete for $name';
-  }
-
-  @override
   String get chatDeletedUndo => 'Chat deleted';
 
   @override
@@ -1511,9 +1506,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get chatDeleteFewSure =>
       'Are you sure you want to delete these chats?';
-
-  @override
-  String get chatDeleteBothSides => 'Delete for everyone where possible';
 
   @override
   String get chatsDeletedUndo => 'Chats deleted';

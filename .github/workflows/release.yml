@@ -243,7 +243,6 @@ jobs:
         run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
       # The sales function is optional: a failure here must never block the Play upload.
       # It goes out before the schema: the new database code calls it, and nothing calls it until the push below.
@@ -265,7 +264,6 @@ jobs:
         run: supabase db push
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
       # The staff chat rows (titles, command words) live only in this secret. The JSON never enters the shell text:
       # it is passed as base64, and every CLI line goes to /dev/null because an error would quote the query.

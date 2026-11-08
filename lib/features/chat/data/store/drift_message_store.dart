@@ -70,13 +70,14 @@ final class DriftMessageStore
     final key = _prefetchedKey;
     if (key == null || _keyTaken || _early != null) return;
     final erasuresAtStart = _erasures;
+    Future<StoreDatabase>? opening;
     try {
       final f = await file();
       if (!await f.exists() || _keyTaken || erasuresAtStart != _erasures) {
         return;
       }
       StartupMarks.mark('early-open-start');
-      final opening = _serial(f.path, () async {
+      opening = _serial(f.path, () async {
         // An erase that began meanwhile wins: never create or re-create the file.
         if (erasuresAtStart != _erasures) throw const _ErasedWhileOpening();
         final db = StoreDatabase(
@@ -100,7 +101,12 @@ final class DriftMessageStore
       await opening;
       StartupMarks.mark('early-open-end');
     } catch (_) {
-      _early = null;
+      // Only this call's own open is dropped; a newer one stays.
+      if (identical(_early, opening)) {
+        _early = null;
+        _earlyKey = null;
+        _earlyPath = null;
+      }
     }
   }
 

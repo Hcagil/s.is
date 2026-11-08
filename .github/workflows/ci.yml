@@ -182,6 +182,9 @@ jobs:
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+      # Gradle refuses to repair a transforms workspace that lacks its metadata file; recomputing costs ~1-2 min.
+      - name: Drop Gradle transforms cache
+        run: rm -rf .ci-cache/gradle/caches/*/transforms
       # JVM unit tests of the native Kotlin (android/app/src/test); they share
       # fixed vectors with the Dart tests (test/fixtures/instant_push_vectors.json).
       # android/gradlew is generated, not tracked; --config-only creates it on a clean checkout.

@@ -243,4 +243,58 @@ void main() {
     await early();
     expect(await read(store(owner: 'owner-2')), isEmpty);
   });
+  // A failed early open is forgotten: the file is not a database while
+  // warmOpen runs, so the early open fails; then the real file comes back at
+  // the SAME path and a new warmOpen with the SAME key must run and be used.
+  test('a failed early open is forgotten: the next open is fresh', () async {
+    await seed();
+    final good = await h.file.readAsBytes();
+    await h.file.delete();
+    await h.file.writeAsBytes(List<int>.filled(8192, 0x5a));
+    await DriftMessageStore.prefetchKey(() async => keyA);
+    await expectLater(
+      DriftMessageStore.warmOpen(() async => h.file),
+      completes,
+    );
+    // Let the failed early open settle (its error handling runs).
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    await h.file.delete();
+    await h.file.writeAsBytes(good);
+    // A later early open is not blocked by the failed one, and is taken:
+    // with the file gone only that early database can show the rows.
+    await DriftMessageStore.warmOpen(() async => h.file);
+    await h.file.delete();
+    expect(await read(store()), ['m1'], reason: 'the new early database');
+  });
+
+  // An older early open fails AFTER a newer one started: the newer one is
+  // still taken. The old one opens a non-database file in another dir; the
+  // first time it reads its path (it is registered by then) the early state
+  // is dropped and a newer warmOpen of the real file starts.
+  test('an old early open failing late keeps the newer one', () async {
+    final bad = await StoreHarness.create();
+    await bad.file.writeAsBytes(List<int>.filled(8192, 0x5a));
+    await seed();
+    await DriftMessageStore.prefetchKey(() async => keyA);
+    Future<void>? newer;
+    final older = DriftMessageStore.warmOpen(
+      () async => _HookFile(
+        bad.file,
+        () => newer = Future<void>(() async {
+          DriftMessageStore.resetPrefetchForTest();
+          await DriftMessageStore.prefetchKey(() async => keyA);
+          await DriftMessageStore.warmOpen(() async => h.file);
+        }),
+      ),
+    );
+    await older;
+    expect(newer, isNotNull, reason: 'fixture: the newer open started');
+    await newer;
+    // Let the older open's failure land, after the newer one is registered.
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    await h.file.delete();
+    expect(await read(store()), [
+      'm1',
+    ], reason: 'served by the newer early database');
+  });
 }

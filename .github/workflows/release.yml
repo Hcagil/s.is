@@ -119,21 +119,18 @@ jobs:
         if: needs.scope.outputs.ship == 'true'
         run: supabase start -x imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
       - name: Install the private functions
-        if: needs.scope.outputs.ship == 'true' && env.PRIVATE_EXPECTED == '1'
+        if: needs.scope.outputs.ship == 'true'
         env:
           PRIVATE_SQL_B64: ${{ secrets.PRIVATE_SQL_B64 }}
-        run: |
-          f=$(mktemp); trap 'rm -f "$f"' EXIT
-          printf %s "$PRIVATE_SQL_B64" | base64 -d > "$f"
-          db=supabase_db_$(sed -n 's/^project_id *= *"\(.*\)"/\1/p' supabase/config.toml)
-          docker exec -i "$db" psql -U postgres -v ON_ERROR_STOP=1 -q < "$f" >/dev/null 2>&1 || { echo "::error::install failed"; exit 1; }
+          PRIVATE_PACK_VERSION: ${{ secrets.PRIVATE_PACK_VERSION }}
+        run: tool/private_install.sh local
       - name: Check the private handlers
         if: needs.scope.outputs.ship == 'true'
         run: |
-          out=$(supabase db query --local -f tool/private_check.sql 2>&1) || { echo "::error::$(printf '%s\n' "$out" | grep -o 'error: .*' | head -1)"; exit 1; }
-          if [ "$PRIVATE_EXPECTED" = 1 ]; then
-            supabase db query --local "do \$\$ begin if coalesce(cardinality(app_private.private_selfcheck()), 0) = 0 then raise exception 'private selfcheck list is empty'; end if; end \$\$" >/dev/null 2>&1 || { echo '::error::private selfcheck list is empty'; exit 1; }
-          fi
+          case "$PRIVATE_EXPECTED" in ''|1) ;; *) echo '::error::PRIVATE_EXPECTED must be empty or 1'; exit 1 ;; esac
+          f=$(mktemp); trap 'rm -f "$f"' EXIT
+          { printf 'do $pk$ begin perform set_config(%s, %s, false); execute $pkw_$' "'private.expected'" "'$PRIVATE_EXPECTED'"; cat tool/private_check.sql; printf '$pkw_$; end $pk$;\n'; } > "$f"
+          out=$(supabase db query --local -f "$f" 2>&1) || { echo "::error::$(printf '%s\n' "$out" | grep -o 'error: .*' | head -1)"; exit 1; }
       - name: Run the private tests
         if: needs.scope.outputs.ship == 'true' && env.PRIVATE_EXPECTED == '1'
         env:
@@ -282,14 +279,10 @@ jobs:
         env:
           PRIVATE_EXPECTED: ${{ vars.PRIVATE_EXPECTED }}
           PRIVATE_SQL_B64: ${{ secrets.PRIVATE_SQL_B64 }}
+          PRIVATE_PACK_VERSION: ${{ secrets.PRIVATE_PACK_VERSION }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
-        run: |
-          case "$PRIVATE_EXPECTED" in ''|1) ;; *) echo '::error::PRIVATE_EXPECTED must be empty or 1'; exit 1 ;; esac
-          if [ "$PRIVATE_EXPECTED" != 1 ]; then echo 'The private part is not expected.'; exit 0; fi
-          [ -n "$PRIVATE_SQL_B64" ] || { echo '::error::the private install secret is empty'; exit 1; }
-          [ "${#PRIVATE_SQL_B64}" -le 100000 ] || { echo '::error::the private install secret is longer than 100000 characters (command line limit)'; exit 1; }
-          supabase db query --linked "do \$\$ begin execute convert_from(decode('$PRIVATE_SQL_B64','base64'),'utf8'); end \$\$" >/dev/null 2>&1 || { echo "::error::install failed"; exit 1; }
+        run: tool/private_install.sh linked
       # Every release, expected or not: each private row needs its function, owned and locked down like the public ones.
       - name: Check the private handlers
         env:
@@ -297,10 +290,10 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
         run: |
-          supabase db query --linked -f tool/private_check.sql >/dev/null 2>&1 || { echo '::error::private check failed'; exit 1; }
-          if [ "$PRIVATE_EXPECTED" = 1 ]; then
-            supabase db query --linked "do \$\$ begin if coalesce(cardinality(app_private.private_selfcheck()), 0) = 0 then raise exception 'private selfcheck list is empty'; end if; end \$\$" >/dev/null 2>&1 || { echo '::error::private selfcheck list is empty'; exit 1; }
-          fi
+          case "$PRIVATE_EXPECTED" in ''|1) ;; *) echo '::error::PRIVATE_EXPECTED must be empty or 1'; exit 1 ;; esac
+          f=$(mktemp); trap 'rm -f "$f"' EXIT
+          { printf 'do $pk$ begin perform set_config(%s, %s, false); execute $pkw_$' "'private.expected'" "'$PRIVATE_EXPECTED'"; cat tool/private_check.sql; printf '$pkw_$; end $pk$;\n'; } > "$f"
+          supabase db query --linked -f "$f" >/dev/null 2>&1 || { echo '::error::private check failed'; exit 1; }
       # storage-sweeper removes queued files from Storage for the cleanup jobs; optional like the sales function: a failure must never block the Play upload.
       - name: Deploy the storage sweeper
         id: sweeper

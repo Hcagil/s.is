@@ -1,48 +1,72 @@
--- Checks that every private: handler in app_private.staff_commands has a correct server function.
--- Run on the throwaway database and on the live database every release.
+-- Checks the private pack against the public side: the owner anchor, untouched public function bodies, locked-down private functions, and (when expected) the required functions.
+-- Run through tool/private_install.sh, which sets private.expected first.
 do $$
 declare
+  ex text := current_setting('private.expected', true);
+  anchor oid;
   n integer;
-  h oid;
-  a oid;
-  s oid;
-  r oid;
+  rec record;
+  v text;
 begin
-  -- Resolve oids
-  h := to_regprocedure('app_private.private_handler(text,uuid,uuid,text,text)');
-  a := to_regprocedure('app_private.private_answer(uuid,boolean,uuid)');
-  s := to_regprocedure('app_private.private_selfcheck()');
-  r := to_regprocedure('app_private.admin_handle(uuid,uuid,text)');
-
-  -- 1. Check if private handlers exist and required functions are present
-  select count(*) into n from app_private.staff_commands where handler like 'private:%';
-  if n > 0 and (h is null or a is null or s is null or r is null) then
-    raise exception 'missing private handler count %', n;
+  if ex is null or ex not in ('', '1') then
+    raise exception 'private.expected is missing or wrong';
   end if;
 
-  -- 2. Check if all private handlers are answered by private_selfcheck
-  if s is not null then
-    execute 'select count(*) from app_private.staff_commands c where c.handler like ''private:%'' and substr(c.handler, 9) <> all (coalesce(app_private.private_selfcheck(), array[]::text[]))' into n;
-    if n > 0 then
-      raise exception 'unanswered private row count %', n;
+  select p.proowner into anchor from pg_proc p where p.oid = to_regprocedure('app_private.admin_on_message()');
+  if anchor is null then
+    raise exception 'owner anchor missing';
+  end if;
+
+  -- A migration that changes one of these functions must update its hash here.
+  for rec in select * from (values
+    ('app_private.admin_on_message()','d854e50164cb4022e6fbe43fcdb2a84b'),
+    ('app_private.sales_on_message()','8982eee1fff414dc7f57cc746937f579'),
+    ('app_private.admin_reply(uuid,jsonb,boolean)','b314ff78d6af821b1189bc19c0575fdc'),
+    ('app_private.has_app_access()','d4a7d6af923e083f8e48ab6fa16eed81'),
+    ('app_private.is_admin_chat(uuid)','93913ca8fe79a8e1b595a15d37d40b16'),
+    ('app_private.is_bot(uuid)','6185d9a602ed43ad547e8ff0f4e4a546'),
+    ('app_private.is_member(uuid)','d249f5b785ab8c5738f36b1efe43f230'),
+    ('app_private.is_owner()','0e86cae9ef71c26f5f664970d74e3cad'),
+    ('public.admin_answer(uuid,boolean)','406da7275ec5e86200ad34908d8c8c1a'),
+    ('public.staff_registry()','8ead9d6fcac7e20137f29ba48ab4282c')
+  ) as t(sig, h) loop
+    select md5(p.prosrc) into v from pg_proc p where p.oid = to_regprocedure(rec.sig);
+    if v is null or v <> rec.h then
+      raise exception 'public function changed: %', rec.sig;
     end if;
-  end if;
+  end loop;
 
-  -- 3. Check owner mismatch against admin_handle
-  select count(*) into n from pg_proc p where p.pronamespace = 'app_private'::regnamespace and p.proname like 'private\_%' and p.proowner != (select proowner from pg_proc where oid = r);
+  select count(*) into n from pg_proc p where p.pronamespace = 'app_private'::regnamespace and p.proname like 'private\_%' and p.proowner <> anchor;
   if n > 0 then
     raise exception 'private function owner mismatch count %', n;
   end if;
 
-  -- 4. Check if private functions are callable by clients
-  select count(*) into n from pg_proc p where p.pronamespace = 'app_private'::regnamespace and p.proname like 'private\_%' and (has_function_privilege('anon', p.oid, 'execute') or has_function_privilege('authenticated', p.oid, 'execute') or has_function_privilege('service_role', p.oid, 'execute'));
+  select count(*) into n from pg_proc p where p.pronamespace = 'app_private'::regnamespace and p.proname like 'private\_%'
+    and (has_function_privilege('anon', p.oid, 'execute') or has_function_privilege('authenticated', p.oid, 'execute') or has_function_privilege('service_role', p.oid, 'execute'));
   if n > 0 then
     raise exception 'private function callable by clients count %', n;
   end if;
 
-  -- 5. Check if private functions are definer with empty search_path
-  select count(*) into n from pg_proc p where p.pronamespace = 'app_private'::regnamespace and p.proname like 'private\_%' and (p.prosecdef = false or not coalesce(p.proconfig, array[]::text[]) @> array['search_path=""']);
+  select count(*) into n from pg_proc p where p.pronamespace = 'app_private'::regnamespace and p.proname like 'private\_%'
+    and (not p.prosecdef or not coalesce(p.proconfig, array[]::text[]) @> array['search_path=""']);
   if n > 0 then
     raise exception 'private function not definer with empty search_path count %', n;
+  end if;
+
+  if ex = '1' then
+    for rec in select unnest(array[
+      'app_private.private_dispatch(uuid,uuid,text)',
+      'app_private.private_panel()',
+      'app_private.private_answer(uuid,boolean,uuid)',
+      'app_private.private_selfcheck()'
+    ]) as sig loop
+      if to_regprocedure(rec.sig) is null then
+        raise exception 'private function missing: %', rec.sig;
+      end if;
+    end loop;
+    execute 'select coalesce(cardinality(app_private.private_selfcheck()), 0)' into n;
+    if n = 0 then
+      raise exception 'private selfcheck list is empty';
+    end if;
   end if;
 end $$;

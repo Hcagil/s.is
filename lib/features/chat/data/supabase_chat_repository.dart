@@ -961,6 +961,7 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
             fileOptions: FileOptions(contentType: image.contentType),
           );
       await _uploadNotificationPicture(path, image.bytes);
+      await _uploadSmallPicture(path, image.bytes);
 
       final row = await _client
           .from('messages')
@@ -999,6 +1000,27 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
     } catch (e) {
       log(
         'sendImage: notification picture not stored: ${e.runtimeType}',
+        name: 'sis.data',
+        level: 900,
+      );
+    }
+  }
+
+  /// The small picture the bubble, album and media tab show, stored next to the photo as `<path>.s` BEFORE the message row exists. Best effort: a photo without one is shown from the full file.
+  Future<void> _uploadSmallPicture(String path, Uint8List bytes) async {
+    try {
+      final small = await shrinkToLongSide(bytes);
+      if (small == null) return;
+      await _client.storage
+          .from('attachments')
+          .uploadBinary(
+            '$path.s',
+            small,
+            fileOptions: const FileOptions(contentType: 'image/jpeg'),
+          );
+    } catch (e) {
+      log(
+        'sendImage: small picture not stored: ${e.runtimeType}',
         name: 'sis.data',
         level: 900,
       );
@@ -1256,6 +1278,12 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
               await _client.storage
                   .from('attachments')
                   .copy('$source.t', '$path.t');
+            } catch (_) {}
+            // The small picture too; an old photo has none.
+            try {
+              await _client.storage
+                  .from('attachments')
+                  .copy('$source.s', '$path.s');
             } catch (_) {}
           }
         }

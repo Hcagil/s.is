@@ -11,6 +11,38 @@ Future<Uint8List?> shrinkLinkImage(
   int width = 600,
   int maxBytes = 262144,
 }) async {
+  return _shrink(
+    bytes,
+    (w, h) => w > width
+        ? ui.TargetImageSize(width: width)
+        : ui.TargetImageSize(width: w, height: h),
+    maxBytes,
+  );
+}
+
+/// Shrinks a picture to a JPEG whose longer side is at most [longSide] pixels (never enlarged) and at most [maxBytes] bytes. Null when it cannot be decoded or no quality fits.
+Future<Uint8List?> shrinkToLongSide(
+  Uint8List bytes, {
+  int longSide = 560,
+  int maxBytes = 153600,
+}) async {
+  return _shrink(bytes, (w, h) {
+    if (w >= h) {
+      return w > longSide
+          ? ui.TargetImageSize(width: longSide)
+          : ui.TargetImageSize(width: w, height: h);
+    }
+    return h > longSide
+        ? ui.TargetImageSize(height: longSide)
+        : ui.TargetImageSize(width: w, height: h);
+  }, maxBytes);
+}
+
+Future<Uint8List?> _shrink(
+  Uint8List bytes,
+  ui.TargetImageSize Function(int w, int h) getTargetSize,
+  int maxBytes,
+) async {
   try {
     final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
     // Read the claimed size first: a tiny file can claim a huge picture.
@@ -23,9 +55,7 @@ Future<Uint8List?> shrinkLinkImage(
     }
     final codec = await ui.instantiateImageCodecWithSize(
       buffer,
-      getTargetSize: (int w, int h) => w > width
-          ? ui.TargetImageSize(width: width)
-          : ui.TargetImageSize(width: w, height: h),
+      getTargetSize: getTargetSize,
     );
     final frame = await codec.getNextFrame();
     final data = await frame.image.toByteData(

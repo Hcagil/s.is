@@ -131,6 +131,9 @@ class _Wire {
   bool networkDown = false;
   int removeStatus = 200;
 
+  /// When set, a GET answers with this (status, error) instead of the data.
+  (int, String)? getFail;
+
   late final SupabaseClient client = SupabaseClient(
     'http://supabase.test',
     'publishable-key',
@@ -155,6 +158,14 @@ class _Wire {
         final key = p.substring('${obj}attachments/'.length);
         log.add('${req.method} $key');
         if (req.method == 'GET') {
+          final f = getFail;
+          if (f != null) {
+            return _json(req, f.$1, {
+              'statusCode': '${f.$1}',
+              'error': f.$2,
+              'message': 'storage said ${f.$2}',
+            });
+          }
           final bytes = objects[key];
           if (bytes == null) return _storageError(req, 404);
           return http.Response.bytes(bytes, 200, request: req);
@@ -251,6 +262,35 @@ void main() {
       expect((second as Ok<Uint8List?>).value, isNull);
       expect(wire.log, ['GET c1/old.png.s']);
     });
+
+    for (final (status, error) in [(500, 'internal'), (400, 'bad_request')]) {
+      test('a $status "$error" is an Err and is asked again later', () async {
+        wire
+          ..getFail = (status, error)
+          ..objects['c1/a.png.s'] = small;
+        final r = await repo.attachmentThumbBytes('c1/a.png');
+        expect(r, isA<Err<Uint8List?>>());
+
+        wire.getFail = null;
+        final again = await repo.attachmentThumbBytes('c1/a.png');
+        expect((again as Ok<Uint8List?>).value, small);
+        expect(wire.log, ['GET c1/a.png.s', 'GET c1/a.png.s']);
+      });
+    }
+
+    test(
+      'a 400 not_found (local stack) is Ok(null), not asked again',
+      () async {
+        wire.getFail = (400, 'not_found');
+        final first = await repo.attachmentThumbBytes('c1/old.png');
+        wire.getFail = (500, 'internal');
+        final second = await repo.attachmentThumbBytes('c1/old.png');
+
+        expect((first as Ok<Uint8List?>).value, isNull);
+        expect((second as Ok<Uint8List?>).value, isNull);
+        expect(wire.log, ['GET c1/old.png.s']);
+      },
+    );
 
     test('a miss for one photo does not hide another photo\'s copy', () async {
       wire.objects['c1/b.png.s'] = small;

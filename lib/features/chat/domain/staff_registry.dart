@@ -174,22 +174,10 @@ class StaffRegistry {
     return t.isEmpty ? null : t;
   }
 
-  /// Whether chat [key] has a command with [handler].
-  bool hasHandler(String? key, String handler) =>
-      commandsFor(key).any((c) => c.handler == handler);
-
   /// The first command word of chat [key] with the UI hint [ui], or null.
   String? wordForUi(String? key, String ui) {
     for (final c in commandsFor(key)) {
       if (c.ui == ui) return c.name;
-    }
-    return null;
-  }
-
-  /// The first command word of chat [key] with [handler], or null.
-  String? wordFor(String? key, String handler) {
-    for (final c in commandsFor(key)) {
-      if (c.handler == handler) return c.name;
     }
     return null;
   }

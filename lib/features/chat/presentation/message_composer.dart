@@ -362,7 +362,7 @@ class _ComposerState extends ConsumerState<_Composer>
     final staffCommands = id == null
         ? const <StaffCommand>[]
         : ref.watch(staffCommandsProvider(id));
-    final salesChat = staffCommands.any((c) => c.handler == 'sales_total');
+    final salesChat = staffCommands.any((c) => c.ui == 'total');
     // A group left or been removed from: read-only, nothing more to write.
     // Checked before the listeners below register at all -- there is
     // nothing left for any of them to restore into a box that cannot send.

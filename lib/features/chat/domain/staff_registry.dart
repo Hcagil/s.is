@@ -6,6 +6,8 @@ class StaffCommand {
     this.handler, {
     this.helpEn = '',
     this.helpTr = '',
+    this.arg = '',
+    this.ui = '',
   });
 
   /// Creates a [StaffCommand] from a JSON map [j].
@@ -14,12 +16,14 @@ class StaffCommand {
     j['h'] as String? ?? '',
     helpEn: j['e'] as String? ?? '',
     helpTr: j['t'] as String? ?? '',
+    arg: j['g'] as String? ?? '',
+    ui: j['u'] as String? ?? '',
   );
 
   /// The command word, for example the text typed after a slash.
   final String name;
 
-  /// The neutral handler key the server runs.
+  /// A legacy handler key; the server may send it empty and nothing depends on it.
   final String handler;
 
   /// English help text.
@@ -28,11 +32,16 @@ class StaffCommand {
   /// Turkish help text.
   final String helpTr;
 
+  /// The kind of argument the command takes after the word, for example email;
+  /// empty for none.
+  final String arg;
+
+  /// A neutral UI hint, for example total for a command whose answer is a
+  /// total; empty for none.
+  final String ui;
+
   /// Whether this command takes an email argument.
-  bool get takesEmail =>
-      handler == 'tester_add_ios' ||
-      handler == 'tester_add_android' ||
-      handler == 'tester_remove';
+  bool get takesEmail => arg == 'email';
 
   /// Returns the help text in [lang], falling back to English.
   String help(String lang) =>
@@ -44,6 +53,8 @@ class StaffCommand {
     'h': handler,
     'e': helpEn,
     't': helpTr,
+    'g': arg,
+    'u': ui,
   };
 }
 
@@ -118,6 +129,8 @@ class StaffRegistry {
           row['handler'] as String? ?? '',
           helpEn: row['help_en'] as String? ?? '',
           helpTr: row['help_tr'] as String? ?? '',
+          arg: row['arg'] as String? ?? '',
+          ui: row['ui'] as String? ?? '',
         ),
       );
     }
@@ -164,6 +177,14 @@ class StaffRegistry {
   /// Whether chat [key] has a command with [handler].
   bool hasHandler(String? key, String handler) =>
       commandsFor(key).any((c) => c.handler == handler);
+
+  /// The first command word of chat [key] with the UI hint [ui], or null.
+  String? wordForUi(String? key, String ui) {
+    for (final c in commandsFor(key)) {
+      if (c.ui == ui) return c.name;
+    }
+    return null;
+  }
 
   /// The first command word of chat [key] with [handler], or null.
   String? wordFor(String? key, String handler) {

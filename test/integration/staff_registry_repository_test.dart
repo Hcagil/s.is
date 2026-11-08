@@ -15,7 +15,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// The member is a command admin, which no client can make: the runner
 /// applies test/integration/fixtures/staff_registry.sql first (tool/ci_local.sh
 /// `integration`, ci.yml "Repository integration tests"). It loads one
-/// neutral staff_b command, /sales -> sales_total.
+/// neutral staff_b command, /sales with the ui hint total (a stand-in panel when
+/// the stack has no private pack).
 const _url = String.fromEnvironment(
   'SUPABASE_TEST_URL',
   defaultValue: 'http://host.docker.internal:54321',
@@ -62,11 +63,14 @@ void main() {
     expect(reg.titleFor('staff_b', 'en'), 'Staff B');
     expect(reg.titleFor('staff_b', 'tr'), 'Ekip B');
     expect(
-      [for (final c in reg.commandsFor('staff_b')) '${c.name}:${c.handler}'],
-      ['/sales:sales_total'],
+      [
+        for (final c in reg.commandsFor('staff_b'))
+          '${c.name}:${c.arg}:${c.ui}:${c.takesEmail}',
+      ],
+      ['/sales::total:false'],
     );
     expect(reg.commandsFor('staff_b').single.help('tr'), 'toplam');
-    expect(reg.hasHandler('staff_b', 'sales_total'), isTrue);
+    expect(reg.wordForUi('staff_b', 'total'), '/sales');
     expect(reg.commandsFor('staff_a'), isEmpty);
   });
 
@@ -82,7 +86,7 @@ void main() {
       final back = await SupabaseStaffRegistryRepository(member).cached();
       expect(back, isNotNull);
       expect(back!.chats.keys, ['staff_b']);
-      expect(back.wordFor('staff_b', 'sales_total'), '/sales');
+      expect(back.wordForUi('staff_b', 'total'), '/sales');
       expect(back.titleFor('staff_b', 'tr'), 'Ekip B');
     },
   );

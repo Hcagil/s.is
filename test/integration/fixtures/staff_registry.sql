@@ -2,8 +2,7 @@
 -- runner (docker exec psql) before the integration tests: a member's staff
 -- chat needs app_private rows and a staff_key no client can write.
 --
--- Only staff_b is loaded (staff_load replaces the commands of the keys it
--- names); the pgTAP files clear staff_commands before their own loads.
+-- Only staff_b has a command (a total).
 -- Idempotent; the password exists only on the local stack.
 begin;
 insert into app_private.allowlist(email) values ('staffreg-member@sis.test'), ('staffreg-outsider@sis.test')
@@ -25,11 +24,20 @@ select gen_random_uuid(), u.id, u.id::text, 'email',
   from auth.users u where u.id in ('5a0f0000-0000-0000-0000-0000000005a1', '5a0f0000-0000-0000-0000-0000000005a2')
 on conflict do nothing;
 
-select app_private.staff_load('{
-  "chats": [{"key":"staff_b","title_en":"Staff B","title_tr":"Ekip B","sort":2}],
-  "commands": [
-    {"chat_key":"staff_b","word":"/sales","handler":"sales_total","help_en":"total","help_tr":"toplam","sort":1}]
-}'::jsonb);
+-- staff_registry() reads only the private panel. CI has no private pack, so a
+-- neutral panel stands in; a stack that already holds the real pack keeps it.
+do $do$
+begin
+  if to_regprocedure('app_private.private_panel()') is null then
+    create function app_private.private_panel()
+    returns table(chat_key text, title_en text, title_tr text, word text, handler text,
+                  arg text, ui text, help_en text, help_tr text, sort int)
+    language sql security definer set search_path = '' as $f$
+      values ('staff_b', 'Staff B', 'Ekip B', '/sales', '', null::text, 'total', 'total', 'toplam', 1)
+    $f$;
+    revoke execute on function app_private.private_panel() from public, anon, authenticated, service_role;
+  end if;
+end $do$;
 
 -- The member becomes a command admin the way production does it; the trigger
 -- gives them their own staff_b chat. The outsider gets nothing.

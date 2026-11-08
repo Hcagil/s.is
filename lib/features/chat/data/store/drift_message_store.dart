@@ -104,8 +104,6 @@ final class DriftMessageStore
       // Only this call's own open is dropped; a newer one stays.
       if (identical(_early, opening)) {
         _early = null;
-        _earlyKey = null;
-        _earlyPath = null;
       }
     }
   }

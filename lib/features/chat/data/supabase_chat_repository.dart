@@ -1058,8 +1058,11 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
           .download(thumbPath);
       await _cache.write(thumbPath, bytes);
       return Ok(bytes);
-    } on StorageException {
-      // No small copy (an older photo): remember it and let the caller show the full photo.
+    } on StorageException catch (e) {
+      // Only a missing object means "no small copy"; any other storage error is retried later.
+      final missing =
+          e.statusCode == '404' || e.message.contains('"error":"not_found"');
+      if (!missing) return Err(_asFailure(e));
       _noThumb.add(attachmentPath);
       return const Ok(null);
     } catch (e) {

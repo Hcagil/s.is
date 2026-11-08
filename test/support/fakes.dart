@@ -243,6 +243,11 @@ class FakeUpdate implements UpdateRepository {
 }
 
 class FakeChat implements ChatRepository {
+  @override
+  Future<Result<Uint8List?>> attachmentThumbBytes(
+    String attachmentPath,
+  ) async => const Ok(null);
+
   // Change feed (store catch-up): an empty feed, as a server with no changes.
   @override
   Future<Result<ChangePage>> changesSince(
@@ -837,6 +842,11 @@ class FakeChat implements ChatRepository {
 /// Realtime delivers only to a live subscription, and every call is recorded
 /// in order so "subscribe before you read" can be checked.
 class ChatFake implements ChatRepository {
+  @override
+  Future<Result<Uint8List?>> attachmentThumbBytes(
+    String attachmentPath,
+  ) async => const Ok(null);
+
   // Change feed (store catch-up): an empty feed, as a server with no changes.
   @override
   Future<Result<ChangePage>> changesSince(

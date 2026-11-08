@@ -171,6 +171,11 @@ class SwitchingAuth implements AuthRepository {
 /// row-level security's manners: no session or no membership reads as
 /// nothing, and a write is refused.
 class SessionChat implements ChatRepository {
+  @override
+  Future<Result<Uint8List?>> attachmentThumbBytes(
+    String attachmentPath,
+  ) async => const Ok(null);
+
   // Change feed (store catch-up): an empty feed, as a server with no changes.
   @override
   Future<Result<ChangePage>> changesSince(

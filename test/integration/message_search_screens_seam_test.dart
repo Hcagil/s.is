@@ -129,6 +129,11 @@ class _AccountAuth implements AuthRepository {
 /// The real repository; search and messagesAround can be pointed at a real
 /// repository on a dead host -- the phone going offline mid-way.
 class _Switch implements ChatRepository {
+  @override
+  Future<Result<Uint8List?>> attachmentThumbBytes(
+    String attachmentPath,
+  ) async => const Ok(null);
+
   // Change feed (store catch-up): relayed to the real repository.
   @override
   Future<Result<ChangePage>> changesSince(

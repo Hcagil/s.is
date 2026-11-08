@@ -161,12 +161,13 @@ job_database() {
   step "Start Supabase and replay migrations" docker compose run --rm supabase start -x "$SKIP" || return 1
   step "Lint database" docker compose run --rm supabase db lint --level error || return 1
   step "Test database" docker compose run --rm supabase test db || return 1
-  step "Private functions and tests" private_scripts || return 1
-  step "Edge function tests" edge_tests || return 1
   step "Build development image" "${CI[@]}" build flutter || return 1
   step "Build the Rust library for the Dart tests" "${CI[@]}" run --rm flutter cargo build --release --manifest-path rust/Cargo.toml || return 1
   step "Wait until Realtime delivers" "${CI[@]}" run --rm flutter flutter test --run-skipped --tags warmup test/integration/realtime_warmup_test.dart || return 1
   step "Repository integration tests" integration || return 1
+  # The integration tests run before the private pack: the registry fixture adds a stand-in panel only when none exists.
+  step "Private functions and tests" private_scripts || return 1
+  step "Edge function tests" edge_tests || return 1
   step "SIS Bot tool test" env SIS_BOT_TEST_COMPOSE="${CI[*]}" test/tool/sis_bot_tool_test.sh || return 1
   step "Test sender admin tool test" env SIS_BOT_TEST_COMPOSE="${CI[*]}" test/tool/sis_test_account_admin_test.sh
 }

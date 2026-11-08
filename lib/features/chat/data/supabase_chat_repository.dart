@@ -48,6 +48,8 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
 
   final SupabaseClient _client;
   final AttachmentCache _cache;
+  // Photos that have no small copy (<path>.s): asked for once per app run.
+  final _noThumb = <String>{};
 
   /// Opens locked texts of rows read from the server (null: rows pass as they are).
   final MessageOpener? _opener;
@@ -1039,6 +1041,27 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
           .download(attachmentPath);
       await _cache.write(attachmentPath, bytes);
       return Ok(bytes);
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<Uint8List?>> attachmentThumbBytes(String attachmentPath) async {
+    if (_noThumb.contains(attachmentPath)) return const Ok(null);
+    final thumbPath = '$attachmentPath.s';
+    final cached = await _cache.read(thumbPath);
+    if (cached != null) return Ok(cached);
+    try {
+      final bytes = await _client.storage
+          .from('attachments')
+          .download(thumbPath);
+      await _cache.write(thumbPath, bytes);
+      return Ok(bytes);
+    } on StorageException {
+      // No small copy (an older photo): remember it and let the caller show the full photo.
+      _noThumb.add(attachmentPath);
+      return const Ok(null);
     } catch (e) {
       return Err(_asFailure(e));
     }

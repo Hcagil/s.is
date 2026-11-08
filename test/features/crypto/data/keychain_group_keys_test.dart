@@ -196,6 +196,36 @@ void main() {
       },
     );
 
+    test(
+      'a failed shared read is not kept: two overlapping callers both get '
+      'the error, the next call reads again and gets the stored key',
+      () async {
+        kc.put(cryptoGroup, pickleKeyName, validKeyA);
+        kc.readDelay = const Duration(milliseconds: 5);
+        kc.failReads = true;
+        final k = PickleKey.inGroup(cryptoGroup, hasPickles: () async => true);
+        final r = await Future.wait([
+          k.loadOrCreate().then<Object>((v) => v, onError: (Object e) => e),
+          k.loadOrCreate().then<Object>((v) => v, onError: (Object e) => e),
+        ]);
+        expect(r, everyElement(isNot(isA<List<int>>())));
+        kc.failReads = false;
+        expect(_hex(await k.loadOrCreate()), validKeyA);
+        expect(kc.writes(), isEmpty);
+      },
+    );
+
+    test(
+      'after a finished call, the next one reads the keychain again',
+      () async {
+        kc.put(cryptoGroup, pickleKeyName, validKeyA);
+        final k = PickleKey.inGroup(cryptoGroup, hasPickles: () async => true);
+        expect(_hex(await k.loadOrCreate()), validKeyA);
+        kc.put(cryptoGroup, pickleKeyName, validKeyB);
+        expect(_hex(await k.loadOrCreate()), validKeyB);
+      },
+    );
+
     test('delete clears the key in both groups', () async {
       kc.put(cryptoGroup, pickleKeyName, validKeyA);
       kc.put(null, pickleKeyName, validKeyB);

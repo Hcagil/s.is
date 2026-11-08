@@ -151,24 +151,35 @@ void main() {
   });
 
   group('15 the store write fails after decrypt', () {
-    for (final mode in ['skipped', 'throws']) {
-      test('($mode) the text still shows, and a second open of the run '
-          'answers from memory', () async {
-        if (mode == 'skipped') {
-          store.dropWrites = true;
-        } else {
-          store.throwWrites = true;
-        }
-        engine.answer[ct('m1')] = () =>
-            Ok(encodeEnvelope(id: 'm1', text: 'opened once'));
-        final o = make();
-        final out = await o.open([locked('m1')]);
-        expect(out.single.body, 'opened once');
-        final again = await o.open([locked('m1')]);
-        expect(again.single.body, 'opened once');
-        expect(engine.calls, hasLength(1));
-      });
-    }
+    test('(skipped) the text still shows, and a second open of the run '
+        'answers from memory', () async {
+      store.dropWrites = true;
+      engine.answer[ct('m1')] = () =>
+          Ok(encodeEnvelope(id: 'm1', text: 'opened once'));
+      final o = make();
+      final out = await o.open([locked('m1')]);
+      expect(out.single.body, 'opened once');
+      final again = await o.open([locked('m1')]);
+      expect(again.single.body, 'opened once');
+      expect(engine.calls, hasLength(1));
+    });
+
+    // The write runs inside the engine step: a throw rolls the step back, so
+    // the opener shows its fallback, keeps nothing as unreadable, and a later
+    // open decrypts again.
+    test('(throws) the fallback shows, and a later open decrypts again and '
+        'shows the text', () async {
+      store.throwWrites = true;
+      engine.answer[ct('m1')] = () =>
+          Ok(encodeEnvelope(id: 'm1', text: 'opened once'));
+      final o = make();
+      final out = await o.open([locked('m1')]);
+      expect(out.single.body, isNot('opened once'));
+      store.throwWrites = false;
+      final again = await o.open([locked('m1')]);
+      expect(again.single.body, 'opened once');
+      expect(engine.calls, hasLength(2));
+    });
   });
 
   group('16 waiting list', () {

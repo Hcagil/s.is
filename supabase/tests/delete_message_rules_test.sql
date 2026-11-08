@@ -191,8 +191,8 @@ select is((select count(*) from public.message_reactions where message_id = m('v
 select is((select link_preview from public.messages where id = m('card')), null, 'G link card erased');
 select is((select array_agg(bucket || ':' || path order by bucket || ':' || path) from app_private.storage_removal_queue
             where path like c('G')::text || '/dm-voice%' or path like '%d8c00000%'),
-          array['attachments:' || c('G')::text || '/dm-voice.m4a', 'attachments:' || c('G')::text || '/dm-voice.m4a.t',
-                'link-previews:' || c('G')::text || '/d8c00000-0000-0000-0000-000000000001.jpg'], 'G queue: attachment, its .t thumbnail and the link-card picture');
+          array['attachments:' || c('G')::text || '/dm-voice.m4a', 'attachments:' || c('G')::text || '/dm-voice.m4a.s', 'attachments:' || c('G')::text || '/dm-voice.m4a.t',
+                'link-previews:' || c('G')::text || '/d8c00000-0000-0000-0000-000000000001.jpg'], 'G queue: attachment, its .s and .t copies and the link-card picture');
 -- repeat: a second message reusing the (now free) path and card is deleted without error
 insert into public.messages(conversation_id, sender_id, body, attachment_path, created_at)
   values (c('G'), '00000000-0000-0000-0000-0000000d8002', 'dm again', c('G')::text || '/dm-voice.m4a', now() - interval '1 hour');
@@ -201,7 +201,7 @@ select test_as('02');
 select lives_ok(format($$select public.delete_message(%L)$$, m('again')), 'G repeat of the same paths does not fail');
 reset role;
 select is((select count(*) from app_private.storage_removal_queue
-            where path like c('G')::text || '/dm-voice%' or path like '%d8c00000%'), 3::bigint,
+            where path like c('G')::text || '/dm-voice%' or path like '%d8c00000%'), 4::bigint,
           'G repeat adds no duplicate queue rows');
 
 -- G poll: options, votes, reactions and the pin go away ----------------------------------

@@ -289,11 +289,19 @@ void main() {
     );
     expect(preview, findsNothing);
 
-    // Really on disk, not only in the provider's own memory.
+    // Really on disk, not only in the provider's own memory. The bubble
+    // shows the small copy (`<path>.s`, a JPEG the sender made), cached under
+    // its own key; the full photo is fetched only when it is opened.
+    final small = await t.runAsync(() => realCache.read('$path.s'));
+    expect(small?.sublist(0, 3), [
+      0xff,
+      0xd8,
+      0xff,
+    ], reason: 'the fetched small copy must be written to the real file cache');
     expect(
       await t.runAsync(() => realCache.read(path)),
-      _png,
-      reason: 'the fetched bytes must be written to the real file cache',
+      isNull,
+      reason: 'the bubble must not download the full photo',
     );
 
     await t.pumpWidget(const SizedBox());
@@ -317,12 +325,12 @@ void main() {
 
     expect(
       spy.hits,
-      contains(path),
+      contains('$path.s'),
       reason: 'the cache must be asked, and answer, before any download',
     );
     expect(
       spy.misses,
-      isNot(contains(path)),
+      isNot(contains('$path.s')),
       reason:
           'a miss here would mean the second screen fell through to the '
           'network for a photo it already has on disk',

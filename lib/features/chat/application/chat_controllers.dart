@@ -342,6 +342,21 @@ final attachmentBytesProvider = FutureProvider.autoDispose
       };
     }, retry: (_, _) => null);
 
+/// The small copy `<path>.s` for bubbles and grids; falls back to the full
+/// file when none exists.
+final attachmentThumbProvider = FutureProvider.autoDispose
+    .family<Uint8List, String>((ref, path) async {
+      // Per account, like every other read.
+      ref.watch(currentUserIdProvider);
+      return switch (await ref
+          .read(chatRepositoryProvider)
+          .attachmentThumbBytes(path)) {
+        Ok(:final value) when value != null => value,
+        Ok() => await ref.watch(attachmentBytesProvider(path).future),
+        Err(:final failure) => throw failure,
+      };
+    }, retry: (_, _) => null);
+
 /// One profile's or group's picture: from this phone when it is here,
 /// otherwise downloaded once and kept. A changed picture is a new storage
 /// path (never an overwrite), so this is never stale.

@@ -46,11 +46,11 @@ final class SupabaseChatDeleteRepository implements ChatDeleteRepository {
       if (paths is List && paths.isNotEmpty) {
         try {
           final files = List<String>.from(paths);
-          // A video's thumbnail sits next to it as `<path>.t`; removing a
-          // name that does not exist is harmless.
+          // A video's thumbnail is `<path>.t`, a photo's small copy `<path>.s`;
+          // removing a name that does not exist is harmless.
           await _client.storage.from('attachments').remove([
             ...files,
-            for (final p in files) '$p.t',
+            for (final p in files) ...['$p.t', '$p.s'],
           ]);
         } catch (e) {
           log(

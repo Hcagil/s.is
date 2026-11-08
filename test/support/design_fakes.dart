@@ -120,6 +120,11 @@ class DesignUpdate implements UpdateRepository {
 }
 
 class DesignChat implements ChatRepository {
+  @override
+  Future<Result<Uint8List?>> attachmentThumbBytes(
+    String attachmentPath,
+  ) async => const Ok(null);
+
   // Change feed (store catch-up): an empty feed, as a server with no changes.
   @override
   Future<Result<ChangePage>> changesSince(

@@ -92,6 +92,11 @@ String _stamp(String what) => '$what ${DateTime.now().microsecondsSinceEpoch}';
 /// survive — reads working, Realtime not — and both halves are the real
 /// implementation, so the Err is the one production produces.
 class _RealtimeDown implements ChatRepository {
+  @override
+  Future<Result<Uint8List?>> attachmentThumbBytes(
+    String attachmentPath,
+  ) async => const Ok(null);
+
   // Change feed (store catch-up): relayed to the real repository.
   @override
   Future<Result<ChangePage>> changesSince(

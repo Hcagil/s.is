@@ -441,6 +441,22 @@ void main() {
       expect(viewer.initialIndex, 1);
     });
 
+    testWidgets('media tiles load the small copies, not the full files', (
+      t,
+    ) async {
+      final w = World();
+      w.chat.thumbBytes
+        ..['c1/1.png'] = pngBytes
+        ..['c1/2.png'] = pngBytes;
+      await bobFromChat(t, w);
+      await tapKey(t, 'tab-media');
+      await t.pumpAndSettle();
+
+      expect(w.chat.thumbRequests, containsAll(['c1/1.png', 'c1/2.png']));
+      expect(w.chat.bytesRequests, isNot(contains('c1/1.png')));
+      expect(w.chat.bytesRequests, isNot(contains('c1/2.png')));
+    });
+
     testWidgets('links: one row per link, newest first, with host, address, '
         'sender and the local date', (t) async {
       final w = World();

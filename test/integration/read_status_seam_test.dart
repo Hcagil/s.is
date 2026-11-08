@@ -118,6 +118,11 @@ class _AccountAuth implements AuthRepository {
 /// the same calls on a real repository at a dead host (the connection that
 /// fails is the real one), or by a slower real answer.
 class _Wired implements ChatRepository {
+  @override
+  Future<Result<Uint8List?>> attachmentThumbBytes(
+    String attachmentPath,
+  ) async => const Ok(null);
+
   // Change feed (store catch-up): relayed to the real repository.
   @override
   Future<Result<ChangePage>> changesSince(

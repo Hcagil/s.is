@@ -48,6 +48,8 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
 
   final SupabaseClient _client;
   final AttachmentCache _cache;
+  // Photos that have no small copy (<path>.s): asked for once per app run.
+  final _noThumb = <String>{};
 
   /// Opens locked texts of rows read from the server (null: rows pass as they are).
   final MessageOpener? _opener;
@@ -961,6 +963,7 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
             fileOptions: FileOptions(contentType: image.contentType),
           );
       await _uploadNotificationPicture(path, image.bytes);
+      await _uploadSmallPicture(path, image.bytes);
 
       final row = await _client
           .from('messages')
@@ -1005,6 +1008,27 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
     }
   }
 
+  /// The small picture the bubble, album and media tab show, stored next to the photo as `<path>.s` BEFORE the message row exists. Best effort: a photo without one is shown from the full file.
+  Future<void> _uploadSmallPicture(String path, Uint8List bytes) async {
+    try {
+      final small = await shrinkToLongSide(bytes);
+      if (small == null) return;
+      await _client.storage
+          .from('attachments')
+          .uploadBinary(
+            '$path.s',
+            small,
+            fileOptions: const FileOptions(contentType: 'image/jpeg'),
+          );
+    } catch (e) {
+      log(
+        'sendImage: small picture not stored: ${e.runtimeType}',
+        name: 'sis.data',
+        level: 900,
+      );
+    }
+  }
+
   @override
   Future<Result<Uint8List>> attachmentBytes(String attachmentPath) async {
     final cached = await _cache.read(attachmentPath);
@@ -1017,6 +1041,30 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
           .download(attachmentPath);
       await _cache.write(attachmentPath, bytes);
       return Ok(bytes);
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<Uint8List?>> attachmentThumbBytes(String attachmentPath) async {
+    if (_noThumb.contains(attachmentPath)) return const Ok(null);
+    final thumbPath = '$attachmentPath.s';
+    final cached = await _cache.read(thumbPath);
+    if (cached != null) return Ok(cached);
+    try {
+      final bytes = await _client.storage
+          .from('attachments')
+          .download(thumbPath);
+      await _cache.write(thumbPath, bytes);
+      return Ok(bytes);
+    } on StorageException catch (e) {
+      // Only a missing object means "no small copy"; any other storage error is retried later.
+      final missing =
+          e.statusCode == '404' || e.message.contains('"error":"not_found"');
+      if (!missing) return Err(_asFailure(e));
+      _noThumb.add(attachmentPath);
+      return const Ok(null);
     } catch (e) {
       return Err(_asFailure(e));
     }
@@ -1256,6 +1304,12 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
               await _client.storage
                   .from('attachments')
                   .copy('$source.t', '$path.t');
+            } catch (_) {}
+            // The small picture too; an old photo has none.
+            try {
+              await _client.storage
+                  .from('attachments')
+                  .copy('$source.s', '$path.s');
             } catch (_) {}
           }
         }

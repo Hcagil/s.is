@@ -46,6 +46,8 @@ printf %s "$PRIVATE_SQL_B64" | base64 -d > "$gz" || fail 'the private secret is 
 gzip -t "$gz" 2>/dev/null || fail 'the private secret is not a valid gzip'
 gzip -dc "$gz" > "$sql" || fail 'the private secret cannot be unpacked'
 [ -s "$sql" ] || fail 'the private install is empty'
+# The version is the hash of the pack without its last two lines (the version function), as pack-secrets.sh computes it.
+[ "v$(head -n -2 "$sql" | sha256sum | cut -c1-16)" = "$PRIVATE_PACK_VERSION" ] || fail 'the private pack does not match its version'
 re=$(base64 -w0 < "$gz")
 [ "${#re}" -le 100000 ] || fail 'the private install secret is longer than 100000 characters'
 

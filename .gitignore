@@ -54,3 +54,6 @@ docker/cargo-tools/*
 
 # ci_local copies the private tests here.
 supabase/tests/private/
+
+# private install temp files
+.private_pack.*

@@ -73,13 +73,13 @@ deploys from protected branches.
 
 ### Server scripts without an app release
 
-`server-scripts.yml` puts the private server scripts (the staff commands that live in the database) live without a build, store upload, tag or release notes. Use it when only a command changed. It runs by hand, from `main` only, in the `play-internal` environment (same secrets and protection as the release), and shares the release's concurrency group, so it never runs beside a release and never cancels one. It proves the scripts on a throwaway database first, then installs and checks them on production through the same shared steps the release uses (`.github/actions/private-server`). It never applies a migration: when production lacks a migration that `main` has, it stops with "production is behind main: run the normal release".
+`server-scripts.yml` puts the private server scripts (the staff commands that live in the database) live without a build, store upload, tag or release notes. Use it when only a command changed. It runs by hand, from `main` only, in the `play-internal` environment (same secrets and protection as the release), and shares the release's concurrency group, so it never runs beside a release. It proves the scripts on a throwaway database first, then installs and checks them on production through the same shared steps the release uses (`.github/actions/private-server`). It installs the newest commit of `main` only when that commit's CI is green; otherwise it stops with "main's newest commit has no green CI yet: wait for CI or run the normal release". It never applies a migration: when production lacks any migration that `main` has (every migration is compared, not only the newest), it stops with "production is behind main: run the normal release". It does not load the staff rows (`STAFF_ROWS_JSON`); a change to those still needs the normal release.
 
 ```
 gh workflow run server-scripts.yml -R Hcagil/s.is --ref main -f reason="..."
 ```
 
-Limit: a run waiting behind a running release can be replaced by a newer queued run of the same group; start it again if it shows as cancelled.
+Limit: a waiting server-scripts run and a waiting release can replace each other, in either direction, because they share one group; start the cancelled one again.
 
 ### Secrets inventory (names only)
 

@@ -15,6 +15,7 @@ jobs:
   guard:
     permissions:
       contents: read
+      actions: read
     runs-on: ubuntu-24.04
     steps:
       - name: Refuse any ref but main
@@ -24,6 +25,14 @@ jobs:
         run: |
           if [ "$REF" != refs/heads/main ]; then echo '::error::server scripts go live from main only'; exit 1; fi
           echo "Server scripts: $REASON" >> "$GITHUB_STEP_SUMMARY"
+      - name: Refuse unless CI is green on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          green=$(gh run list --workflow ci.yml --branch main --event push --status success --limit 50 --json headSha --jq ".[] | select(.headSha == \"$SHA\") | .headSha" | head -1)
+          if [ -z "$green" ]; then echo "::error::main's newest commit has no green CI yet: wait for CI or run the normal release"; exit 1; fi
 
   private-gate:
     needs: guard
@@ -66,11 +75,13 @@ jobs:
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
       - name: Refuse when production is behind main
         run: |
-          latest=$(find supabase/migrations -maxdepth 1 -name '*.sql' -printf '%f\n' | sed -n 's/^\([0-9]\{14\}\)_.*/\1/p' | sort | tail -1)
-          applied=$(supabase db query --linked "select max(version) from supabase_migrations.schema_migrations" 2>/dev/null | grep -Eo '[0-9]{14}' | sort | tail -1)
-          [ -n "$applied" ] || { echo '::error::could not read the latest applied migration'; exit 1; }
-          if [ "$applied" -lt "$latest" ]; then echo '::error::production is behind main: run the normal release'; exit 1; fi
-          echo "Migrations: production $applied, main $latest" >> "$GITHUB_STEP_SUMMARY"
+          main=$(find supabase/migrations -maxdepth 1 -name '*.sql' -printf '%f\n' | sed -n 's/^\([0-9]\{14\}\)_.*/\1/p' | sort -u)
+          applied=$(supabase db query --linked "select version from supabase_migrations.schema_migrations" 2>/dev/null | grep -Eo '[0-9]{14}' | sort -u)
+          [ -n "$main" ] || { echo '::error::could not read the migrations of main'; exit 1; }
+          [ -n "$applied" ] || { echo '::error::could not read the applied migrations'; exit 1; }
+          missing=$(comm -23 <(echo "$main") <(echo "$applied") | tr '\n' ' ')
+          if [ -n "$missing" ]; then echo "::error::production is behind main: run the normal release (missing: $missing)"; exit 1; fi
+          echo "Migrations: production has every migration of main" >> "$GITHUB_STEP_SUMMARY"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}

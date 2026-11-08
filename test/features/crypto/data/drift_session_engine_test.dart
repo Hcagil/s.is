@@ -9,6 +9,10 @@ import 'dart:convert';
 import 'package:drift/drift.dart' show Variable, driftRuntimeOptions;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/core/failure.dart';
+import 'package:sis/features/chat/application/message_opener.dart';
+import 'package:sis/features/chat/domain/encrypted_message_repository.dart';
+import 'package:sis/features/chat/domain/message.dart';
+import 'package:sis/features/chat/domain/message_envelope.dart';
 import 'package:sis/features/chat/data/store/drift_message_store.dart';
 import 'package:sis/features/chat/data/store/drift_send_queue_store.dart';
 import 'package:sis/features/chat/domain/send_queue_store.dart';
@@ -18,6 +22,7 @@ import 'package:sis/features/crypto/data/olm_key_engine.dart';
 import 'package:sis/features/crypto/domain/key_directory.dart';
 import 'package:sis/features/crypto/domain/session_engine.dart';
 
+import '../../../support/opener_fakes.dart' show SlowStore;
 import '../../chat/data/store/store_harness.dart';
 
 final class _FixedPickleKey implements PickleKeyStore {
@@ -1318,6 +1323,66 @@ void main() {
       await unblock(alice);
       expect(await alice.snapshot(), before, reason: 'session rolled back');
       expect(await queueRows(alice), rows);
+    });
+  });
+
+  group('opened text is kept with the session advance', () {
+    // Contract: after the opener decrypts, the decoded text is safe in the
+    // store in the same step as the session advance; a failed text write
+    // never leaves the session advanced without the text.
+    test('the store write of the opened text throws once: a new opener on '
+        'the same store and engine still shows the text', () async {
+      final m = await first();
+      // first() locked 'merhaba'; lock the real envelope for row m1 instead.
+      final sent = ok(
+        await alice.engine.encrypt(
+          'bob',
+          encodeEnvelope(id: 'm1', text: 'merhaba'),
+          peerIdentityKey: bob.identityKey,
+        ),
+      );
+      expect(m.olmType, 0);
+      final row = Message(
+        id: 'm1',
+        conversationId: 'c1',
+        senderId: 'alice',
+        body: lockedBodyPlaceholder,
+        createdAt: DateTime.utc(2026, 3, 1),
+        ciphertext: sent.ciphertext,
+        olmType: sent.olmType,
+      );
+      await bob.store.upsertAll([row]);
+      final slow = SlowStore(bob.store);
+      StoreMessageOpener opener() {
+        final o = StoreMessageOpener(
+          me: () => 'bob',
+          engine: () => bob.engine,
+          store: () => slow,
+          peerKey: (_) async => Ok(
+            ClaimedKeys(
+              identityKey: alice.identityKey,
+              signingKey: 'unused',
+              deviceSignature: 'unused',
+              oneTimeKey: '',
+              isFallback: false,
+            ),
+          ),
+        );
+        addTearDown(o.dispose);
+        return o;
+      }
+
+      slow.throwWrites = true;
+      await opener().open([row]);
+      slow.throwWrites = false;
+
+      final again = await opener().open([row]);
+      expect(
+        again.single.body,
+        'merhaba',
+        reason: 'session advanced without the text: the message is lost',
+      );
+      expect(await bob.body('m1'), 'merhaba');
     });
   });
 }

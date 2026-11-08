@@ -183,6 +183,19 @@ void main() {
       },
     );
 
+    test(
+      'two callers arriving together on a fresh install share one '
+      'read-or-create: both get the same key, and it is the stored one',
+      () async {
+        kc.readDelay = const Duration(milliseconds: 5);
+        final k = PickleKey.inGroup(cryptoGroup, hasPickles: () async => false);
+        final r = await Future.wait([k.loadOrCreate(), k.loadOrCreate()]);
+        expect(_hex(r[0]), _hex(r[1]), reason: 'two different keys were made');
+        expect(kc.get(cryptoGroup, pickleKeyName), _hex(r[0]));
+        expect(kc.writes(), hasLength(1), reason: kc.log.join('\n'));
+      },
+    );
+
     test('delete clears the key in both groups', () async {
       kc.put(cryptoGroup, pickleKeyName, validKeyA);
       kc.put(null, pickleKeyName, validKeyB);

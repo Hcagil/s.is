@@ -128,6 +128,11 @@ class _AccountAuth implements AuthRepository {
 /// Everything goes to [live] except markRead, which goes to a real
 /// repository on a dead host: the connection that fails is the real one.
 class _MarkReadDown implements ChatRepository {
+  @override
+  Future<Result<Uint8List?>> attachmentThumbBytes(
+    String attachmentPath,
+  ) async => const Ok(null);
+
   // Change feed (store catch-up): relayed to the real repository.
   @override
   Future<Result<ChangePage>> changesSince(

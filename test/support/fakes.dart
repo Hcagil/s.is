@@ -243,6 +243,11 @@ class FakeUpdate implements UpdateRepository {
 }
 
 class FakeChat implements ChatRepository {
+  @override
+  Future<Result<Uint8List?>> attachmentThumbBytes(
+    String attachmentPath,
+  ) async => const Ok(null);
+
   // Change feed (store catch-up): an empty feed, as a server with no changes.
   @override
   Future<Result<ChangePage>> changesSince(
@@ -837,6 +842,23 @@ class FakeChat implements ChatRepository {
 /// Realtime delivers only to a live subscription, and every call is recorded
 /// in order so "subscribe before you read" can be checked.
 class ChatFake implements ChatRepository {
+  /// Small copies `<path>.s` the sender uploaded, keyed by the photo's path.
+  /// A path with none answers Ok(null), like an old photo sent before small
+  /// copies existed.
+  final thumbBytes = <String, Uint8List>{};
+  final thumbFailures = <String, Failure>{};
+
+  /// Every path [attachmentThumbBytes] was asked for, in order.
+  final thumbRequests = <String>[];
+
+  @override
+  Future<Result<Uint8List?>> attachmentThumbBytes(String attachmentPath) async {
+    await _tick('attachmentThumbBytes:$attachmentPath');
+    thumbRequests.add(attachmentPath);
+    if (thumbFailures[attachmentPath] case final failure?) return Err(failure);
+    return Ok(thumbBytes[attachmentPath]);
+  }
+
   // Change feed (store catch-up): an empty feed, as a server with no changes.
   @override
   Future<Result<ChangePage>> changesSince(

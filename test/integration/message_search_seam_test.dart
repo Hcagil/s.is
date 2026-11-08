@@ -1,6 +1,8 @@
 @Tags(['integration'])
 library;
 
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/core/failure.dart';
@@ -66,6 +68,11 @@ final _tag = () {
 /// order -- optionally answered late: the real answer, held after the server
 /// gave it, the way a slow network hands it over.
 class _Counted implements ChatRepository {
+  @override
+  Future<Result<Uint8List?>> attachmentThumbBytes(
+    String attachmentPath,
+  ) async => const Ok(null);
+
   _Counted(this.live);
 
   /// Where the calls go; a test may point it at the dead host mid-way.

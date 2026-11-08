@@ -205,6 +205,9 @@ abstract interface class ChatRepository {
   /// otherwise downloaded once (members of its conversation only) and kept.
   Future<Result<Uint8List>> attachmentBytes(String attachmentPath);
 
+  /// The small copy of the photo at [attachmentPath] (`<path>.s`, see sendImage) for the bubble, album and media tab. Ok(null) when the photo has none (an older photo): the caller then shows the full photo.
+  Future<Result<Uint8List?>> attachmentThumbBytes(String attachmentPath);
+
   /// The card picture at [imagePath] (see [LinkPreview.imagePath]): from this
   /// phone's cache when it is there, otherwise downloaded once from the
   /// link-previews bucket (members of the conversation only) and kept.

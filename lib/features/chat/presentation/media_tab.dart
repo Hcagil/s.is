@@ -47,7 +47,7 @@ class _Thumb extends ConsumerWidget {
     final placeholder = ColoredBox(
       color: Theme.of(context).colorScheme.surfaceContainerHigh,
     );
-    return switch (ref.watch(attachmentBytesProvider(path))) {
+    return switch (ref.watch(attachmentThumbProvider(path))) {
       // Decoded at thumbnail size: a grid of full photos would hold every one
       // at full resolution in memory.
       AsyncData(:final value) => Image.memory(

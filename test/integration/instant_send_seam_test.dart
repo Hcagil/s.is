@@ -76,6 +76,11 @@ typedef _Send = Future<Result<Message>> Function({
 
 /// The real repository, passed through untouched except where noted.
 class _Relay implements ChatRepository {
+  @override
+  Future<Result<Uint8List?>> attachmentThumbBytes(
+    String attachmentPath,
+  ) async => const Ok(null);
+
   // Change feed (store catch-up): relayed to the real repository.
   @override
   Future<Result<ChangePage>> changesSince(

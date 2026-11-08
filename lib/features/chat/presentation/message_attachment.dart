@@ -128,7 +128,7 @@ class _Attachment extends ConsumerWidget {
               ),
             ),
             (_, final String path) => switch (ref.watch(
-              attachmentBytesProvider(path),
+              attachmentThumbProvider(path),
             )) {
               AsyncData(:final value) => sized(
                 Image.memory(

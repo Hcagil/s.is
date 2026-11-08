@@ -132,14 +132,15 @@ select is((select avatar_path from public.conversations where id = g('G1')), nul
 select is((select count(*)::int from public.conversation_members where conversation_id = g('G1')), 2, 'G1 former members kept');
 select is(q('G1'), (select array_agg(x order by x) from unnest(array[
     'attachments:' || g('G1')::text || '/a.jpg',
+    'attachments:' || g('G1')::text || '/a.jpg.s',
     'attachments:' || g('G1')::text || '/a.jpg.t',
     'avatars:' || g('G1')::text || '/avatar.jpg',
     'link-previews:' || g('G1')::text || '/' || m('card')::text || '.jpg',
     'link-previews:' || g('G1')::text || '/' || m('edit')::text || '.jpg'
-  ]) x), 'G1 queue: attachment, .t, avatar, card picture, edited message picture (nothing for plain/poll)');
+  ]) x), 'G1 queue: attachment, .s, .t, avatar, card picture, edited message picture (nothing for plain/poll)');
 select is(nlog('G1'), 1, 'G1 one log row');
 select is((select row(messages_removed, files_queued, avatar_queued)::text from app_private.group_cleanup_log
-            where conversation_id = g('G1')), row(5, 4, true)::text, 'G1 log counts: 5 messages, 4 files, avatar');
+            where conversation_id = g('G1')), row(5, 5, true)::text, 'G1 log counts: 5 messages, 5 files, avatar');
 
 select is(nmsg('DBG'), 0, 'Debug group (only the bot current) is cleaned by the rule');
 select is(nlog('DBG'), 1, 'Debug group logged');

@@ -1,5 +1,5 @@
 begin;
-select plan(187);
+select plan(139);
 
 -- Neutral staff registry rows, loaded the way release loads the private file.
 do $fx$ begin perform app_private.staff_load($j${
@@ -15,8 +15,10 @@ do $fx$ begin perform app_private.staff_load($j${
     {"chat_key":"staff_b","word":"/sales","handler":"sales_total","help_en":"total","help_tr":"toplam","sort":1}]
 }$j$::jsonb); end $fx$;
 
--- The second staff chat (staff_b): a command chat for command admins only, one command /sales
--- (the Vega money total). Written from the contract, not from the migration:
+-- The second staff chat (staff_b): a command chat for command admins only.
+-- Its words (the ask, the switch, the rate limit, the cache, the audit) live
+-- in the private pack now (private_hook_test.sql covers the gate). The public
+-- side kept here, written from the contract, not from the migration:
 --
 -- 1. shape and grants: sales_job_claim / sales_job_finish for service_role
 --    only; sales tables in app_private hold no grant for clients.
@@ -27,16 +29,16 @@ do $fx$ begin perform app_private.staff_load($j${
 --    a revoked session see nothing (not the chat, its messages, members or
 --    preview). Each negative subject fails exactly one gate.
 -- 4. sends: only the flagged member with app access, plain text only.
--- 5. only the exact /sales is a command; anything else -> podUnk, no job.
--- 6. rate limit 30 commands per 10 minutes -> podRate, no job.
--- 7. one audit row per command; the amount is never in it.
 -- 8. the business day is Istanbul time; 00:00-07:30 = previous day (prev).
--- 9. 30 s shared cache; asks during a fetch wait and get the same answer.
--- 10. /salesoff and /saleson: the owner, in the admin chat only.
+-- 9. a finished job answers every waiting ask with the same answer and fills
+--    the shared cache (amount, day, fetch time).
 -- 11. three failures in a row (any reason but 'config') turn the command off.
 -- 12. claim once; finish answers with pod/podPrev or podFail.
 -- 13. no push for any reply; the body and the chat-list preview never hold
 --     the amount; a malformed amount is never stored or shown.
+-- An ask is made here as the private pack makes it: a sales_jobs row, pending,
+-- or waiting while another job is in flight.
+
 
 create or replace function test_as(uid uuid, sid text) returns void language plpgsql as $$
 begin
@@ -132,6 +134,12 @@ create function want_prev() returns boolean language sql as $$
 create function want_day() returns date language sql as $$
   select (now() at time zone 'Europe/Istanbul')::date - case when want_prev() then 1 else 0 end $$;
 create function want_k() returns text language sql as $$ select case when want_prev() then 'podPrev' else 'pod' end $$;
+
+-- An ask as the private pack queues it: pending, or waiting while a job is in flight.
+create function ask(conv uuid) returns void language sql as $$
+  insert into app_private.sales_jobs(conversation_id, state, prev, day)
+  values (conv, case when exists (select 1 from app_private.sales_jobs where state in ('pending', 'running')) then 'waiting' else 'pending' end,
+          want_prev(), want_day()) $$;
 
 -- 1 shape and grants -------------------------------------------------------------
 select ok(has_function_privilege('service_role', 'public.sales_job_claim(uuid)', 'execute'), 'service_role may claim a job');
@@ -275,33 +283,19 @@ select is(try_own(format($$insert into public.messages(conversation_id, sender_i
           'err:42501', 'no ciphertext');
 select fresh(bc('own'));
 
--- 5 exact /sales only -------------------------------------------------------------------
-create table j0 as select jobs() as n;
-select is(say('own', bc('own'), t), 'ok', 'fixture: own sends ' || t) from unnest(array['/sales x', 'sales', '/salesx', '/sales set 5', '/salesoff']) t;
-select is(jobs(), (select n from j0), 'no text but /sales makes a job');
-select is((select jsonb_agg(e->>'k') from jsonb_array_elements(fresh(bc('own'))) e), '["podUnk","podUnk","podUnk","podUnk","podUnk"]'::jsonb,
-          'each non-command gets podUnk');
-select is((select off from app_private.sales_state), false, '/salesoff in the staff_b chat does not switch anything');
-select is((select count(*) from public.messages where conversation_id = bc('own') and sender_id = '00000000-0000-0000-0000-00000000ad41'
-             and body like '%set 5%'), 0::bigint, 'the typed text is never echoed back');
-
--- 8, 12 one ask: a job for the Istanbul business day -----------------------------------------
-create table c0 as select cmds() as n;
-select is(say('own', bc('own'), '/sales'), 'ok', 'own asks /sales');
-select is(jobs(), (select n from j0) + 1, 'one ask makes one job');
-select is((select prev from app_private.sales_jobs where state = 'pending'), want_prev(), 'prev = Istanbul time before 07:30');
-select is((select day from app_private.sales_jobs where state = 'pending'), want_day(), 'day = the Istanbul business day');
+-- 8, 12 one ask: claim hands out the day and prev once --------------------------------------------
+select ask(bc('own'));
 select is(fresh(bc('own')), '[]'::jsonb, 'no reply before Vega answers');
-select is(cmds(), (select n from c0) + 1, 'one audit row for the ask');
 
--- 9 a second ask while the fetch runs waits ------------------------------------------------
-select is(say('own', bc('own'), '/sales'), 'ok', 'own asks again while the job is pending');
-select is((select count(*) from app_private.sales_jobs where state = 'pending'), 1::bigint, 'still only one job goes to Vega');
+-- 9 asks while the fetch runs wait and get the same answer -----------------------------------------
+select ask(bc('own'));
+select is((select count(*) from app_private.sales_jobs where state = 'pending'), 1::bigint, 'fixture: one job goes to Vega, one ask waits');
 create table claimed as select public.sales_job_claim((select id from app_private.sales_jobs where state = 'pending')) as c;
 select is((select c from claimed), jsonb_build_object('day', want_day(), 'prev', want_prev()), 'claim returns the day and prev');
 select is(public.sales_job_claim((select id from app_private.sales_jobs where state = 'running')), null, 'a second claim of the same job gets nothing');
 select is(public.sales_job_claim(gen_random_uuid()), null, 'claiming an unknown job gets nothing');
-select is(say('own', bc('own'), '/sales'), 'ok', 'own asks a third time while the job runs');
+select is(public.sales_job_claim((select id from app_private.sales_jobs where state = 'waiting' limit 1)), null, 'a waiting ask cannot be claimed');
+select ask(bc('own'));
 select is((select count(*) from app_private.sales_jobs where state in ('pending', 'running')), 1::bigint, 'still one job at Vega');
 select public.sales_job_finish((select id from app_private.sales_jobs where state = 'running'), '4815162342', null);
 create table r1 as select fresh(bc('own')) as v;
@@ -312,6 +306,8 @@ select is((select v->0->>'amt' from r1), '4815162342', 'the answer carries the a
 select is((select (v->0->>'day')::date from r1), want_day(), 'the answer names the business day');
 select is((select (v->0->>'at')::timestamptz from r1), now(), 'the answer carries the fetch time');
 select is((select count(*) from app_private.sales_jobs where state in ('pending', 'running', 'waiting')), 0::bigint, 'no job is left open');
+select is((select amount || '|' || day || '|' || fetched_at from app_private.sales_state), '4815162342|' || want_day() || '|' || now(),
+          'the answer fills the shared cache: amount, day, fetch time');
 
 -- 13 the amount is never in a body, a preview, an audit row or a push ----------------------------
 select is((select count(*) from public.messages where body like '%4815162342%'), 0::bigint, 'no message body holds the amount');
@@ -324,8 +320,7 @@ select is((select count(*) from public.messages where conversation_id in (select
           'no reply in a staff_b chat is flagged for push');
 select isnt(vault.create_secret('https://bd-test.local/notify', 'notify_on_message_url'), null, 'fixture: a notify URL is configured');
 create table q0 as select coalesce(max(id), 0) as n from net.http_request_queue;
-update app_private.sales_state set fetched_at = now() - interval '31 seconds';
-select from (select say('own', bc('own'), '/sales')) x;
+select ask(bc('own'));
 select vega('7770001', null);
 select is(jsonb_array_length(fresh(bc('own'))), 1, 'fixture: a reply was written');
 select is((select count(*) from net.http_request_queue where id > (select n from q0) and url = 'https://bd-test.local/notify'), 0::bigint,
@@ -351,29 +346,16 @@ select is((select answer_for(true, '7770009')), jsonb_build_object('b', 'Previou
 select fresh(bc('own'));
 update app_private.sales_state set amount = '7770001', day = want_day(), fetched_at = now() - interval '31 seconds';
 
--- 9 the 30 s shared cache ---------------------------------------------------------------------
-create table j1 as select jobs() as n;
-update app_private.sales_state set fetched_at = now() - interval '29 seconds';
+
+-- one finish answers waiting asks in every chat: another admin's waiting ask gets the same answer there
 insert into app_private.command_admins(user_id) values (u('adm'));
 create table chat2 as select c.id from public.conversations c join public.conversation_members m on m.conversation_id = c.id
    where c.staff_key = 'staff_b' and m.user_id = u('adm');
 select fresh((select id from chat2));
-select is(say('adm', (select id from chat2), '/sales'), 'ok', 'adm (flag given back) asks 29 s after the fetch');
-select is(jobs(), (select n from j1), 'within 30 s nobody calls Vega again, even another admin');
-create table r2 as select fresh((select id from chat2)) as v;
-select is((select v->0->>'amt' from r2), '7770001', 'the other admin gets the cached amount at once');
-select is((select (v->0->>'at')::timestamptz from r2), now() - interval '29 seconds', 'with the ORIGINAL fetch time');
-update app_private.sales_state set fetched_at = now() - interval '31 seconds';
-select is(say('own', bc('own'), '/sales'), 'ok', 'own asks 31 s after the fetch');
-select is(jobs(), (select n from j1) + 1, 'after 30 s a new job goes to Vega');
-select is(fresh(bc('own')), '[]'::jsonb, 'and no stale answer is given');
+select ask(bc('own')); select ask((select id from chat2));
 select vega('7770002', null);
-select fresh(bc('own'));
-update app_private.sales_state set day = want_day() - 3, fetched_at = now();
-select is(say('own', bc('own'), '/sales'), 'ok', 'own asks while the cache holds another day');
-select is(fresh(bc('own')), '[]'::jsonb, 'a cached total of another day is never served');
-select vega('7770003', null);
-select fresh(bc('own'));
+select is(fresh(bc('own'))->0->>'amt' || '/' || (fresh((select id from chat2))->0->>'amt'), '7770002/7770002',
+          'a waiting ask in another admin''s chat gets the same answer in that chat');
 
 -- 12, 13 amount validation: a bad amount is a failure, never stored or shown -------------------------
 insert into audit_log select c::text from app_private.sales_commands c; delete from app_private.sales_commands;
@@ -383,13 +365,13 @@ create table badr(a text, v jsonb, stored text);
 do $$ declare r record; begin
   for r in select a from bad loop
     update app_private.sales_state set fetched_at = now() - interval '31 seconds', fail_count = 0, off = false where only_row;
-    perform say('own', bc('own'), '/sales');
+    perform ask(bc('own'));
     perform vega(r.a, null);
     insert into badr values (r.a, fresh(bc('own')), (select amount from app_private.sales_state));
   end loop;
 end $$;
 select is((select count(*) from badr where v = '[{"k":"podFail"}]'::jsonb), 11::bigint, 'each malformed or missing amount -> exactly one podFail');
-select is((select count(*) from badr where stored is distinct from '7770003'), 0::bigint, 'a malformed amount never replaces the stored one');
+select is((select count(*) from badr where stored is distinct from '7770002'), 0::bigint, 'a malformed amount never replaces the stored one');
 select is((select count(*) from public.messages m, bad b where b.a <> '' and m.body like '%' || b.a || '%'), 0::bigint,
           'a malformed amount is never shown');
 select is((select count(*) from badr where v::text like '%"amt"%'), 0::bigint, 'a failure reply carries no amount');
@@ -401,7 +383,7 @@ insert into audit_log select c::text from app_private.sales_commands c; delete f
 create function fail_once(reason text) returns void language plpgsql as $$
 begin
   update app_private.sales_state set fetched_at = now() - interval '31 seconds';
-  perform say('own', bc('own'), '/sales');
+  perform ask(bc('own'));
   perform vega(null, reason);
   perform fresh(bc('own'));
 end $$;
@@ -412,68 +394,21 @@ select is((select fail_count from app_private.sales_state), 0, 'a config failure
 select fail_once('timeout'); select fail_once('shape');
 select is((select off from app_private.sales_state), false, 'two failures: still on');
 update app_private.sales_state set fetched_at = now() - interval '31 seconds' where only_row;
-select from (select say('own', bc('own'), '/sales')) x; select vega('7770004', null); select fresh(bc('own'));
+select ask(bc('own')); select vega('7770004', null); select fresh(bc('own'));
 select fail_once('login');
 select is((select off from app_private.sales_state), false, 'timeout, shape, success, login: not three in a row, still on');
 select fail_once('shape'); select fail_once('other');
 select is((select off from app_private.sales_state), true, 'three non-config failures in a row (login, shape, other) turn the command off');
-create table j2 as select jobs() as n;
-select is(say('own', bc('own'), '/sales'), 'ok', 'own asks while it is off');
-select is(fresh(bc('own')), '[{"k":"podOff"}]'::jsonb, 'an ask while off -> podOff');
-select is(jobs(), (select n from j2), 'and Vega is not called');
 
--- 10 the switch lives in the owner's admin chat --------------------------------------------------
-select is(say('own', (select id from adm), '/saleson'), 'ok', 'the owner types /saleson in the admin chat');
-select is((select admin_msg->>'k' from public.messages where conversation_id = (select id from adm)
-             and sender_id = '00000000-0000-0000-0000-00000000ad41' order by created_at desc, (admin_msg->>'k' = 'podSwOn') desc limit 1),
-          'podSwOn', 'and gets podSwOn');
-select is((select off from app_private.sales_state), false, '/saleson turns it on');
-select fail_once('login');
-select is((select off from app_private.sales_state), false, 'after /saleson one login failure does not turn it off again');
-select is(say('own', (select id from adm), '/salesoff'), 'ok', 'the owner types /salesoff in the admin chat');
-select is((select off from app_private.sales_state), true, '/salesoff turns it off');
-select is(say('adm', (select id from chat2), '/saleson'), 'ok', 'fixture: adm types /saleson in adm''s chat');
-select is((select off from app_private.sales_state), true, 'a command admin cannot switch it from the staff_b chat');
-select is(fresh((select id from chat2)) -> 0 ->> 'k', 'podUnk', 'and gets podUnk');
-select from (select say('own', (select id from adm), '/saleson')) x;
+-- (the private switch turned it back on here before; same state, set directly)
+update app_private.sales_state set off = false, fail_count = 0 where only_row;
 
--- 7 audit, 6 rate limit -----------------------------------------------------------------------------
-insert into audit_log select c::text from app_private.sales_commands c; delete from app_private.sales_commands;
-create table c1 as select cmds() as n;
-select from (select say('adm', (select id from chat2), t) from unnest(array['/sales', 'hello', '/sales']) t) x;
-select is(cmds(), (select n from c1) + 3, 'one audit row per command, known or not');
-select ok((select bool_and(user_id = u('adm') and at = now()) from app_private.sales_commands
-            where at = now() and user_id = u('adm')), 'each audit row names the user and the time');
-select is((select count(*) from app_private.sales_commands where command not in ('sales_total', 'unknown')), 0::bigint,
-          'the audit never stores free text the user typed');
-select fresh((select id from chat2));
-select vega('7770005', null);
-select fresh((select id from chat2));
-
-insert into audit_log select c::text from app_private.sales_commands c; delete from app_private.sales_commands where user_id = u('adm');
-insert into app_private.sales_commands(user_id, at, command, outcome)
-  select u('adm'), now() - interval '11 minutes', '/sales', 'cache' from generate_series(1, 50);
-insert into app_private.sales_commands(user_id, at, command, outcome)
-  select u('adm'), now() - interval '9 minutes', '/sales', 'cache' from generate_series(1, 29);
-update app_private.sales_state set fetched_at = now();
-select is(say('adm', (select id from chat2), '/sales'), 'ok', 'the 30th command in 10 minutes');
-select is(fresh((select id from chat2)) -> 0 ->> 'k', want_k(), 'is answered (older commands do not count)');
-create table j3 as select jobs() as n;
-update app_private.sales_state set fetched_at = now() - interval '31 seconds';
-select is(say('adm', (select id from chat2), '/sales'), 'ok', 'the 31st command in 10 minutes');
-select is(fresh((select id from chat2)), '[{"k":"podRate"}]'::jsonb, 'is refused with podRate');
-select is(jobs(), (select n from j3), 'and calls nobody');
-select is(say('own', bc('own'), '/sales'), 'ok', 'the limit is per user: own still asks');
-select is(jobs(), (select n from j3) + 1, 'own''s ask makes a job');
-select vega('7770006', null);
-
-insert into audit_log select c::text from app_private.sales_commands c; delete from app_private.sales_commands;
 -- dispatch: a job sends only its id and the shared secret header, to the Vault URL ---------------------
 select isnt(vault.create_secret('https://bd-test.local/sales', 'job_url'), null, 'fixture: the sales URL is configured');
 select isnt(vault.create_secret('bd-shared-value', 'job_secret'), null, 'fixture: the shared secret is configured');
 create table q1 as select coalesce(max(id), 0) as n from net.http_request_queue;
 update app_private.sales_state set fetched_at = now() - interval '31 seconds';
-select from (select say('own', bc('own'), '/sales')) x;
+select ask(bc('own'));
 select is((select count(*) from net.http_request_queue where id > (select n from q1) and url = 'https://bd-test.local/sales'), 1::bigint,
           'one job -> one call to the sales function');
 select is((select convert_from(body, 'utf8')::jsonb from net.http_request_queue where id > (select n from q1) and url = 'https://bd-test.local/sales'),
@@ -502,7 +437,7 @@ do $$ declare r record; begin
     delete from app_private.sales_commands;
     update app_private.sales_state set amount = 'before', fetched_at = now() - interval '31 seconds',
       fail_count = case when r.good then 2 else 0 end, off = false where only_row;
-    perform say('own', bc('own'), '/sales');
+    perform ask(bc('own'));
     perform vega(r.a, null);
     insert into amt_res select r.a, r.good, fresh(bc('own')), amount, fail_count from app_private.sales_state;
   end loop;
@@ -555,20 +490,6 @@ select ok(not has_function_privilege('authenticated', 'app_private.sales_busines
 select ok(not exists (select 1 from pg_proc p, aclexplode(p.proacl) a
                        where p.oid = 'app_private.sales_business_day(timestamptz)'::regprocedure and a.grantee = 0),
           'it is not granted to public');
-
--- the ask path uses it: with the function stubbed, the job and the cache follow the stub
-create or replace function app_private.sales_business_day(at timestamptz) returns date language sql immutable as $$ select date '2001-02-03' $$;
-update app_private.sales_state set fetched_at = now() - interval '31 seconds' where only_row;
-create table j9 as select id from app_private.sales_jobs;
-select is(say('own', bc('own'), '/sales'), 'ok', 'fixture: own asks with the business day stubbed');
-select is((select day from app_private.sales_jobs where id not in (select id from j9)), date '2001-02-03',
-          'the job is for the day sales_business_day returns');
-select vega('5', null); select fresh(bc('own'));
-update app_private.sales_state set fetched_at = now() - interval '5 seconds' where only_row;
-create table j10 as select jobs() as n;
-select from (select say('own', bc('own'), '/sales')) x;
-select is(fresh(bc('own'))->0->>'amt', '5', 'a fresh cache of the stubbed day is served');
-select is(jobs(), (select n from j10), 'without a new job: the cache day check uses sales_business_day too');
 
 -- last: nothing anywhere ever held an amount outside the answer's admin_msg
 select is((select count(*) from app_private.sales_commands c where c::text ~ '(777000[0-9]|4815162342)')

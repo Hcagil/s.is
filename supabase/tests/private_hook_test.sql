@@ -1,22 +1,25 @@
 begin;
-select plan(152);
+select plan(134);
 
 -- Generic private hook. Written from the contract, not the migrations. The
 -- private functions are NOT part of the public code; here each one is a tiny
--- fake made inside this transaction, so the public side can be driven:
---   app_private.private_handler(name text, conv uuid, owner uuid, c text, rest text)
+-- fake made inside this transaction (or dropped, to stand for a missing pack),
+-- so the public side is driven the same with or without the real pack:
+--   app_private.private_dispatch(conv uuid, sender uuid, body text)
 --   app_private.private_answer(card uuid, yes boolean, conv uuid)
 -- 1. staff_commands.handler accepts ^(private:)?[a-z_]{3,40}$ and nothing else.
--- 2. a 'private:<name>' row: the owner's word calls private_handler(<name>, ...)
---    with the arguments passed as values; the function missing -> 'unk' in the
---    first chat, silence in the second; a public-looking name -> 'unk'.
--- 3. second chat: owner plain text / sales word -> exactly one sales reply and
---    no admin_commands row; a private word -> exactly the private reply, no
---    sales reply, no sales_commands row; an error -> 'err' without help.
--- 4. admin_answer: card key and kind must match ('card' <-> 'private:%',
---    'conf' <-> null) or the card expires with 'keep' and nothing is removed;
---    a private card calls private_answer (missing -> expire + keep, raising ->
---    expire + err); cancel stays public and logs the kind; 'conf' unchanged.
+-- 2. both chat gates call private_dispatch exactly once per accepted message,
+--    with the chat, the sender and the body unchanged; the public side runs no
+--    command of its own (no sales job, no tester change). Hook missing ->
+--    silence (no reply, no error to the sender). Hook raising -> exactly one
+--    'err' reply with no help and no cause.
+-- 3. the first chat (staff_a) takes only the owner; the second chat (staff_b)
+--    takes the owner or a command admin.
+-- 4. admin_answer: answers only private cards (key 'card', kind 'private:%');
+--    a mismatch, a missing private_answer or an old open 'conf' card expires
+--    with 'keep' and removes nothing (allowlist, sessions, command admins, bot
+--    contacts, no job); a raising private_answer expires with 'err'; cancel
+--    stays public and logs the kind.
 -- 5. admin_body: 'card' and 'note' show msg->>'t'; other keys unchanged.
 -- 6. only the owner who is a member of the card's chat can answer; a client
 --    cannot forge a card.
@@ -181,30 +184,29 @@ select is(try_sql(format($$insert into app_private.staff_commands(chat_key, word
 select is(try_sql($$update app_private.staff_commands set handler = 'private:x''y' where word = '/fa'$$), 'err:23514',
           'an update cannot write a crafted name either');
 
+
 -- consume what the chats were born with
 select ks(ca()), ks(cb('own')), ks(cb('adm'));
 
--- 2 private function missing (no fake yet) -----------------------------------------
-drop function if exists app_private.private_handler(text, uuid, uuid, text, text);
+-- 2 hook missing (stands for "no private pack") ---------------------------------------
+drop function if exists app_private.private_dispatch(uuid, uuid, text);
 drop function if exists app_private.private_answer(uuid, boolean, uuid);
-create table a0 as select acmd() a, scmd() s;
-select typed('own', ca(), '/fa');
-select is(ks(ca()), 'unk', 'missing private function: the first chat gets only unk');
-select typed('own', cb('own'), '/fb');
-select is(ks(cb('own')), '', 'missing private function: the second chat stays silent');
-select typed('own', cb('own'), '/fb some arg');
-select is(ks(cb('own')), '', 'missing private function: the second chat stays silent with an argument');
-select is(scmd(), (select s from a0), 'missing private function: no sales_commands row for a private word');
-select is(acmd(), (select a from a0) + 1, 'missing private function: only the first-chat unk is logged');
-select typed('own', cb('own'), '/fa');
-select is(ks(cb('own')), 'podUnk', 'a first-chat word typed in the second chat is a plain unknown there');
+create table j0 as select (select count(*) from app_private.sales_jobs) j, (select count(*) from app_private.admin_jobs) aj;
+select lives_ok($$select typed('own', ca(), '/fa tst1@mail.test')$$, 'missing hook: the owner''s send in the first chat does not fail');
+select is(ks(ca()), '', 'missing hook: the first chat stays silent');
+select lives_ok($$select typed('own', cb('own'), '/sales')$$, 'missing hook: the owner''s send in the second chat does not fail');
+select is(ks(cb('own')), '', 'missing hook: the second chat stays silent');
+select typed('adm', cb('adm'), 'plain words');
+select is(ks(cb('adm')), '', 'missing hook: a command admin''s chat stays silent');
+select is((select count(*) from app_private.sales_jobs), (select j from j0), 'missing hook: no sales job is made by the public side');
+select is(listed('tst1@mail.test'), 1::bigint, 'missing hook: nothing about the tester changes');
 
 -- the fakes ------------------------------------------------------------------------
-create function app_private.private_handler(name text, conv uuid, owner uuid, c text, rest text) returns void
+create function app_private.private_dispatch(conv uuid, sender uuid, body text) returns void
 language plpgsql as $$
 begin
-  insert into public.calls(fn, a1, a2, a3, a4, a5) values ('handler', name, conv, owner, c, rest);
-  if name = 'fake_boom' then raise exception 'fake failure'; end if;
+  insert into public.calls(fn, a2, a3, a4) values ('dispatch', conv, sender, body);
+  if body like '%boom%' then raise exception 'fake cause qzx'; end if;
   perform app_private.admin_reply(conv, jsonb_build_object('k', 'note', 't', 'fake reply'));
 end $$;
 create function app_private.private_answer(card uuid, yes boolean, conv uuid) returns void
@@ -214,84 +216,93 @@ begin
   if (select on_ from public.fail_answer) then raise exception 'fake failure'; end if;
   perform app_private.admin_reply(conv, jsonb_build_object('k', 'note', 't', 'fake done'));
 end $$;
+-- calls since [c], as 'chat|sender|body' with chat/sender named
+create function got(c bigint) returns text language sql as $$
+  select coalesce(string_agg(
+           case a2 when ca() then 'A' when cb('own') then 'Bown' when cb('adm') then 'Badm' else 'other' end || '|' ||
+           case a3 when u('own') then 'own' when u('adm') then 'adm' when u('mal') then 'mal' else a3::text end || '|' || a4,
+           '#' order by n), '')
+    from calls where fn = 'dispatch' and n > c $$;
 
 -- 3 dispatch -------------------------------------------------------------------------
-create table a1 as select acmd() a, scmd() s;
-select typed('own', ca(), '/fa');
-select is((select admin_msg->>'t' || '|' || body from last_reply(ca())), 'fake reply|fake reply',
-          'the private reply is a note whose body is its t text');
-select is(ks(ca()), 'note', 'first chat: a private word gives exactly the private reply');
-select is((select a1 || '|' || a2 || '|' || a3 || '|' || coalesce(a5, '') from calls where fn = 'handler' order by n desc limit 1),
-          'fake_cmd|' || ca() || '|' || u('own') || '|', 'private_handler gets the name without the prefix, the chat and the owner');
-select typed('own', ca(), '/fa tst1@mail.test');
-select is((select a5 from calls order by n desc limit 1), 'tst1@mail.test', 'the argument reaches private_handler');
-select is(ks(ca()), 'note', 'and still exactly one reply');
-select typed('own', ca(), '/fmax');
-select is((select a1 from calls order by n desc limit 1), repeat('a', 40), 'a 40-letter name is passed whole');
-select ks(ca());
+create table c0 as select coalesce(max(n), 0) c from calls;
+select typed('own', ca(), '/fa tst2@mail.test');
+select is(got((select c from c0)), 'A|own|/fa tst2@mail.test', 'first chat: the owner''s message calls the hook once with chat, sender, body');
+select is((select admin_msg->>'t' || '|' || body from last_reply(ca())), 'fake reply|fake reply', 'the hook''s reply is a note whose body is its t text');
+select is(ks(ca()), 'note', 'first chat: exactly the hook''s reply, nothing public');
+delete from c0; insert into c0 select max(n) from calls;
+select typed('own', ca(), t) from unnest(array[E'x''; drop table app_private.allowlist; --', E'\t/fa', E'\n/fa tst3@mail.test', 'plain words', '/list', '/' || repeat('a', 300)]) t;
+select is(got((select c from c0)),
+          E'A|own|x''; drop table app_private.allowlist; --#A|own|\t/fa#A|own|\n/fa tst3@mail.test#A|own|plain words#A|own|/list#A|own|/' || repeat('a', 300),
+          'first chat: any text reaches the hook unchanged, once each');
+select is(ks(ca()), 'note,note,note,note,note,note', 'and each gets only the hook''s reply');
+select is((select count(*) from app_private.allowlist where email like '%@sis.test'), 3::bigint, 'crafted text runs nothing');
 
--- crafted arguments arrive as values and run nothing
-create table c0 as select (select count(*) from app_private.allowlist) n, ncalls() c;
-select typed('own', ca(), '/fa x''); delete from app_private.allowlist; --');
-select typed('own', ca(), '/fa $1 %s %L '' ; select 1');
-select is((select string_agg(a5, '#' order by n) from calls where n > (select c from c0)),
-          'x''); delete from app_private.allowlist; --#$1 %s %L '' ; select 1', 'crafted arguments reach private_handler unchanged');
-select is((select count(*) from app_private.allowlist), (select n from c0), 'and nothing else changes');
-select is(ks(ca()), 'note,note', 'each gets one private reply');
-
--- names that only look private are not private
-create table c1 as select ncalls() c;
-select typed('own', ca(), '/fpx');
-select typed('own', ca(), '/fpu');
-select typed('own', ca(), '/fax');
-select is(ks(ca()), 'unk,unk,unk', 'privatex_ / private_ names and a glued word -> unk');
-select is(ncalls(), (select c from c1), 'and private_handler is not called');
-
--- second chat
-create table a2 as select acmd() a, scmd() s, ncalls() c;
-select typed('own', cb('own'), '/fb');
-select is(ks(cb('own')), 'note', 'second chat: a private word gives exactly the private reply');
-select typed('own', cb('own'), '/fb tst2@mail.test');
-select is(ks(cb('own')), 'note', 'second chat: with an argument too');
-select is((select string_agg(a2::text || '|' || coalesce(a5, ''), ',' order by n) from calls where n > (select c from a2)),
-          cb('own') || '|,' || cb('own') || '|tst2@mail.test', 'private_handler gets the second chat and the argument');
-select is(scmd(), (select s from a2), 'second chat: a private word makes no sales_commands row');
-
-create table a3 as select acmd() a, scmd() s, ncalls() c;
-select typed('own', cb('own'), 'hello there');
-select is(ks(cb('own')), 'podUnk', 'second chat: owner plain text gets exactly one reply, the sales unknown');
--- sales switched off: the sales word answers at once (no job)
-update app_private.sales_state set off = true;
+delete from c0; insert into c0 select max(n) from calls;
 select typed('own', cb('own'), '/sales');
-select matches(ks(cb('own')), '^[A-Za-z0-9_]+$', 'second chat: the sales word gets exactly one reply');
-select is(acmd(), (select a from a3), 'second chat: plain text and the sales word make no admin_commands row');
-select is(scmd(), (select s from a3) + 2, 'they are sales commands');
--- many plain texts do not use up (they do fill the sales rate limit: the
--- private word below must still reach the private path, before that limit)
--- and do not use up the owner's command budget in the first chat
-select typed('own', cb('own'), 'chat ' || i) from generate_series(1, 30) i;
+select typed('adm', cb('adm'), '/sales tst4@mail.test');
+select is(got((select c from c0)), 'Bown|own|/sales#Badm|adm|/sales tst4@mail.test',
+          'second chat: the owner and a command admin each call the hook once');
+select is(ks(cb('own')) || '/' || ks(cb('adm')), 'note/note', 'second chat: exactly the hook''s reply');
+select is((select count(*) from app_private.sales_jobs), (select j from j0), 'the public side makes no sales job');
+
+-- the first chat: only the owner (a command admin and a plain user, made members past the guard)
+select set_config('app_private.admin_write', 'on', true);
+insert into public.conversation_members(conversation_id, user_id, role) values (ca(), u('adm'), 'member'), (ca(), u('mal'), 'member'),
+  (cb('own'), u('mal'), 'member');
+select set_config('app_private.admin_write', '', true);
+delete from c0; insert into c0 select max(n) from calls;
+select typed('adm', ca(), '/fa tst5@mail.test');
+select typed('mal', ca(), '/fa tst5@mail.test');
+select is(got((select c from c0)), '', 'first chat: a command admin or a plain member never reaches the hook');
+select is(ks(ca()), '', 'and gets no reply');
+-- the second chat: a plain member is not a command admin
+select typed('mal', cb('own'), '/sales');
+select is(got((select c from c0)), '', 'second chat: a member who is neither owner nor command admin never reaches the hook');
+select is(ks(cb('own')), '', 'and gets no reply');
+-- a server row, a row with admin_msg, a row not sent as auth.uid(), an ordinary chat
+insert into public.conversations(id, title) values ('6f0c0000-0000-0000-0000-000000000001', 'Ordinary');
+insert into public.conversation_members(conversation_id, user_id, role) values ('6f0c0000-0000-0000-0000-000000000001', u('own'), 'admin');
+select typed('own', '6f0c0000-0000-0000-0000-000000000001', '/fa');
+select app_private.admin_reply(ca(), '{"k":"note","t":"server"}'::jsonb);
+select set_config('request.jwt.claims', json_build_object('sub', u('own'), 'role', 'authenticated')::text, true);
+insert into public.messages(conversation_id, sender_id, body, admin_msg) values (ca(), u('own'), '/fa', '{"k":"note"}');
+select set_config('request.jwt.claims', json_build_object('sub', u('mal'), 'role', 'authenticated')::text, true);
+insert into public.messages(conversation_id, sender_id, body) values (ca(), u('own'), '/fa');
+select set_config('request.jwt.claims', '', true);
+select is(got((select c from c0)), '', 'an ordinary chat, a server reply, a row with admin_msg and a row not sent as auth.uid() never reach the hook');
+select ks(ca());
+-- owner OR command admin: the owner without a command_admins row still reaches the second chat
+delete from app_private.command_admins where user_id = u('own');
+select is((select count(*) from app_private.command_admins where user_id = u('own')), 0::bigint, 'fixture: the owner holds no command_admins row');
+select typed('own', cb('own'), '/sales');
+select is(got((select c from c0)), 'Bown|own|/sales', 'second chat: the owner alone (not a command admin) reaches the hook');
 select ks(cb('own'));
-select is(acmd(), (select a from a3), 'thirty plain texts in the second chat: still no admin_commands row');
-select typed('own', ca(), '/fa');
-select is(ks(ca()), 'note', 'and the first chat still answers (no rate-limit count)');
+-- a command admin whose flag is removed no longer reaches it
+delete from app_private.command_admins where user_id = u('adm');
+delete from c0; insert into c0 select max(n) from calls;
+select typed('adm', cb('adm'), '/sales');
+select is(got((select c from c0)), '', 'second chat: a removed command admin never reaches the hook');
+insert into app_private.command_admins(user_id) values (u('adm'));
+select typed('adm', cb('adm'), '/sales');
+select is(got((select c from c0)), 'Badm|adm|/sales', 'control: the same user as a command admin reaches it');
+select ks(cb('adm'));
+select set_config('app_private.admin_write', 'on', true);
+delete from public.conversation_members where conversation_id in (ca(), cb('own')) and user_id in (u('adm'), u('mal'));
+select set_config('app_private.admin_write', '', true);
+insert into app_private.command_admins(user_id) values (u('own')) on conflict do nothing;
 
--- a command admin's private word in the second chat: not the owner -> nothing
-create table c2 as select ncalls() c;
-select typed('adm', cb('adm'), '/fb');
-select is(ks(cb('adm')), '', 'a command admin''s private word gets no reply');
-select is(ncalls(), (select c from c2), 'and private_handler is not called for a non-owner');
-
--- errors
-select typed('own', cb('own'), '/fbboom');
-select is((select coalesce((admin_msg->>'help')::boolean, false) from last_reply(cb('own'))), false,
-          'second chat: the err reply carries no help');
-select is((select body from last_reply(cb('own'))), app_private.admin_body('{"k":"err"}'::jsonb),
-          'second chat: the err body is the plain err text (no tester list)');
-select is(ks(cb('own')), 'err', 'second chat: a failing private function gives exactly err');
-select typed('own', ca(), '/fboom');
-select is((select coalesce((admin_msg->>'help')::boolean, false) from last_reply(ca())), true,
-          'first chat: err keeps its help, unchanged');
-select is(ks(ca()), 'err', 'first chat: a failing private function gives exactly err');
+-- errors: one plain err, no help, no cause, the send itself succeeds
+create table e1 as select r.id, r.admin_msg, r.body from last_reply(ca()) r where false;
+select lives_ok($$select typed('own', ca(), '/boom')$$, 'first chat: a raising hook does not fail the owner''s send');
+insert into e1 select r.id, r.admin_msg, r.body from last_reply(ca()) r;
+select is(ks(ca()), 'err', 'first chat: a raising hook gives exactly one err');
+select lives_ok($$select typed('own', cb('own'), '/boom')$$, 'second chat: a raising hook does not fail the owner''s send');
+insert into e1 select r.id, r.admin_msg, r.body from last_reply(cb('own')) r;
+select is(ks(cb('own')), 'err', 'second chat: a raising hook gives exactly one err');
+select is((select count(*) from e1 where coalesce((admin_msg->>'help')::boolean, false) = false), 2::bigint, 'neither err carries help');
+select is((select count(*) from e1 where body = app_private.admin_body('{"k":"err"}'::jsonb)), 2::bigint, 'both bodies are the plain err text');
+select is((select count(*) from e1 where (admin_msg::text || body) like '%qzx%'), 0::bigint, 'neither names the cause');
 
 -- 4 admin_answer -----------------------------------------------------------------------
 -- 4a private_answer missing: the private card expires, nothing is removed
@@ -308,9 +319,7 @@ alter function app_private.private_answer_off(uuid, boolean, uuid) rename to pri
 
 -- 4b key and kind mismatch, both ways, and an unprefixed kind
 create table k2 as select mkcard(ca(), 'card', 'tst6@mail.test', null) id;
-select typed('own', ca(), '/remove tst7@mail.test');
-create table k3 as select id from public.messages
-  where conversation_id = ca() and admin_msg->>'k' = 'conf' and id not in (select id from seen);
+create table k3 as select mkcard(ca(), 'conf', 'tst7@mail.test', null) id;
 select is(try_sql(format($$update app_private.admin_pending set kind = 'private:fake_cmd' where card_message_id = %L$$, (select id from k3))), 'ok',
           'fixture: a conf card with a private kind');
 create table k4 as select mkcard(ca(), 'card', 'tst8@mail.test', 'fake_cmd') id;
@@ -325,27 +334,40 @@ select is(card_st(id), 'expired', 'its message says st = expired') from (values 
 select is(listed(e), 1::bigint, 'nothing is removed: ' || e) from unnest(array['tst6@mail.test', 'tst7@mail.test', 'tst8@mail.test']) e;
 select is(ks(ca()), 'keep,keep,keep', 'each answer gets keep');
 select is(ncalls(), (select c from c3), 'private_answer is not called for a mismatch');
-
--- 4c a normal conf card is unchanged (kind null: the coalesce)
-select typed('own', ca(), '/remove tst9@mail.test');
-create table k5 as select id from public.messages
-  where conversation_id = ca() and admin_msg->>'k' = 'conf' and id not in (select id from seen);
+-- 4c an old open 'conf' card (kind null) answers keep and removes nothing:
+-- no allowlist, session, command admin or bot contact row goes, no job is queued
+insert into auth.users (id, email, email_confirmed_at) values
+  ('00000000-0000-0000-0000-0000006f0b01', 'tst11@mail.test', now()),
+  ('00000000-0000-0000-0000-0000006f0b03', 'fakebot@sis.test', now());
+insert into auth.sessions (id, user_id, created_at, updated_at) values
+  ('6f0b0000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000006f0b01', now(), now());
+insert into app_private.active_sessions(user_id, session_id, session_created_at)
+  values ('00000000-0000-0000-0000-0000006f0b01', '6f0b0000-0000-0000-0000-000000000001', now());
+insert into app_private.bot_accounts(user_id, debug_conversation) values ('00000000-0000-0000-0000-0000006f0b03', ca());
+insert into app_private.command_admins(user_id) values ('00000000-0000-0000-0000-0000006f0b01');
+insert into app_private.bot_contacts(bot_id, contact_id) values ('00000000-0000-0000-0000-0000006f0b03', '00000000-0000-0000-0000-0000006f0b01');
+create function rows11() returns text language sql as $$
+  select (select count(*) from app_private.allowlist where email = 'tst11@mail.test')
+   || '/' || (select count(*) from app_private.active_sessions where user_id = '00000000-0000-0000-0000-0000006f0b01')
+   || '/' || (select count(*) from app_private.command_admins where user_id = '00000000-0000-0000-0000-0000006f0b01')
+   || '/' || (select count(*) from app_private.bot_contacts where contact_id = '00000000-0000-0000-0000-0000006f0b01')
+   || '/' || (select count(*) from app_private.admin_jobs) $$;
+create table r0 as select rows11() v;
+select matches((select v from r0), '^1/1/1/1/', 'fixture: the user has allowlist, session, command admin and bot contact rows');
+create table k5 as select mkcard(ca(), 'conf', 'tst11@mail.test', null) id;
 select ks(ca());
-select is(ans('own', (select id from k5), true), 'ok', 'yes on a normal conf card');
-select is(listed('tst9@mail.test'), 0::bigint, 'the tester IS removed');
-select is(card_state((select id from k5)), 'used:null', 'the card is used');
-select is(ks(ca()), 'rmOk', 'the reply is rmOk');
-select typed('own', ca(), '/remove tst10@mail.test');
-create table k6 as select id from public.messages
-  where conversation_id = ca() and admin_msg->>'k' = 'conf' and id not in (select id from seen);
+create table c35 as select ncalls() c;
+select is(ans('own', (select id from k5), true), 'ok', 'yes on an old conf card does not raise');
+select is(ks(ca()), 'keep', 'yes on an old conf card -> keep');
+select is(card_state((select id from k5)), 'expired:null', 'the conf card expires, email nulled');
+select is(card_st((select id from k5)), 'expired', 'its message says st = expired');
+select is(rows11(), (select v from r0), 'yes on an old conf card removes nothing and queues no job');
+select is(ncalls(), (select c from c35), 'an old conf card never reaches private_answer');
+create table k6 as select mkcard(ca(), 'conf', 'tst11@mail.test', null) id;
 select ks(ca());
-create table l1 as select count(*) n from app_private.admin_commands where md5(command) = 'dc6e9609a26f1c6b9cea40c6e280f669';  -- the log word of the public removal card, as before
-select is(ans('own', (select id from k6), false), 'ok', 'cancel on a normal conf card');
-select is(ks(ca()), 'canOk', 'cancel -> canOk');
-select is(listed('tst10@mail.test'), 1::bigint, 'cancel removes nothing');
-select is(card_state((select id from k6)), 'cancelled:null', 'the conf card is cancelled');
-select is((select count(*) from app_private.admin_commands where md5(command) = 'dc6e9609a26f1c6b9cea40c6e280f669'), (select n from l1) + 1,
-          'the conf cancel is logged with the same word as before');
+select is(ans('own', (select id from k6), false), 'ok', 'cancel on an old conf card does not raise');
+select is(rows11(), (select v from r0), 'cancel on an old conf card removes nothing');
+select ks(ca());
 
 -- 4d a private card: private_answer gets the card, the answer and the chat
 create table k7 as select mkcard(ca(), 'card', 'tst11@mail.test', 'private:fake_cmd') id;
@@ -396,7 +418,6 @@ select is(card_state((select id from k11)), 'expired:null', 'the card expires, e
 select is(listed('tst15@mail.test'), 1::bigint, 'nothing is removed');
 select is(ks(ca()), 'err', 'the reply is err');
 update fail_answer set on_ = false;
-
 -- 5 admin_body ---------------------------------------------------------------------
 select is(app_private.admin_body(jsonb_build_object('k', k, 't', 'Masked t***@m***.test')), 'Masked t***@m***.test',
           k || ' shows its t text') from unnest(array['card', 'note']) k;
@@ -413,12 +434,6 @@ select is(md5(string_agg(k || '=' || app_private.admin_body(m), '|' order by k))
     ('keep', '{"k":"keep"}'), ('noem', '{"k":"noem"}'), ('nolink', '{"k":"nolink"}'),
     ('nolist', '{"k":"nolist","e":"z***@m***.test"}'), ('p3', '{"k":"p3"}'), ('r3', '{"k":"r3"}'), ('rate', '{"k":"rate"}'),
     ('rmOk', '{"k":"rmOk","e":"r***@m***.test"}'), ('unk', '{"k":"unk"}')) v(k, m);
--- first-chat public commands keep their outcome
-select typed('own', ca(), '/addandroid tst16@mail.test');
-select typed('own', ca(), '/nope');
-select typed('own', ca(), 'plain words');
-select is(ks(ca()), 'andOk,nolink,unk,unk', 'first chat: public word, unknown word and plain text answer as before');
-select is(listed('tst16@mail.test'), 1::bigint, 'the public add still adds');
 
 -- 6 who may answer ------------------------------------------------------------------
 create table k12 as select mkcard(ca(), 'card', 'tst17@mail.test', 'private:fake_cmd') id;
@@ -449,48 +464,6 @@ select is((select count(*) from public.messages where admin_msg->>'k' = 'card' a
 select ok(exists (select 1 from information_schema.columns where table_schema = 'app_private' and table_name = 'admin_pending' and column_name = 'kind')
           and not has_column_privilege(r, 'app_private.admin_pending', 'kind', p), r || ' has no ' || p || ' on admin_pending.kind')
   from unnest(array['anon', 'authenticated']) r, unnest(array['SELECT', 'INSERT', 'UPDATE']) p;
-
--- R6: a removed tester also loses command-chat access and bot contact (yes on a
--- normal conf card only); other users' rows stay; cancel changes nothing.
-insert into auth.users (id, email, email_confirmed_at) values
-  ('00000000-0000-0000-0000-0000006f0b01', 'tst11@mail.test', now()),
-  ('00000000-0000-0000-0000-0000006f0b02', 'tst12@mail.test', now()),
-  ('00000000-0000-0000-0000-0000006f0b03', 'fakebot@sis.test', now());
-insert into app_private.bot_accounts(user_id, debug_conversation) values ('00000000-0000-0000-0000-0000006f0b03', ca());
-insert into app_private.command_admins(user_id) values ('00000000-0000-0000-0000-0000006f0b01'), ('00000000-0000-0000-0000-0000006f0b02');
-insert into app_private.bot_contacts(bot_id, contact_id) values
-  ('00000000-0000-0000-0000-0000006f0b03', '00000000-0000-0000-0000-0000006f0b01'),
-  ('00000000-0000-0000-0000-0000006f0b03', '00000000-0000-0000-0000-0000006f0b02');
-create function r6(who text) returns text language sql as $$
-  select (select count(*) from app_private.command_admins where user_id = ('00000000-0000-0000-0000-0000006f0b' || who)::uuid)
-   || '/' || (select count(*) from app_private.bot_contacts where contact_id = ('00000000-0000-0000-0000-0000006f0b' || who)::uuid) $$;
-select is(r6('01') || ' ' || r6('02'), '1/1 1/1', 'R6 fixture: both testers have access and a contact');
-select typed('own', ca(), '/remove tst11@mail.test');
-create table r6a as select id from public.messages
-  where conversation_id = ca() and admin_msg->>'k' = 'conf' and id not in (select id from seen);
-select ks(ca());
-select typed('own', ca(), '/remove tst12@mail.test');
-create table r6b as select id from public.messages
-  where conversation_id = ca() and admin_msg->>'k' = 'conf' and id not in (select id from seen) and id not in (select id from r6a);
-select ks(ca());
-select is(ans('own', (select id from r6b), false), 'ok', 'R6 cancel');
-select is(r6('02'), '1/1', 'R6 cancel keeps the access and the contact');
-select is(ans('own', (select id from r6a), true), 'ok', 'R6 yes on a normal conf card');
-select is(listed('tst11@mail.test'), 0::bigint, 'R6 the tester is removed');
-select is(r6('01'), '0/0', 'R6 the removed tester has no access row and no contact row');
-select is((select count(*) from app_private.command_admins where user_id = '00000000-0000-0000-0000-0000006f0b01'), 0::bigint, 'R6 access row gone');
-select is((select count(*) from app_private.bot_contacts where contact_id = '00000000-0000-0000-0000-0000006f0b01'), 0::bigint, 'R6 contact row gone');
-select is(r6('02'), '1/1', 'R6 another user keeps both rows');
-select is((select count(*) from app_private.command_admins where user_id = u('own')), 1::bigint, 'R6 the owner keeps the access row');
-
--- A private word after leading whitespace (tab, newline): still only the private reply in the second chat.
-create table ws as select scmd() s, ncalls() c;
-select typed('own', cb('own'), E'\t/fb');
-select is(ks(cb('own')), 'note', 'second chat: a private word after a tab gets exactly the private reply');
-select typed('own', cb('own'), E'\n/fb tst2@mail.test');
-select is(ks(cb('own')), 'note', 'second chat: a private word after a newline, with an argument, gets exactly one reply');
-select is(scmd(), (select s from ws), 'second chat: leading whitespace makes no sales_commands row');
-select is(ncalls(), (select c from ws) + 2, 'second chat: private_handler ran for both');
 
 select * from finish();
 rollback;

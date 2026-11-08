@@ -1,24 +1,23 @@
 begin;
-select plan(100);
+select plan(79);
 
--- Staff registry and dispatch. Written from the contract, not the migrations:
+-- Staff registry. Written from the contract, not the migrations:
 -- 1. app_private.staff_chats / staff_commands: RLS on, no policy, no grant.
--- 2. public.staff_registry(): rows only for a caller with app access, not the
---    bot account, and a current member of a chat with that staff_key; anyone
---    else gets zero rows, never an error. Each negative subject below passes
---    every gate but one (its positive control runs first).
+-- 2. public.staff_registry(): a thin wrapper over the private panel
+--    app_private.private_panel() (faked here, in this transaction); rows only
+--    for a caller with app access, not the bot account, and a current member
+--    of a chat with that staff_key; anyone else gets zero rows, never an
+--    error. Each negative subject passes every gate but one (its positive
+--    control runs first). Columns arg and ui come through as the panel gives
+--    them. Panel missing (no private pack) or raising: zero rows, no error.
 -- 3. app_private.staff_load(jsonb): no API role may run it; upserts; never
 --    deletes chats; deletes commands only of the chat keys in the input;
 --    aborts (and changes nothing) on empty / unknown / bad / too long input.
--- 4. dispatch: the typed word is looked up for that chat's staff_key; each
---    handler runs only in its own chat with its own role (tester_* and
---    sales_on/off: staff_a + owner; sales_total: staff_b + command admin);
---    an unknown word gets the unknown reply; the audit keeps the handler key
---    or 'unknown', never the typed text.
+--    (Stays until the loader is dropped; no longer feeds the registry.)
 -- 5. sales_job_claim / sales_job_finish: service_role only.
 -- 6. conversations.staff_key: not client-writable, set by trigger on new staff
 --    chats, returned by chat_list().
--- 7. migration applied but rows not loaded yet: every word is unknown.
+-- (dispatch through the chat gates: private_hook_test.sql)
 
 -- helpers ----------------------------------------------------------------------
 create function u(n text) returns uuid language sql immutable as $$
@@ -38,12 +37,13 @@ begin
 end $$;
 grant execute on function as_(text) to authenticated;
 
--- staff_registry() rows as [n] sees them, 'chat_key:word:handler' sorted; error -> 'err:<state>'.
+-- staff_registry() rows as [n] sees them, 'chat_key:word:handler:arg:ui' sorted; error -> 'err:<state>'.
 create function reg(n text) returns text language plpgsql as $$
 declare r text;
 begin
   perform as_(n);
-  select coalesce(string_agg(chat_key || ':' || word || ':' || handler, ',' order by chat_key, word), '')
+  select coalesce(string_agg(chat_key || ':' || word || ':' || handler || ':' || coalesce(arg, '-') || ':' || coalesce(ui, '-'),
+                             ',' order by chat_key, word), '')
     into r from public.staff_registry();
   execute 'reset role';
   perform set_config('request.jwt.claims', '', true);
@@ -54,28 +54,7 @@ exception when others then
   return 'err:' || sqlstate;
 end $$;
 
--- A message [n] types into [conv], inserted as the server sees a client
--- insert (auth.uid() = sender) but past RLS, so only the dispatcher decides.
-create function typed(n text, conv uuid, t text) returns void language plpgsql as $$
-begin
-  perform set_config('request.jwt.claims', json_build_object('sub', u(n), 'role', 'authenticated')::text, true);
-  insert into public.messages(conversation_id, sender_id, body) values (conv, u(n), t);
-  perform set_config('request.jwt.claims', '', true);
-end $$;
 
--- Server replies (from ...ad41) in [conv] since the last call: their k, in order.
-create table seen(id uuid primary key);
-create function ks(conv uuid) returns text language plpgsql as $$
-declare r text;
-begin
-  select coalesce(string_agg(m.admin_msg->>'k', ',' order by m.created_at, m.id), '') into r
-    from public.messages m
-   where m.conversation_id = conv and m.sender_id = '00000000-0000-0000-0000-00000000ad41'
-     and m.id not in (select id from seen);
-  insert into seen select m.id from public.messages m
-   where m.conversation_id = conv and m.id not in (select id from seen);
-  return r;
-end $$;
 
 create function access_for(n text) returns boolean language plpgsql as $$
 declare r boolean;
@@ -122,8 +101,6 @@ create function rows_std(extra jsonb default '[]') returns jsonb language sql as
       jsonb_build_object('chat_key','staff_b','word','/sales','handler','sales_total')) || extra) $$;
 
 create function ncmd() returns bigint language sql as $$ select count(*) from app_private.staff_commands $$;
-create function sjobs() returns bigint language sql as $$ select count(*) from app_private.sales_jobs $$;
-create function listed(e text) returns bigint language sql as $$ select count(*) from app_private.allowlist where email = e $$;
 
 -- fixtures -------------------------------------------------------------------
 -- own  owner (allowlisted, active): staff_a chat, and command admin -> staff_b chat
@@ -151,7 +128,7 @@ end $$;
 select is((select count(*) from unnest(array['own','adm','rmv','lft','nax','mal','bot']) n where act(n)), 7::bigint,
           'fixture: all seven sessions are active');
 
--- section 7 first: migration applied, staff_load never run
+
 delete from app_private.staff_commands;
 insert into app_private.owners(user_id) values (u('own'));
 insert into app_private.command_admins(user_id) values (u('adm')), (u('rmv'));
@@ -168,18 +145,31 @@ select isnt(cb('own'), null, 'the owner has a staff_b chat (trigger set staff_ke
 select isnt(cb('adm'), null, 'a command admin has a staff_b chat');
 select ok((select bool_and(admin_chat) from public.conversations where staff_key is not null), 'every staff chat is admin_chat');
 
--- consume whatever the new chats were born with
-select ks(ca()), ks(cb('own')), ks(cb('adm'));
-select typed('own', ca(), t) from unnest(array['/addios gap1@mail.test', '/list', '/saleson', '/salesoff']) t;
-select is(ks(ca()), 'unk,unk,unk,unk', 'unloaded registry: every staff_a word gets only the unknown reply');
-select is(listed('gap1@mail.test'), 0::bigint, 'unloaded registry: nobody is added');
-select is((select count(*) from app_private.admin_commands where owner_id = u('own') and command <> 'unknown'), 0::bigint,
-          'unloaded registry: the audit only says unknown');
-create table j0 as select sjobs() n;
-select typed('own', cb('own'), '/sales');
-select is(ks(cb('own')), 'podUnk', 'unloaded registry: the staff_b word gets only the unknown reply');
-select is(sjobs(), (select n from j0), 'unloaded registry: no sales job');
-select is(reg('own'), '', 'unloaded registry: staff_registry has no rows');
+
+-- the fake panel: what a private pack would return (neutral words)
+create or replace function app_private.private_panel()
+returns table(chat_key text, title_en text, title_tr text, word text, handler text, arg text, ui text, help_en text, help_tr text, sort int)
+language plpgsql security definer set search_path = '' as $$
+begin
+  if current_setting('qa.panel', true) = 'boom' then raise exception 'fake panel failure'; end if;
+  return query values
+    ('staff_a', 'Staff A', 'Ekip A', '/addx', 'private', 'email', null::text, 'add', 'ekle', 1),
+    ('staff_a', 'Staff A', 'Ekip A', '/listx', 'private', null, null, 'list', 'liste', 2),
+    ('staff_b', 'Staff B', 'Ekip B', '/totalx', 'private', null, 'total', 'total', 'toplam', 1);
+end $$;
+create table want as select
+  'staff_a:/addx:private:email:-,staff_a:/listx:private:-:-,staff_b:/totalx:private:-:total'::text a_b,
+  'staff_b:/totalx:private:-:total'::text b;
+
+-- 7 panel missing or failing: zero rows, never an error ---------------------------------
+select is(reg('own'), (select a_b from want), 'control: the owner sees the panel rows of both chats, arg and ui included');
+select set_config('qa.panel', 'boom', true);
+select is(reg('own'), '', 'a raising panel: zero rows, no error');
+select set_config('qa.panel', '', true);
+alter function app_private.private_panel() rename to private_panel_off;
+select is(reg('own'), '', 'a missing panel (no private pack): zero rows, no error');
+alter function app_private.private_panel_off() rename to private_panel;
+select is(reg('own'), (select a_b from want), 'control: the panel back, the rows are back');
 
 -- 3 staff_load -------------------------------------------------------------------
 select ok(not has_function_privilege(r, 'app_private.staff_load(jsonb)', 'execute'), r || ' cannot execute staff_load')
@@ -258,14 +248,13 @@ select ok(not has_table_privilege(r, 'app_private.' || t, 'select,insert,update,
 
 -- 2 staff_registry --------------------------------------------------------------
 select ok(not has_function_privilege('anon', 'public.staff_registry()', 'execute'), 'anon cannot execute staff_registry');
-select is(reg('own'), 'staff_a:/addandroid:tester_add_android,staff_a:/addios:tester_add_ios,staff_a:/list:tester_list,'
-  'staff_a:/remove:tester_remove,staff_a:/salesoff:sales_off,staff_a:/saleson:sales_on,staff_b:/sales:sales_total',
-  'the owner sees both chats'' commands');
-select is(reg('adm'), 'staff_b:/sales:sales_total', 'a command admin sees only staff_b');
+select ok(has_function_privilege('authenticated', 'public.staff_registry()', 'execute'), 'authenticated may execute staff_registry');
+select is(reg('own'), (select a_b from want), 'the owner sees both chats'' rows');
+select is(reg('adm'), (select b from want), 'a command admin sees only staff_b');
 select is(reg('mal'), '', 'a user in no staff chat gets zero rows, no error');
 
 -- removed admin: control, then removal
-select is(reg('rmv'), 'staff_b:/sales:sales_total', 'control: rmv sees staff_b while a command admin');
+select is(reg('rmv'), (select b from want), 'control: rmv sees staff_b while a command admin');
 delete from app_private.command_admins where user_id = u('rmv');
 select is(reg('rmv'), '', 'a removed command admin gets zero rows');
 
@@ -273,85 +262,24 @@ select is(reg('rmv'), '', 'a removed command admin gets zero rows');
 select set_config('app_private.admin_write', 'on', true);
 insert into public.conversation_members(conversation_id, user_id, role) values (ca(), u('lft'), 'member'), (ca(), u('nax'), 'member'), (ca(), u('bot'), 'member');
 select set_config('app_private.admin_write', '', true);
-select matches(reg('lft'), '^staff_a:', 'control: a current member of staff_a gets its rows');
+select matches(reg('lft'), '^staff_a:/addx:', 'control: a current member of staff_a gets its rows');
 select set_config('app_private.admin_write', 'on', true);
 update public.conversation_members set left_at = now(), left_reason = 'left' where conversation_id = ca() and user_id = u('lft');
 select set_config('app_private.admin_write', '', true);
 select is(reg('lft'), '', 'a member who left gets zero rows');
 
 -- no app access
-select matches(reg('nax'), '^staff_a:', 'control: nax with app access gets rows');
+select matches(reg('nax'), '^staff_a:/addx:', 'control: nax with app access gets rows');
 delete from app_private.allowlist where email = 'nax@sis.test';
 select is(access_for('nax'), false, 'fixture: nax has no app access now');
 select is(reg('nax'), '', 'a member without app access gets zero rows');
 
 -- bot account
-select matches(reg('bot'), '^staff_a:', 'control: the same user before being made the bot account gets rows');
+select matches(reg('bot'), '^staff_a:/addx:', 'control: the same user before being made the bot account gets rows');
 insert into public.conversations(id, title) values ('5f0c0000-0000-0000-0000-000000000001', 'Debug');
 insert into app_private.bot_accounts(user_id, debug_conversation, enabled) values (u('bot'), '5f0c0000-0000-0000-0000-000000000001', true);
 select is(access_for('bot'), true, 'fixture: the bot still has app access');
 select is(reg('bot'), '', 'the bot account gets zero rows');
-
--- 4 dispatch ---------------------------------------------------------------------
-select is(ks(ca()), '', 'fixture: staff_a replies read');
-select ks(cb('own')); select ks(cb('adm'));
-delete from app_private.admin_commands; delete from app_private.sales_commands;
-update app_private.sales_state set off = false, amount = null, day = null, fetched_at = null, fail_count = 0;
-
--- positive controls through the same insert path
-select typed('own', ca(), '/addandroid ok1@mail.test');
-select is(listed('ok1@mail.test'), 1::bigint, 'control: the owner''s staff_a word runs its handler');
-select is((select string_agg(command, ',') from app_private.admin_commands), 'tester_add_android', 'the audit keeps the handler key');
-select ok((select bool_and(position('/addandroid' in c::text) = 0 and position('ok1@' in c::text) = 0) from app_private.admin_commands c),
-          'the audit holds neither the typed word nor the email');
-create table j1 as select sjobs() n;
-select typed('adm', cb('adm'), '/sales');
-select is(sjobs(), (select n from j1) + 1, 'control: a command admin''s staff_b word makes a sales job');
-select is((select string_agg(command, ',') from app_private.sales_commands), 'sales_total', 'the sales audit keeps the handler key');
-select ks(ca()); select ks(cb('adm'));
-
--- unknown word
-delete from app_private.admin_commands; delete from app_private.sales_commands;
-select typed('own', ca(), '/nope zz@mail.test');
-select is(ks(ca()), 'unk', 'an unknown staff_a word gets the unknown reply');
-select is((select string_agg(command, ',') from app_private.admin_commands), 'unknown', 'its audit says unknown');
-select ok((select bool_and(position('nope' in c::text) = 0 and position('zz@' in c::text) = 0) from app_private.admin_commands c),
-          'the audit never holds the typed text');
-select typed('adm', cb('adm'), '/nope');
-select is(ks(cb('adm')), 'podUnk', 'an unknown staff_b word gets the unknown reply');
-select ok((select bool_and(command = 'unknown' and position('nope' in c::text) = 0) from app_private.sales_commands c)
-           and (select count(*) from app_private.sales_commands) = 1, 'the sales audit says unknown, not the text');
-
--- handler in the wrong chat: the words exist, but in the other chat
-select is(load(rows_std(jsonb_build_array(
-  jsonb_build_object('chat_key','staff_b','word','/addx','handler','tester_add_ios'),
-  jsonb_build_object('chat_key','staff_b','word','/onx','handler','sales_on'),
-  jsonb_build_object('chat_key','staff_a','word','/totalx','handler','sales_total')))), 'ok', 'fixture: cross-chat words loaded');
--- sales is switched on, so a job would be made if the handler ran
-update app_private.sales_state set off = false, amount = null, day = null, fetched_at = null, fail_count = 0;
-create table j2 as select sjobs() n;
-select typed('own', ca(), '/totalx');
-select is(sjobs(), (select n from j2), 'sales_total does not run in staff_a');
-select set_config('app_private.admin_write', 'on', true);
-insert into public.conversation_members(conversation_id, user_id, role) values (ca(), u('mal'), 'member'), (cb('adm'), u('mal'), 'member');
-select set_config('app_private.admin_write', '', true);
-select typed('mal', cb('adm'), '/sales');
-select is(sjobs(), (select n from j2), 'a staff_b member who is not a command admin cannot run sales_total');
-select is((select count(*) from app_private.sales_commands where user_id = u('mal')), 0::bigint, 'and nothing is run or audited for them');
-
-update app_private.sales_state set off = true;
-select typed('own', cb('own'), '/addx wc1@mail.test');
-select is(listed('wc1@mail.test'), 0::bigint, 'tester_add_ios does not run in staff_b, even for the owner');
-select typed('own', cb('own'), '/onx');
-select is((select off from app_private.sales_state), true, 'sales_on does not run in staff_b, even for the owner');
-
--- wrong role in the right chat
-select typed('mal', ca(), '/addios wr1@mail.test');
-select is(listed('wr1@mail.test'), 0::bigint, 'a staff_a member who is not the owner cannot run tester_add_ios');
-select typed('mal', ca(), '/saleson');
-select is((select off from app_private.sales_state), true, 'a staff_a member who is not the owner cannot run sales_on');
-select typed('own', ca(), '/saleson');
-select is((select off from app_private.sales_state), false, 'control: the owner runs sales_on in staff_a');
 
 -- 5 sales job functions ------------------------------------------------------------
 select ok(not has_function_privilege(r, f, 'execute'), r || ' cannot execute ' || f)

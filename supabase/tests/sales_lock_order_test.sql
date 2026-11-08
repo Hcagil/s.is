@@ -1,5 +1,5 @@
 begin;
-select plan(24);
+select plan(20);
 
 -- Neutral staff registry rows, loaded the way release loads the private file.
 do $fx$ begin perform app_private.staff_load($j${
@@ -15,14 +15,14 @@ do $fx$ begin perform app_private.staff_load($j${
     {"chat_key":"staff_b","word":"/sales","handler":"sales_total","help_en":"total","help_tr":"toplam","sort":1}]
 }$j$::jsonb); end $fx$;
 
--- Admin command job lock order. Written from the contract, not the migration:
--- sales_handle (after its per-user advisory lock) and sales_job_finish both
--- lock (1) the sales_state row, then (2) sales_jobs rows. Before the fix,
--- handle (stale waiting job, then state) crossed with finish (state, then the
--- job) could deadlock (40P01) and abort a user's message insert.
+-- Sales job lock order. Written from the contract, not the migration:
+-- an ask (now in the private pack; here session B plays it with plain SQL:
+-- the sales_state row first, then job rows) and sales_job_finish both lock
+-- (1) the sales_state row, then (2) sales_jobs rows. Finish taking a job row
+-- before the state row would cross with an ask and deadlock (40P01).
 --
 -- Part 1 uses real sessions over dblink, so its fixtures are COMMITTED by a
--- setup session and removed at the end of part 1. Part 2 (sweep, quiet finish)
+-- setup session and removed at the end of part 1. Part 2 (quiet finish)
 -- runs in this transaction and is rolled back.
 --
 -- dblink must authenticate with a password as a non-superuser; loopback is
@@ -86,10 +86,11 @@ select rx('a', 'begin');
 select * from extensions.dblink('a', format('select public.sales_job_finish(%L, ''1.000'', null)::text',
   (select id from jw where name = 'J'))) as t(x text);
 create table bpid as select * from extensions.dblink('b', 'select pg_backend_pid()') as t(pid int);
-select rx('b', 'begin; ' || as_sql(1));
+select rx('b', 'begin');
 select extensions.dblink_send_query('b', format(
-  'insert into public.messages(conversation_id, sender_id, body) values (%L, %L, ''/sales'')',
-  (select id from chat where who = u(1)), u(1)));
+  'select (select only_row::text from app_private.sales_state for update) || '':'' || '
+  '(select count(*)::text from (select 1 from app_private.sales_jobs where id = %L for update) x)',
+  (select id from jw where name = 'W')));
 
 -- wait (at most 10 s) until B blocks on a lock
 create function b_waits() returns boolean language plpgsql as $$
@@ -100,12 +101,12 @@ begin
   end loop;
   return false;
 end $$;
-select ok(b_waits(), 'B blocks while A holds its finish open');
+select ok(b_waits(), 'B (state row, then a job row) blocks while A holds its finish open');
 -- a row-lock waiter holds the heavyweight tuple lock of the row it waits for
 create table bwait as
   select l.relation::regclass::text as rel from pg_locks l where l.pid = (select pid from bpid) and l.locktype = 'tuple';
 select is((select string_agg(rel, ',') from bwait), 'app_private.sales_state',
-          'B waits on the sales_state row, not on a job row');
+          'A''s open finish holds the sales_state row: B waits there, not on a job row');
 select is((select count(*) from pg_locks l where l.pid = (select pid from bpid) and not l.granted and l.locktype = 'advisory'),
           0::bigint, 'B is not stuck on the advisory lock');
 
@@ -119,10 +120,8 @@ begin
 exception when others then
   return 'err:' || sqlstate;
 end $$;
-select is(b_result(), 'INSERT 0 1', 'after A commits, B''s message insert completes (no 40P01)');
+select is(b_result(), 'true:1', 'after A commits, B completes (no 40P01)');
 select rx('b', 'commit');
-select is((select count(*) from public.messages where conversation_id = (select id from chat where who = u(1)) and body = '/sales'),
-          1::bigint, 'B''s message is stored');
 select is((select count(*) from app_private.sales_jobs where id in (select id from jw) and state in ('running', 'waiting')),
           0::bigint, 'neither J nor W is left open');
 
@@ -136,9 +135,8 @@ select rx('f', format($q$
     (%2$L, %3$L, 'waiting', false, current_date, now() - interval '3 minutes');
 $q$, (select id from jw where name = 'J2'), (select id from jw where name = 'W2'), (select id from chat where who = u(2))));
 create table apid as select * from extensions.dblink('a', 'select pg_backend_pid()') as t(pid int);
-select rx('b', 'begin; ' || as_sql(1));
-select rx('b', format('insert into public.messages(conversation_id, sender_id, body) values (%L, %L, ''/sales'')',
-  (select id from chat where who = u(1)), u(1)));
+select rx('b', 'begin');
+select * from extensions.dblink('b', 'select only_row::text from app_private.sales_state for update') as t(x text);
 select extensions.dblink_send_query('a', format('select public.sales_job_finish(%L, ''1.000'', null)::text',
   (select id from jw where name = 'J2')));
 create function a_waits() returns boolean language plpgsql as $$
@@ -149,7 +147,7 @@ begin
   end loop;
   return false;
 end $$;
-select ok(a_waits(), 'A''s finish blocks while B''s ask holds the state row');
+select ok(a_waits(), 'A''s finish blocks while B holds the state row');
 select is((select string_agg(l.relation::regclass::text, ',') from pg_locks l where l.pid = (select pid from apid) and l.locktype = 'tuple'),
           'app_private.sales_state', 'A waits on the sales_state row');
 -- a third session probes J2: A must not hold it yet
@@ -189,7 +187,7 @@ select is((select count(*) from auth.users where id in (u(1), u(2)))
         + (select count(*) from public.conversations where id in (select id from chat)), 0::bigint,
           'committed fixtures are removed');
 
--- part 2: sweep and quiet finish (this transaction only) ------------------------------------------
+-- part 2: quiet finish (this transaction only) ------------------------------------------
 create function test_as(n int) returns void language plpgsql as $$
 begin
   perform set_config('request.jwt.claims', claims(n), true);
@@ -215,16 +213,9 @@ insert into app_private.sales_jobs(id, conversation_id, state, prev, day, create
   ((select id from jw2 where name = 'young'), c2(4), 'waiting', false, current_date, now() - interval '1 minute 50 seconds');
 create function st(n text) returns text language sql as $$
   select state from app_private.sales_jobs where id = (select id from jw2 where name = n) $$;
-create function replies(conv uuid) returns jsonb language sql as $$
-  select coalesce(jsonb_agg(admin_msg->>'k' order by id), '[]') from public.messages
-   where conversation_id = conv and sender_id = '00000000-0000-0000-0000-00000000ad41' $$;
 
-select test_as(3);
-insert into public.messages(conversation_id, sender_id, body) values (c2(3), u(3), '/sales');
-reset role;
-select is(st('old'), 'failed', 'an ask sweeps a waiting job older than 2 minutes to failed');
-select is(st('young'), 'waiting', 'a waiting job inside 2 minutes is not swept');
-select is(replies(c2(4)), '["podFail"]'::jsonb, 'the swept job''s chat gets exactly one failure reply');
+-- (sweeping a waiting job past 2 minutes is the private ask's work; here it is set directly)
+update app_private.sales_jobs set state = 'failed' where id = (select id from jw2 where name = 'old');
 
 -- finish with an unknown or a non-running job returns quietly
 create table before as select (select count(*) from public.messages) as m, (select row(p.*)::text from app_private.sales_state p) as ps;

@@ -69,7 +69,7 @@ class _AlbumTile extends ConsumerWidget {
         ],
       );
     } else {
-      final bytes = ref.watch(attachmentBytesProvider(path));
+      final bytes = ref.watch(attachmentThumbProvider(path));
       child = switch (bytes) {
         AsyncData(:final value) => Image.memory(
           value,

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Every release.yml step named "Mask the private words" (any job), run as
+# Every step named "Mask the private words" (in the private-server action that release.yml and server-scripts.yml share), run as
 # written under GitHub's default `bash -e`, with PRIVATE_WORDS =
 #   empty (secret not set), one word, several words with a blank line between:
 # it exits 0 and prints `::add-mask::<w>` exactly once per non-empty line, and
@@ -8,7 +8,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 fail() { echo "FAIL: $*"; exit 1; }
-f=.github/workflows/release.yml
+f=.github/actions/private-server/action.yml
 
 # Writes each such step's `run: |` block, de-indented, to $tmp/step.<n>.sh.
 awk -v dir="$tmp" '

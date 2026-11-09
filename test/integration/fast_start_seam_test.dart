@@ -15,6 +15,7 @@ import 'package:sis/app/sis_app.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/core/runtime_config.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
+import 'package:sis/features/auth/domain/last_session.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/data/store/drift_chat_list_snapshot_store.dart';
@@ -35,6 +36,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/drift_stores.dart';
 import '../support/fakes.dart';
+import '../support/last_session_fakes.dart';
 import '../support/reach.dart';
 import '../support/video_fakes.dart';
 
@@ -95,6 +97,17 @@ class _Wire extends http.BaseClient {
   Duration delay = Duration.zero;
   bool oneAtATime = false;
   bool lastAsked = false;
+
+  /// A request to a table in [held] gets no answer until [release]: the
+  /// server has not answered yet, however slow the phone is.
+  final held = <String>{};
+  var _held = Completer<void>();
+  void release() {
+    held.clear();
+    if (!_held.isCompleted) _held.complete();
+    _held = Completer<void>();
+  }
+
   final log = <_Req>[];
   int _inFlight = 0;
   int maxInFlight = 0;
@@ -137,6 +150,7 @@ class _Wire extends http.BaseClient {
           ? Duration(milliseconds: max(0, 240 - 40 * (log.length - 1)))
           : delay;
       await Future<void>.delayed(wait);
+      if (held.contains(r.table)) await _held.future;
       final res = await _inner.send(request);
       final body = await res.stream.toBytes();
       r.end = _clock.elapsed;
@@ -586,7 +600,12 @@ void main() {
 
     /// bram's app as main.dart wires it, the stored list included (on a temp
     /// directory: path_provider has no platform side in a test).
-    ProviderContainer app({Future<File> Function()? file}) => ProviderContainer(
+    /// [marker] is the last-session file on the phone: shared by two starts,
+    /// the second finds what the first left, as on a real phone.
+    ProviderContainer app({
+      Future<File> Function()? file,
+      LastSessionStore? marker,
+    }) => ProviderContainer(
       overrides: [
         ...videoOverrides(),
         runtimeConfigProvider.overrideWithValue(
@@ -620,6 +639,9 @@ void main() {
           NotificationExplainerStoreFake(shown: true),
         ),
         ...driftStoreOverrides(dir, key, file: file),
+        lastSessionStoreProvider.overrideWithValue(
+          marker ?? MemoryLastSessionStore(),
+        ),
       ],
     );
 
@@ -660,7 +682,8 @@ void main() {
       }
 
       // First start: nothing on the phone; the server's list is saved.
-      var c = app();
+      final marker = MemoryLastSessionStore();
+      var c = app(marker: marker);
       await t.pumpWidget(
         UncontrolledProviderScope(container: c, child: const SisApp()),
       );
@@ -676,6 +699,11 @@ void main() {
         seen = await saved(appStore);
       }
       expect(seen, contains(bramLast), reason: 'the app never saved the list');
+      expect(
+        (marker.stored?.userId, marker.stored?.onboarded),
+        (bramId, true),
+        reason: 'the first start left no onboarded marker for bram',
+      );
       await t.pumpWidget(const SizedBox());
       await t.runAsync(appStore.close);
       c.dispose();
@@ -696,11 +724,15 @@ void main() {
       expect(last, isNot(contains('@integration.test')), reason: 'an email');
 
       // Next start, over a slow connection: the stored list is on screen
-      // before the server has answered the list's request.
+      // before the server has answered the list's or the profile's request.
+      // Both answers are held until the test releases them, not merely
+      // delayed: a delay raced the store read (CI run 42488751395).
       wire
         ..delay = const Duration(milliseconds: 1500)
-        ..reset();
-      c = app();
+        ..reset()
+        ..held.addAll(['chat_list', 'own_profile']);
+      addTearDown(wire.release);
+      c = app(marker: marker);
       await t.pumpWidget(
         UncontrolledProviderScope(container: c, child: const SisApp()),
       );
@@ -708,7 +740,8 @@ void main() {
       expect(
         [
           for (final r in wire.rest)
-            if (r.table == 'chat_list' && r.end != null) r,
+            if ({'chat_list', 'own_profile'}.contains(r.table) && r.end != null)
+              r,
         ],
         isEmpty,
         reason: 'the list waited for the server: ${wire.rest}',
@@ -718,6 +751,7 @@ void main() {
       ], containsAll([withDora, withEli, groupId]));
 
       // The server's answer then replaces it quietly: still on screen.
+      wire.release();
       await pumpUntil(
         t,
         () => wire.rest.any((r) => r.table == 'chat_list' && r.end != null),

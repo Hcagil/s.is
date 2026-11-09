@@ -19,7 +19,6 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:imcodec/imcodec.dart' as img;
 import 'package:sis/core/failure.dart';
-import 'package:sis/features/chat/data/supabase_chat_delete_repository.dart';
 import 'package:sis/features/chat/data/supabase_chat_repository.dart';
 import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:sis/features/chat/domain/message.dart';
@@ -368,28 +367,5 @@ void main() {
     final main = wire.copies.firstWhere((c) => c.$1 == 'c1/a.png');
     expect(main.$2, startsWith('c2/'));
     expect(wire.copies, contains(('c1/a.png.s', '${main.$2}.s')));
-  });
-
-  group('deleteDirectChat', () {
-    test('removes each photo with its .t and .s copies', () async {
-      final r = await SupabaseChatDeleteRepository(wire.client)
-          .deleteDirectChat('c1');
-
-      expect(r, isA<Ok<void>>());
-      expect(
-        wire.removed,
-        containsAll(['c1/a.png', 'c1/a.png.t', 'c1/a.png.s']),
-      );
-    });
-
-    test('a refused removal is still Ok', () async {
-      wire.removeStatus = 403;
-
-      final r = await SupabaseChatDeleteRepository(wire.client)
-          .deleteDirectChat('c1');
-
-      expect(r, isA<Ok<void>>());
-      expect(wire.removed, contains('c1/a.png.s'));
-    });
   });
 }

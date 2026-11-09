@@ -1467,11 +1467,6 @@ class AppLocalizationsTr extends AppLocalizations {
   }
 
   @override
-  String chatDeleteAlso(String name) {
-    return '$name için de sil';
-  }
-
-  @override
   String get chatDeletedUndo => 'Sohbet silindi';
 
   @override
@@ -1498,9 +1493,6 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get chatDeleteFewSure =>
       'Bu sohbetleri silmek istediğinizden emin misiniz?';
-
-  @override
-  String get chatDeleteBothSides => 'Mümkünse herkesten sil';
 
   @override
   String get chatsDeletedUndo => 'Sohbetler silindi';

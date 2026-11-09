@@ -6,6 +6,7 @@
 // server answer replaces them and is saved; a server error keeps them.
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/core/failure.dart';
@@ -286,20 +287,38 @@ void main() {
     final c = await ready(chat, store);
     open(c, 'c1');
     await within(
-      const Duration(seconds: 1),
+      const Duration(seconds: 5),
       () => shown(c).isNotEmpty && chat.readSubscriptions > 0,
     );
     expect(chat.readSubscriptions, greaterThan(0), reason: 'fixture');
 
+    final live = [('u2', true, t1)];
     chat.deliverRead('c1', ReadMark(userId: 'u2', shares: true, readAt: t1));
-    await settle();
-    expect(shown(c), [('u2', true, t1)], reason: 'live read waited');
-    expect(rows(store.data['c1']), [
-      ('u2', true, t1),
-    ], reason: 'live read not saved');
+    // Waits on the outcome, not a fixed time: under load a busy CPU can
+    // push the store's write past any fixed wait (the server is still held,
+    // so showing it at all proves it did not wait for the server).
+    await within(
+      const Duration(seconds: 5),
+      () =>
+          listEquals(shown(c), live) &&
+          listEquals(rows(store.data['c1']), live),
+    );
+    expect(shown(c), live, reason: 'live read waited');
+    expect(rows(store.data['c1']), live, reason: 'live read not saved');
 
+    final savesBefore = store.saves.length;
     chat.releaseReadMarks();
-    await settle(100);
+    // The server answer is saved: wait for that save, so the checks below
+    // run after the answer landed, then once more for a late overwrite.
+    expect(
+      await within(
+        const Duration(seconds: 5),
+        () => store.saves.length > savesBefore,
+      ),
+      isTrue,
+      reason: 'server answer never saved',
+    );
+    await settle();
     expect(shown(c), [('u2', true, t1)], reason: 'server answer undid it');
     expect(rows(store.data['c1']), [('u2', true, t1)]);
   });

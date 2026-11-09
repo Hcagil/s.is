@@ -1270,7 +1270,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String statusStartBody(String reason) {
-    return 'Uygulamayı yeniden başlatın. Yine olmazsa uygulamayı kaldırıp tekrar yükleyin.\n\n$reason';
+    return 'Uygulamayı yeniden başlatın. Yine olmazsa lütfen daha sonra tekrar deneyin.\n\n$reason';
   }
 
   @override

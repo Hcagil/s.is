@@ -1277,7 +1277,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String statusStartBody(String reason) {
-    return 'Restart the app. If it keeps failing, reinstall it.\n\n$reason';
+    return 'Restart the app. If it keeps failing, please try again later.\n\n$reason';
   }
 
   @override

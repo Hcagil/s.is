@@ -966,7 +966,7 @@
   "@statusConnectTitle": {"description": "Title of the connection error screen"},
   "statusStartTitle": "Could not start SIS",
   "@statusStartTitle": {"description": "Title of the start-up error screen"},
-  "statusStartBody": "Restart the app. If it keeps failing, reinstall it.\n\n{reason}",
+  "statusStartBody": "Restart the app. If it keeps failing, please try again later.\n\n{reason}",
   "@statusStartBody": {"description": "Body of the start-up error screen", "placeholders": {"reason": {"type": "String"}}},
   "updateAvailable": "Update available",
   "@updateAvailable": {"description": "Update banner"},

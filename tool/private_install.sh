@@ -43,14 +43,15 @@ if [ "$mode" = db ]; then
   ca=${PRIVATE_DB_CA:-}
   [ -f "$pgp" ] || fail 'the database password file is missing'
   [ -f "$ca" ] || fail 'the database CA file is missing'
-  # Refuse a password file wider than 600 or a folder wider than 700 (no group or other bits).
+  # Resolve links first: the checks below must see the real file and the real folder, not the link.
+  pgp=$(readlink -f "$pgp"); ca=$(readlink -f "$ca")
+  # Refuse a password file wider than 600 or its real folder wider than 700 (no group or other bits).
   [ $((8#$(stat -c %a "$pgp") & 8#077)) -eq 0 ] || fail 'the database password file is too open'
   [ $((8#$(stat -c %a "$(dirname "$pgp")") & 8#077)) -eq 0 ] || fail 'the database password folder is too open'
   # Only host, port, db and user are read (cut keeps the password field out of the shell).
   IFS=: read -r dbhost dbport dbname dbuser < <(cut -d: -f1-4 "$pgp" | head -n1) || true
   [ -n "$dbhost" ] && [ -n "$dbport" ] && [ -n "$dbname" ] && [ -n "$dbuser" ] || fail 'the database password file is malformed'
   [ "$dbport" != 6543 ] || fail 'the transaction pooler port 6543 is refused: use the direct host or the session pooler on 5432'
-  pgp=$(readlink -f "$pgp"); ca=$(readlink -f "$ca")
 fi
 
 # db mode only: psql reads the password from the mounted pgpass file, so it is never in an argument or in ps.

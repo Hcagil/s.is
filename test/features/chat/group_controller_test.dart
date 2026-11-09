@@ -103,6 +103,17 @@ Future<ProviderContainer> startReal(
 
 Future<void> settle() => Future<void>.delayed(const Duration(milliseconds: 30));
 
+/// [settle] until [done] holds (at most 5 s), then once more so a late extra
+/// entry still shows. A fixed 30 ms flaked under a loaded CPU: the security
+/// code store answers on a real timer (t_54d90df94c).
+Future<void> settleUntil(bool Function() done) async {
+  final end = DateTime.now().add(const Duration(seconds: 5));
+  while (!done() && DateTime.now().isBefore(end)) {
+    await settle();
+  }
+  await settle();
+}
+
 List<String> queued(ProviderContainer c, String conv) => [
   for (final m in c.read(sendQueueProvider)[conv] ?? const <Message>[]) m.id,
 ];
@@ -559,7 +570,9 @@ void main() {
         final c = await startReal(chat, codes: changedAt(5));
         c.read(openConversationProvider.notifier).open('c1');
         c.listen(chatTimelineProvider, (_, _) {});
-        await settle();
+        await settleUntil(
+          () => c.read(chatTimelineProvider).any((e) => e is KeyChangeEntry),
+        );
         expect(c.read(chatTimelineProvider).map(label), [
           'm:m1',
           'k:u2',

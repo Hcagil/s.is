@@ -336,11 +336,23 @@ class StoreMessageOpener implements MessageOpener {
       _wait(m);
       return fallback;
     }
+    var savedByEngine = false;
     final result = await engine.decrypt(
       peerUserId: m.senderId,
       peerIdentityKey: peerKey.identityKey,
       ciphertext: cipher,
       olmType: m.olmType!,
+      // Written inside the engine's transaction (the store and the engine share one database), so the session never advances without the text; a throw rolls the step back. An unreadable envelope or a hidden row is never written.
+      save: store == null
+          ? null
+          : PlaintextSave.write((decrypted) async {
+              final env = decodeEnvelope(decrypted, m.id);
+              if (env == null || _forgotten.contains(m.id)) return;
+              await store.upsertAll([
+                m.withPlain(env.text, env.card, sealed: hash),
+              ]);
+              savedByEngine = true;
+            }),
     );
     switch (result) {
       case Ok(:final value):
@@ -355,9 +367,9 @@ class StoreMessageOpener implements MessageOpener {
         _pending.remove(m.id);
         _publish();
         _remember(slot, plain);
-        // The ratchet moved, so this message can never be opened again: saved before it is shown, kept in memory even if the write fails.
+        // The ratchet moved, so this message can never be opened again: the engine saved the text with it (see save above); this write repeats it for an engine that does not run the save, and keeps it in memory even if it fails.
         try {
-          await store?.upsertAll([plain]);
+          if (!savedByEngine) await store?.upsertAll([plain]);
           // A deletion that landed while decrypting wins over the text.
           final near = await store?.around(m.conversationId, m.id, each: 0);
           final now = near?.where((s) => s.id == m.id).firstOrNull;

@@ -6,6 +6,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 final class StoreKey {
   const StoreKey({
     this._storage = const FlutterSecureStorage(
+      // A read error must never delete the key: it throws, and callers retry later.
+      aOptions: AndroidOptions(resetOnError: false),
       // This device only: the key must never travel in an iCloud or Finder
       // backup together with the database file.
       iOptions: IOSOptions(
@@ -24,6 +26,8 @@ final class StoreKey {
   final FlutterSecureStorage _storage;
 
   static FlutterSecureStorage _inGroup(String? group) => FlutterSecureStorage(
+    // A read error must never delete the key: it throws, and callers retry later.
+    aOptions: AndroidOptions(resetOnError: false),
     iOptions: IOSOptions(
       accessibility: KeychainAccessibility.first_unlock_this_device,
       groupId: group,

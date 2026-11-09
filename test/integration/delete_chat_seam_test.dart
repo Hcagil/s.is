@@ -129,8 +129,8 @@ class _App {
   ChatDelete get delete => container.read(chatDeleteProvider.notifier);
 
   /// Starts a delete of [ids] and waits out the window and the commit.
-  Future<void> deleteAndWait(List<String> ids, {required bool both}) async {
-    delete.start([for (final id in ids) row(id)], alsoForOthers: both);
+  Future<void> deleteAndWait(List<String> ids) async {
+    delete.start([for (final id in ids) row(id)]);
     for (final id in ids) {
       expect(lists(id), isFalse, reason: '$id still listed during the window');
     }
@@ -231,8 +231,8 @@ void main() {
           .maybeSingle()) !=
       null;
 
-  test('delete for me: the 1:1 is hidden for ash only and stays out of '
-      'the reloaded list', () async {
+  test('a 1:1 is hidden for ash only and stays out of the reloaded list; '
+      'the server never deletes it', () async {
     final conv = await direct(ash, bea);
     final app = _App(ash);
     addTearDown(app.container.dispose);
@@ -240,7 +240,7 @@ void main() {
     expect(app.lists(conv), isTrue);
     final beaSees = await readable(bea, conv);
 
-    await app.deleteAndWait([conv], both: false);
+    await app.deleteAndWait([conv]);
 
     expect(app.state.failure, isNull);
     expect(app.lists(conv), isFalse, reason: 'back after the quiet reload');
@@ -254,21 +254,6 @@ void main() {
     expect(await exists(conv), isTrue);
   }, timeout: const Timeout(Duration(seconds: 90)));
 
-  test('delete for both: the server refuses it (rule 9); the 1:1 stays for '
-      'both', () async {
-    final conv = await direct(ash, cyd);
-    final app = _App(ash);
-    addTearDown(app.container.dispose);
-    await app.ready();
-
-    await app.deleteAndWait([conv], both: true);
-
-    expect(app.state.failure, isA<DeniedFailure>());
-    expect(await exists(conv), isTrue);
-    final cydList = _ok(await SupabaseChatRepository(cyd).conversations());
-    expect([for (final c in cydList) c.id], contains(conv));
-  }, timeout: const Timeout(Duration(seconds: 90)));
-
   test('a group as a member: bea leaves it, then it is hidden for her; the '
       'group lives on', () async {
     final g = await group(ash, [bea, cyd]);
@@ -277,7 +262,7 @@ void main() {
     await app.ready();
     expect(app.row(g).isAdmin, isFalse);
 
-    await app.deleteAndWait([g], both: false);
+    await app.deleteAndWait([g]);
 
     expect(app.state.failure, isNull);
     expect(app.lists(g), isFalse);
@@ -312,7 +297,7 @@ void main() {
     final app = _App(ash);
     addTearDown(app.container.dispose);
     await app.ready();
-    await app.deleteAndWait([g], both: true);
+    await app.deleteAndWait([g]);
 
     expect(app.lists(g), isFalse);
     expect(await app.freshIds(), isNot(contains(g)));
@@ -327,7 +312,7 @@ void main() {
     final before = [for (final c in app.rows) c.id];
     final seen = await readable(bea, conv);
 
-    app.delete.start([app.row(conv)], alsoForOthers: true);
+    app.delete.start([app.row(conv)]);
     expect(app.lists(conv), isFalse);
     await Future<void>.delayed(const Duration(seconds: 2));
     app.delete.undo();
@@ -354,7 +339,7 @@ void main() {
     await app.ready();
     final seen = await readable(ash, conv);
 
-    await app.deleteAndWait([conv], both: false);
+    await app.deleteAndWait([conv]);
     await _until(() => app.lists(conv), 'the row to come back');
 
     expect(app.state.failure, isNotNull);

@@ -2636,12 +2636,6 @@ abstract class AppLocalizations {
   /// **'Permanently delete the chat with **{name}**?'**
   String chatDeleteSure(String name);
 
-  /// Checkbox: delete the chat for the other person too
-  ///
-  /// In en, this message translates to:
-  /// **'Also delete for {name}'**
-  String chatDeleteAlso(String name);
-
   /// Undo bar after deleting one chat
   ///
   /// In en, this message translates to:
@@ -2677,12 +2671,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Are you sure you want to delete these chats?'**
   String get chatDeleteFewSure;
-
-  /// Checkbox of the several-chats delete dialog
-  ///
-  /// In en, this message translates to:
-  /// **'Delete for everyone where possible'**
-  String get chatDeleteBothSides;
 
   /// Undo bar after deleting several chats
   ///

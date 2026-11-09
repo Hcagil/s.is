@@ -28,10 +28,9 @@ final chatDeleteProvider = NotifierProvider<ChatDelete, ChatDeleteState>(
 );
 
 final class _Job {
-  const _Job(this.chats, this.alsoForOthers);
+  const _Job(this.chats);
 
   final List<Conversation> chats;
-  final bool alsoForOthers;
 }
 
 /// Deleting chats from the list. The rows leave the list at once; nothing
@@ -50,12 +49,12 @@ class ChatDelete extends Notifier<ChatDeleteState> {
   }
 
   /// Takes [chats] off the list and starts the undo countdown. A delete
-  /// still waiting is committed first. [alsoForOthers] is the dialog's box:
-  /// both sides for a 1:1, a group is only left.
-  void start(List<Conversation> chats, {required bool alsoForOthers}) {
+  /// still waiting is committed first. A 1:1 is deleted for the caller only; a
+  /// group is only left.
+  void start(List<Conversation> chats) {
     if (chats.isEmpty) return;
     if (_pending != null) unawaited(_commit());
-    _pending = _Job(chats, alsoForOthers);
+    _pending = _Job(chats);
     ref.read(chatSelectionProvider.notifier).clear();
     ref.read(conversationListProvider.notifier).hideLocally([
       for (final c in chats) c.id,
@@ -108,7 +107,7 @@ class ChatDelete extends Notifier<ChatDeleteState> {
     state = const ChatDeleteState();
     Failure? first;
     for (final c in job.chats) {
-      final result = await _run(job, c);
+      final result = await _run(c);
       if (result case Err(:final failure)) first ??= failure;
       if (!ref.mounted) return;
     }
@@ -125,13 +124,9 @@ class ChatDelete extends Notifier<ChatDeleteState> {
     }
   }
 
-  Future<Result<void>> _run(_Job job, Conversation c) async {
+  Future<Result<void>> _run(Conversation c) async {
     final repo = ref.read(chatDeleteRepositoryProvider);
-    if (!c.isGroup) {
-      return job.alsoForOthers
-          ? repo.deleteDirectChat(c.id)
-          : repo.hideChat(c.id);
-    }
+    if (!c.isGroup) return repo.hideChat(c.id);
     final groups = ref.read(groupControllerProvider);
     if (!c.hasLeft) {
       final left = await groups.leave(c.id);

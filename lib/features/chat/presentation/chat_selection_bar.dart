@@ -121,11 +121,9 @@ class ChatSelectionBar extends ConsumerWidget implements PreferredSizeWidget {
             tooltip: l.chatDeleteAction,
             icon: const Icon(Icons.delete_outline),
             onPressed: () async {
-              final also = await showDeleteChatsDialog(context, chats);
-              if (also == null) return;
-              ref
-                  .read(chatDeleteProvider.notifier)
-                  .start(chats, alsoForOthers: also);
+              final ok = await showDeleteChatsDialog(context, chats);
+              if (ok == null) return;
+              ref.read(chatDeleteProvider.notifier).start(chats);
             },
           ),
         PopupMenuButton<String>(

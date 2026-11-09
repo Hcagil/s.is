@@ -7,7 +7,7 @@ import 'package:sis/features/chat/domain/conversation.dart';
 import 'fakes.dart';
 
 /// [ChatDeleteRepository] as the server behaves: each call takes [latency],
-/// is recorded in [calls] (`hide:<id>` / `deleteDirect:<id>`) the moment it
+/// is recorded in [calls] (`hide:<id>`) the moment it
 /// is made, and on success removes the row from [chat]'s conversation list,
 /// so the next list read no longer returns it -- and on a refusal the row
 /// is still there for the reload to bring back.
@@ -27,9 +27,8 @@ class ChatDeleteFake implements ChatDeleteRepository {
   final Duration latency;
   final calls = <String>[];
 
-  /// Forced answers per call kind; null answers like the real thing.
+  /// Forced answer; null answers like the real thing.
   Result<void>? hideResult;
-  Result<void>? deleteDirectResult;
 
   /// When set, every call waits on it after [latency].
   Completer<void>? hold;
@@ -37,10 +36,6 @@ class ChatDeleteFake implements ChatDeleteRepository {
   @override
   Future<Result<void>> hideChat(String conversationId) =>
       _run('hide:$conversationId', conversationId, hideResult);
-
-  @override
-  Future<Result<void>> deleteDirectChat(String conversationId) =>
-      _run('deleteDirect:$conversationId', conversationId, deleteDirectResult);
 
   Future<Result<void>> _run(
     String call,

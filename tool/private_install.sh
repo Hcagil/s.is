@@ -3,20 +3,22 @@ set -euo pipefail
 set +x
 umask 077
 
-# usage: tool/private_install.sh local|linked
+# usage: tool/private_install.sh local|linked|db
+#      db mode exit code 3 = refused because the pack version differs from the live one
 # env: PRIVATE_EXPECTED (empty or 1), PRIVATE_SQL_B64 (gzip, then base64), PRIVATE_PACK_VERSION (v + 16 hex),
 #      PRIVATE_SUPABASE (command that runs the Supabase CLI, default: supabase)
+#      db mode: PRIVATE_DB_PGPASS (path of a pgpass file, host:port:db:user:password), PRIVATE_DB_CA (path of the server CA cert), PRIVATE_PSQL_IMAGE (default public.ecr.aws/supabase/postgres:17.6.1.167)
 
 fail() {
   echo "::error::$1" >&2
   exit 1
 }
 
-[ "$#" -eq 1 ] || fail 'usage: exactly one argument, local or linked'
+[ "$#" -eq 1 ] || fail 'usage: exactly one argument, local, linked or db'
 mode=${1:-}
 case "$mode" in
-  local|linked) ;;
-  *) fail 'usage: local or linked' ;;
+  local|linked|db) ;;
+  *) fail 'usage: local, linked or db' ;;
 esac
 
 case "${PRIVATE_EXPECTED:-}" in
@@ -36,6 +38,38 @@ printf %s "$PRIVATE_PACK_VERSION" | grep -Eq '^v[0-9a-f]{16}$' || fail 'the priv
 
 sup=${PRIVATE_SUPABASE:-supabase}
 
+if [ "$mode" = db ]; then
+  pgp=${PRIVATE_DB_PGPASS:-}
+  ca=${PRIVATE_DB_CA:-}
+  [ -f "$pgp" ] || fail 'the database password file is missing'
+  [ -f "$ca" ] || fail 'the database CA file is missing'
+  # Refuse a password file wider than 600 or a folder wider than 700 (no group or other bits).
+  [ $((8#$(stat -c %a "$pgp") & 8#077)) -eq 0 ] || fail 'the database password file is too open'
+  [ $((8#$(stat -c %a "$(dirname "$pgp")") & 8#077)) -eq 0 ] || fail 'the database password folder is too open'
+  # Only host, port, db and user are read (cut keeps the password field out of the shell).
+  IFS=: read -r dbhost dbport dbname dbuser < <(cut -d: -f1-4 "$pgp" | head -n1) || true
+  [ -n "$dbhost" ] && [ -n "$dbport" ] && [ -n "$dbname" ] && [ -n "$dbuser" ] || fail 'the database password file is malformed'
+  [ "$dbport" != 6543 ] || fail 'the transaction pooler port 6543 is refused: use the direct host or the session pooler on 5432'
+  pgp=$(readlink -f "$pgp"); ca=$(readlink -f "$ca")
+fi
+
+# db mode only: psql reads the password from the mounted pgpass file, so it is never in an argument or in ps.
+run_sql_out() {
+  docker run --rm --user "$(id -u):$(id -g)" -e PGPASSFILE=/pg/pgpass \
+    -v "$pgp:/pg/pgpass:ro" -v "$ca:/pg/ca.crt:ro" -v "$PWD:/w:ro" -w /w \
+    --entrypoint psql "${PRIVATE_PSQL_IMAGE:-public.ecr.aws/supabase/postgres:17.6.1.167}" \
+    -X -q -A -t -v ON_ERROR_STOP=1 -f "$1" \
+    "host=$dbhost port=$dbport dbname=$dbname user=$dbuser sslmode=verify-full sslrootcert=/pg/ca.crt" 2>/dev/null
+}
+
+run_sql() {
+  if [ "$mode" = db ]; then
+    run_sql_out "$1" >/dev/null
+  else
+    $sup db query "--$mode" -f "$1" >/dev/null 2>&1
+  fi
+}
+
 # Temp files stay in the working directory so a container sees them; mode 600, removed on exit.
 gz=$(mktemp .private_pack.XXXXXX)
 sql=$(mktemp .private_pack.XXXXXX)
@@ -52,20 +86,38 @@ gzip -dc "$gz" > "$sql" || fail 'the private secret cannot be unpacked'
 re=$(base64 -w0 < "$gz")
 [ "${#re}" -le 100000 ] || fail 'the private install secret is longer than 100000 characters'
 
+if [ "$mode" = db ]; then
+  live=$(mktemp .private_pack.XXXXXX)
+  chmod 600 "$live"
+  trap 'rm -f "$gz" "$sql" "$chk" "$live"' EXIT
+  cat > "$live" <<'SQL'
+select case when to_regprocedure('app_private.private_pack_version()') is not null then 'select app_private.private_pack_version()' else 'select ''''' end \gexec
+SQL
+  liveversion=$(run_sql_out "$live" | tr -d '[:space:]') || fail 'could not read the live pack version'
+  if [ "$liveversion" != "$PRIVATE_PACK_VERSION" ]; then
+    # While the release workflow still installs a pack itself, this script may only re-install the live version.
+    if [ ! -f .github/workflows/release.yml ] || grep -q 'private-server' .github/workflows/release.yml; then
+      echo '::error::the pack version differs from the live one and the release workflow still installs a pack' >&2
+      exit 3
+    fi
+  fi
+fi
+
 # $sup is left unquoted on purpose (it may be several words).
 # db query -f runs ONE statement, so each file is wrapped into a single DO that executes the text.
 if grep -q 'pkq_' "$sql"; then fail 'the private install holds a reserved tag'; fi
 if grep -q 'pkw_' tool/private_check.sql; then fail 'the private check holds a reserved tag'; fi
 
+# One statement = one transaction: a red check rolls the install back.
 printf 'do $pk$ begin execute $pkq_$' > "$chk"
 cat "$sql" >> "$chk"
-printf '$pkq_$; end $pk$;\n' >> "$chk"
-$sup db query "--$mode" -f "$chk" >/dev/null 2>&1 || fail 'install failed'
-
-# The check runs with the expected flag set in the same session, then compares the pack version.
-printf 'do $pk$ begin perform set_config(%s, %s, false); execute $pkw_$' "'private.expected'" "'1'" > "$chk"
+printf '$pkq_$;\n' >> "$chk"
+printf 'perform set_config(%s, %s, true);\n' "'private.expected'" "'1'" >> "$chk"
+printf 'execute $pkw_$' >> "$chk"
 cat tool/private_check.sql >> "$chk"
-printf '$pkw_$; if app_private.private_pack_version() is distinct from %s then raise exception %s; end if; end $pk$;\n' "'$PRIVATE_PACK_VERSION'" "'private pack is stale'" >> "$chk"
-$sup db query "--$mode" -f "$chk" >/dev/null 2>&1 || fail 'private check failed'
+printf '$pkw_$;\n' >> "$chk"
+printf 'if app_private.private_pack_version() is distinct from %s then raise exception %s; end if;\n' "'$PRIVATE_PACK_VERSION'" "'private pack is stale'" >> "$chk"
+printf 'end $pk$;\n' >> "$chk"
+run_sql "$chk" || fail 'install or check failed, nothing was changed'
 
 echo 'The private part is installed and checked.'

@@ -60,7 +60,16 @@ class ScriptEngine implements SessionEngine {
     }
     final r =
         (answer[ciphertext] ?? () => const Err(UnreadableMessageFailure()))();
-    if (r is Ok<String>) _opened.add(ciphertext);
+    if (r is Ok<String>) {
+      // As the real engine: the caller's writer runs only on success; a
+      // throw rolls the step back (the message can be opened again).
+      try {
+        await save?.writer?.call(r.value);
+      } catch (_) {
+        return const Err(SessionStoreFailure());
+      }
+      _opened.add(ciphertext);
+    }
     return r;
   }
 

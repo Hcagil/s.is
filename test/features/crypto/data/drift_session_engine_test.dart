@@ -9,6 +9,11 @@ import 'dart:convert';
 import 'package:drift/drift.dart' show Variable, driftRuntimeOptions;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/core/failure.dart';
+import 'package:sis/features/chat/application/message_opener.dart';
+import 'package:sis/features/chat/domain/encrypted_message_repository.dart';
+import 'package:sis/features/chat/domain/message.dart';
+import 'package:sis/features/chat/domain/message_envelope.dart';
+import 'package:sis/features/chat/domain/message_store.dart';
 import 'package:sis/features/chat/data/store/drift_message_store.dart';
 import 'package:sis/features/chat/data/store/drift_send_queue_store.dart';
 import 'package:sis/features/chat/domain/send_queue_store.dart';
@@ -18,6 +23,7 @@ import 'package:sis/features/crypto/data/olm_key_engine.dart';
 import 'package:sis/features/crypto/domain/key_directory.dart';
 import 'package:sis/features/crypto/domain/session_engine.dart';
 
+import '../../../support/opener_fakes.dart' show SlowStore;
 import '../../chat/data/store/store_harness.dart';
 
 final class _FixedPickleKey implements PickleKeyStore {
@@ -1320,4 +1326,281 @@ void main() {
       expect(await queueRows(alice), rows);
     });
   });
+
+  group('opened text is kept with the session advance', () {
+    // Contract: after the opener decrypts, the decoded text is safe in the
+    // store in the same step as the session advance; a failed text write
+    // never leaves the session advanced without the text.
+    test('the store write of the opened text throws once: a new opener on '
+        'the same store and engine still shows the text', () async {
+      final m = await first();
+      // first() locked 'merhaba'; lock the real envelope for row m1 instead.
+      final sent = ok(
+        await alice.engine.encrypt(
+          'bob',
+          encodeEnvelope(id: 'm1', text: 'merhaba'),
+          peerIdentityKey: bob.identityKey,
+        ),
+      );
+      expect(m.olmType, 0);
+      final row = Message(
+        id: 'm1',
+        conversationId: 'c1',
+        senderId: 'alice',
+        body: lockedBodyPlaceholder,
+        createdAt: DateTime.utc(2026, 3, 1),
+        ciphertext: sent.ciphertext,
+        olmType: sent.olmType,
+      );
+      await bob.store.upsertAll([row]);
+      final slow = SlowStore(bob.store);
+      StoreMessageOpener opener() {
+        final o = StoreMessageOpener(
+          me: () => 'bob',
+          engine: () => bob.engine,
+          store: () => slow,
+          peerKey: (_) async => Ok(
+            ClaimedKeys(
+              identityKey: alice.identityKey,
+              signingKey: 'unused',
+              deviceSignature: 'unused',
+              oneTimeKey: '',
+              isFallback: false,
+            ),
+          ),
+        );
+        addTearDown(o.dispose);
+        return o;
+      }
+
+      slow.throwWrites = true;
+      await opener().open([row]);
+      slow.throwWrites = false;
+
+      final again = await opener().open([row]);
+      expect(
+        again.single.body,
+        'merhaba',
+        reason: 'session advanced without the text: the message is lost',
+      );
+      expect(await bob.body('m1'), 'merhaba');
+    });
+
+    /// Alice locks the envelope of row m1; the row as the sync hands it over.
+    Future<Message> lockedM1() async {
+      ok(await alice.engine.createOutbound('bob', bob.keys()));
+      final sent = ok(
+        await alice.engine.encrypt(
+          'bob',
+          encodeEnvelope(id: 'm1', text: 'merhaba'),
+          peerIdentityKey: bob.identityKey,
+        ),
+      );
+      return Message(
+        id: 'm1',
+        conversationId: 'c1',
+        senderId: 'alice',
+        body: lockedBodyPlaceholder,
+        createdAt: DateTime.utc(2026, 3, 1),
+        ciphertext: sent.ciphertext,
+        olmType: sent.olmType,
+      );
+    }
+
+    StoreMessageOpener openerOn(MessageStore store, {SessionEngine? engine}) {
+      final o = StoreMessageOpener(
+        me: () => 'bob',
+        engine: () => engine ?? bob.engine,
+        store: () => store,
+        peerKey: (_) async => Ok(
+          ClaimedKeys(
+            identityKey: alice.identityKey,
+            signingKey: 'unused',
+            deviceSignature: 'unused',
+            oneTimeKey: '',
+            isFallback: false,
+          ),
+        ),
+      );
+      addTearDown(o.dispose);
+      return o;
+    }
+
+    test('first-time open of a row not yet stored, text write throws: a new '
+        'opener later still opens it and keeps the text', () async {
+      final row = await lockedM1();
+      final slow = SlowStore(bob.store)..throwWrites = true;
+      await openerOn(slow).open([row]);
+      slow.throwWrites = false;
+      expect(await bob.body('m1'), isNull);
+
+      final again = await openerOn(slow).open([row]);
+      expect(again.single.body, 'merhaba');
+      expect(await bob.body('m1'), 'merhaba');
+    });
+
+    test('text write throws: the same opener does not keep the row as '
+        'unreadable, a retry opens it', () async {
+      final row = await lockedM1();
+      await bob.store.upsertAll([row]);
+      final slow = SlowStore(bob.store)..throwWrites = true;
+      final o = openerOn(slow);
+      await o.open([row]);
+      slow.throwWrites = false;
+
+      final again = await o.open([row]);
+      expect(again.single.body, 'merhaba');
+      expect(await bob.body('m1'), 'merhaba');
+    });
+
+    test(
+      'a row hidden while it is being opened is never written back',
+      () async {
+        final row = await lockedM1();
+        await bob.store.upsertAll([row]);
+        late final StoreMessageOpener o;
+        final engine = _BeforeDecrypt(bob.engine, () async {
+          await bob.store.remove('m1');
+          o.forget('m1');
+        });
+        o = openerOn(bob.store, engine: engine);
+        await o.open([row]);
+        expect(engine.decrypts, 1, reason: 'the hide must land mid-open');
+        expect(await bob.body('m1'), isNull);
+      },
+    );
+  });
+
+  group('PlaintextSave.write: the caller writes inside the engine step', () {
+    Future<void> boom(String t) async {
+      // A real write that must vanish with the rollback.
+      await bob.store.upsertAll([msg('w1', body: t)]);
+      throw StateError('disk full');
+    }
+
+    test('pre-key message, writer throws: SessionStoreFailure, nothing kept '
+        '(not even the writer\'s own row), a retry opens it', () async {
+      final m = await first();
+      final before = await bob.snapshot();
+      expect(
+        err(await bobOpens(m, save: PlaintextSave.write(boom))),
+        isA<SessionStoreFailure>(),
+      );
+      expect(await bob.snapshot(), before);
+      expect(ok(await bobOpens(m)), 'merhaba');
+    });
+
+    test('normal message, writer throws: session not advanced, a retry '
+        'opens it', () async {
+      await established();
+      final m = ok(
+        await alice.engine.encrypt(
+          'bob',
+          'ikinci',
+          peerIdentityKey: bob.identityKey,
+        ),
+      );
+      expect(m.olmType, 1);
+      final before = await bob.snapshot();
+      expect(
+        err(await bobOpens(m, save: PlaintextSave.write(boom))),
+        isA<SessionStoreFailure>(),
+      );
+      expect(await bob.snapshot(), before);
+      expect(ok(await bobOpens(m)), 'ikinci');
+    });
+
+    test('writer gets the opened text once, only when it opens, and its '
+        'write is kept', () async {
+      final m = await first();
+      final got = <String>[];
+      Future<void> keep(String t) async {
+        got.add(t);
+        await bob.store.upsertAll([msg('w1', body: t)]);
+      }
+
+      expect(
+        err(
+          await bobOpens(
+            LockedText(
+              ciphertext: tamper(m.ciphertext),
+              olmType: m.olmType,
+              sessionId: m.sessionId,
+            ),
+            save: PlaintextSave.write(keep),
+          ),
+        ),
+        isA<UnreadableMessageFailure>(),
+      );
+      expect(got, isEmpty);
+      expect(ok(await bobOpens(m, save: PlaintextSave.write(keep))), 'merhaba');
+      expect(got, ['merhaba']);
+      expect(await bob.body('w1'), 'merhaba');
+    });
+  });
+}
+
+/// The real engine, with [before] run at the start of each decrypt.
+final class _BeforeDecrypt implements SessionEngine {
+  _BeforeDecrypt(this.inner, this.before);
+
+  final SessionEngine inner;
+  final Future<void> Function() before;
+  int decrypts = 0;
+
+  @override
+  Future<Result<String>> decrypt({
+    required String peerUserId,
+    required String peerIdentityKey,
+    required String ciphertext,
+    required int olmType,
+    PlaintextSave? save,
+  }) async {
+    decrypts++;
+    await before();
+    return inner.decrypt(
+      peerUserId: peerUserId,
+      peerIdentityKey: peerIdentityKey,
+      ciphertext: ciphertext,
+      olmType: olmType,
+      save: save,
+    );
+  }
+
+  @override
+  Future<bool> hasSession(String peerUserId) => inner.hasSession(peerUserId);
+
+  @override
+  Future<Result<String>> createOutbound(String peerUserId, ClaimedKeys keys) =>
+      inner.createOutbound(peerUserId, keys);
+
+  @override
+  Future<Result<LockedText>> encrypt(
+    String peerUserId,
+    String plaintext, {
+    required String peerIdentityKey,
+    PlaintextSave? save,
+    QueueTarget? queue,
+  }) => inner.encrypt(
+    peerUserId,
+    plaintext,
+    peerIdentityKey: peerIdentityKey,
+    save: save,
+    queue: queue,
+  );
+
+  @override
+  Future<Result<String>> createInbound({
+    required String peerUserId,
+    required String peerIdentityKey,
+    required String ciphertext,
+    required int olmType,
+    PlaintextSave? save,
+  }) => inner.createInbound(
+    peerUserId: peerUserId,
+    peerIdentityKey: peerIdentityKey,
+    ciphertext: ciphertext,
+    olmType: olmType,
+    save: save,
+  );
 }

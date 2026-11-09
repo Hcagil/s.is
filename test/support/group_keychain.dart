@@ -20,6 +20,10 @@ class GroupKeychain {
   /// When set, every read fails like a locked keychain.
   bool failReads = false;
 
+  /// Every read answers only after this delay, as a real keychain call that
+  /// crosses the platform channel does; lets two callers overlap.
+  Duration readDelay = Duration.zero;
+
   void put(String? group, String key, String value) =>
       (items[group] ??= {})[key] = value;
   String? get(String? group, String key) => items[group]?[key];
@@ -43,6 +47,7 @@ class GroupKeychain {
           log.add('${call.method} ${group ?? 'default'} $key');
           switch (call.method) {
             case 'read':
+              await Future<void>.delayed(readDelay);
               if (failReads) {
                 throw PlatformException(code: '-25308', message: 'locked');
               }

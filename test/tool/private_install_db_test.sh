@@ -298,5 +298,18 @@ run 'pack not matching version' "$P" "$CA" "$B64" v2222222222222222
 case "$out" in *'does not match'*) ;; *) fail "pack not matching version: wrong message: $out";; esac
 expect 'pack not matching version' 1 f "$OLDV"
 
+# wrong CA: a different, self-made CA must be refused by verify-full
+openssl req -x509 -newkey rsa:2048 -nodes -keyout "$box/ca2.key" -out "$box/ca2.crt" -subj "/CN=qa-other-ca" -days 2 2>/dev/null
+run 'wrong CA' "$PT" "$box/ca2.crt" "$B64" "$V"
+expect 'wrong CA' 1 f "$OLDV"
+
+# wrong host: the database answers on its own container address, which is not in the certificate names
+CIP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$CTR")
+[ -n "$CIP" ] || fail 'wrong host: container address not found'
+mkdir "$box/pgcip"; chmod 700 "$box/pgcip"
+printf '%s:5432:postgres:qa_trust:x\n' "$CIP" >"$box/pgcip/pgpass"; chmod 600 "$box/pgcip/pgpass"
+run 'wrong host' "$box/pgcip/pgpass" "$CA" "$B64" "$V"
+expect 'wrong host' 1 f "$OLDV"
+
 [ ${#P6543[@]} -gt 0 ] || echo 'note: host port 6543 was busy, the 6543 case only checks the refusal message'
 finish

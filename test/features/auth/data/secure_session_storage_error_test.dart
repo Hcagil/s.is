@@ -1,8 +1,9 @@
 // SecureSessionStorage (where supabase keeps the sign-in session) against the
 // secure-storage plugin's real method channel. Contract: Android options turn
-// resetOnError off (rest at defaults); a read that throws gives "no session"
-// (null / false), never a throw, and nothing is written or deleted; a stored
-// value passes through unchanged. Written from the contract.
+// resetOnError off (rest at defaults); a read that throws throws again (never
+// taken as "no session", so start-up stops instead of signing out), and
+// nothing is written or deleted; a stored value passes through unchanged. Written from the contract.
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/features/auth/data/secure_session_storage.dart';
@@ -40,22 +41,26 @@ void main() {
     expect(await s.hasAccessToken(), isTrue);
   });
 
-  test(
-    'a read that throws: accessToken null, no throw, nothing changed',
-    () async {
-      kc.put(null, _key, _session);
-      kc.failRead = (_, _) => true;
-      expect(await const SecureSessionStorage().accessToken(), isNull);
-      expect(kc.changes, isEmpty);
-      expect(kc.get(null, _key), _session, reason: 'the session is kept');
-    },
-  );
-
-  test('a read that throws: hasAccessToken false, no throw, nothing '
+  test('a read that throws: accessToken throws again, nothing '
       'changed', () async {
     kc.put(null, _key, _session);
     kc.failRead = (_, _) => true;
-    expect(await const SecureSessionStorage().hasAccessToken(), isFalse);
+    await expectLater(
+      const SecureSessionStorage().accessToken(),
+      throwsA(isA<PlatformException>()),
+    );
+    expect(kc.changes, isEmpty);
+    expect(kc.get(null, _key), _session, reason: 'the session is kept');
+  });
+
+  test('a read that throws: hasAccessToken throws again, nothing '
+      'changed', () async {
+    kc.put(null, _key, _session);
+    kc.failRead = (_, _) => true;
+    await expectLater(
+      const SecureSessionStorage().hasAccessToken(),
+      throwsA(isA<PlatformException>()),
+    );
     expect(kc.changes, isEmpty);
     expect(kc.get(null, _key), _session);
   });

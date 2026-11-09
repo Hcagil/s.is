@@ -311,5 +311,60 @@ printf '%s:5432:postgres:qa_trust:x\n' "$CIP" >"$box/pgcip/pgpass"; chmod 600 "$
 run 'wrong host' "$box/pgcip/pgpass" "$CA" "$B64" "$V"
 expect 'wrong host' 1 f "$OLDV"
 
+# new test block for symlink and permission checks
+# 1. REFUSE folder: open755
+mkdir "$box/open755"
+chmod 755 "$box/open755"
+cp "$PT" "$box/open755/pgpass"
+chmod 600 "$box/open755/pgpass"
+mkdir "$box/lnk755"
+chmod 700 "$box/lnk755"
+ln -s "$box/open755/pgpass" "$box/lnk755/pgpass"
+run 'symlink to file in 755 folder' "$box/lnk755/pgpass" "$CA" "$B64" "$V"
+case "$out" in
+  *'the database password folder is too open'*) ;;
+  *) fail "symlink to file in 755 folder: wrong message: $out" ;;
+esac
+expect 'symlink to file in 755 folder' 1 f "$OLDV"
+
+# 2. REFUSE file: 644
+mkdir "$box/pg644"
+chmod 700 "$box/pg644"
+printf '172.17.0.1:%s:postgres:qa_trust:x\n' "$PORT" > "$box/pg644/pgpass"
+chmod 644 "$box/pg644/pgpass"
+mkdir "$box/lnk644"
+chmod 700 "$box/lnk644"
+ln -s "$box/pg644/pgpass" "$box/lnk644/pgpass"
+run 'symlink to 644 file' "$box/lnk644/pgpass" "$CA" "$B64" "$V"
+case "$out" in
+  *'the database password file is too open'*) ;;
+  *) fail "symlink to 644 file: wrong message: $out" ;;
+esac
+expect 'symlink to 644 file' 1 f "$OLDV"
+
+# 3. DANGLING
+mkdir "$box/lnkdead"
+chmod 700 "$box/lnkdead"
+ln -s "$box/nowhere" "$box/lnkdead/pgpass"
+run 'dangling symlink' "$box/lnkdead/pgpass" "$CA" "$B64" "$V"
+case "$out" in
+  *'the database password file is missing'*) ;;
+  *) fail "dangling symlink: wrong message: $out" ;;
+esac
+expect 'dangling symlink' 1 f "$OLDV"
+
+# 4. ACCEPT pgpass link
+mkdir "$box/lnkok"
+chmod 700 "$box/lnkok"
+ln -s "$PT" "$box/lnkok/pgpass"
+run 'symlink to 600 file in 700 folder' "$box/lnkok/pgpass" "$CA" "$B64" "$V"
+expect 'symlink to 600 file in 700 folder' 0 t "$V"
+
+# 5. ACCEPT CA link
+baseline "$OLDV"
+ln -s "$CA" "$box/ca-link.crt"
+run 'symlinked CA' "$PT" "$box/ca-link.crt" "$B64" "$V"
+expect 'symlinked CA' 0 t "$V"
+
 [ ${#P6543[@]} -gt 0 ] || echo 'note: host port 6543 was busy, the 6543 case only checks the refusal message'
 finish

@@ -358,6 +358,7 @@ class KeyDirectoryController extends Notifier<KeyDirectoryState> {
     _retry?.cancel();
     _revision++;
     _attempt = 0;
+    _storageFails = 0;
     final user = _userOf(s);
     if (user == null) {
       state = const KeysIdle();

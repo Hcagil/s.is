@@ -10,25 +10,12 @@ final class SecureSessionStorage extends LocalStorage {
   @override
   Future<void> initialize() async {}
 
-  // A failed read is "no session yet", never a delete: the stored session stays for the next run.
+  // A failed read throws (never "no session"): Supabase.initialize then fails into
+  // the start-up failure screen, and no session-end wipe runs. resetOnError stays off.
   @override
-  Future<String?> accessToken() async {
-    try {
-      return await _storage.read(key: _key);
-    } on Object {
-      return null;
-    }
-  }
-
-  // A failed read is "no session yet", never a delete: the stored session stays for the next run.
+  Future<String?> accessToken() => _storage.read(key: _key);
   @override
-  Future<bool> hasAccessToken() async {
-    try {
-      return await _storage.read(key: _key) != null;
-    } on Object {
-      return false;
-    }
-  }
+  Future<bool> hasAccessToken() async => await _storage.read(key: _key) != null;
 
   @override
   Future<void> persistSession(String persistSessionString) =>

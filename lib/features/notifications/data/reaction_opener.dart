@@ -14,9 +14,10 @@ Future<OpenedReaction?> Function(ReactionPush push) reactionOpener(
   final olmType = push.olmType;
   if (ciphertext == null || olmType == null) return null;
 
-  final key = await StoreKey.inGroup(keychainGroup).read();
-  final pickle = await PickleKey.inGroup(keychainGroup).read();
-  if (key == null || pickle == null) return null;
+  final keys = await _readKeys(keychainGroup);
+  if (keys == null) return null;
+  final key = keys.key;
+  final pickle = keys.pickle;
 
   final path = (await storeFile()).path;
   final userId = push.userId;
@@ -39,6 +40,19 @@ Future<OpenedReaction?> Function(ReactionPush push) reactionOpener(
     ),
   );
 };
+
+/// The two keys, or null when secure storage cannot be read now or a key is absent. Never throws, never deletes.
+Future<({String key, List<int> pickle})?> _readKeys(String? group) async {
+  try {
+    final key = await StoreKey.inGroup(group).read();
+    final pickle = await PickleKey.inGroup(group).read();
+    if (key == null || pickle == null) return null;
+    return (key: key, pickle: pickle);
+  } catch (_) {
+    // Secure storage not ready: cannot open now (plain fallback notification); nothing is deleted.
+    return null;
+  }
+}
 
 Future<OpenedReaction?> _peek(
   String storePath,

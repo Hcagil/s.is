@@ -42,6 +42,14 @@ final class KeysRetrying extends KeyDirectoryState {
   const KeysRetrying();
 }
 
+/// Failed pickle-key reads in a row before [KeysStorageStuck] shows: 5 tries are about one minute on the 2+4+8+16+32 s retry ladder.
+const storageStuckAfter = 5;
+
+/// The pickle key cannot be read from secure storage after [storageStuckAfter] tries in a row. Retries go on (every 60 s); the key is never deleted or remade. Only the user may choose a new identity (a later step).
+final class KeysStorageStuck extends KeyDirectoryState {
+  const KeysStorageStuck();
+}
+
 /// The server has keys for this member but this phone has none it can read (new phone after a reset, wiped store, unreadable pickle). NEVER fixed silently: a new identity changes every contact's security code. Waits for an explicit decision (a later step: restore a backup or reset).
 final class KeysIdentityLost extends KeyDirectoryState {
   const KeysIdentityLost();
@@ -57,6 +65,7 @@ final keyDirectoryControllerProvider =
 class KeyDirectoryController extends Notifier<KeyDirectoryState> {
   Timer? _retry;
   int _attempt = 0;
+  int _storageFails = 0;
   int _revision = 0;
   bool _busy = false;
   bool _again = false;
@@ -116,9 +125,15 @@ class KeyDirectoryController extends Notifier<KeyDirectoryState> {
     try {
       pickleKey = await pickleKeys.loadOrCreate();
     } catch (_) {
-      if (alive()) _scheduleRetry(userId, rev);
+      if (alive()) {
+        _scheduleRetry(userId, rev);
+        if (++_storageFails >= storageStuckAfter) {
+          state = const KeysStorageStuck();
+        }
+      }
       return;
     }
+    _storageFails = 0;
     final saved = await pickles.load();
     if (!alive()) return;
     if (saved == null) {

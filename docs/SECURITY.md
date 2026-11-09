@@ -627,6 +627,7 @@ the truth (DECISIONS 2026-10-17).
   On iOS it is `first_unlock_this_device`: a backup carries it locked to this
   phone's hardware, so it is restored only onto the same phone. Every erase
   deletes it.
+- **Storage errors never erase keys.** On Android the secure storages use `resetOnError: false`, so a storage read error throws and never deletes or remakes a key (DECISIONS.md 2026-11-09). Known limit: plugin issue 1298.
 - **Where the file lives.** Android: the app support directory (never the cache,
   which the OS may clear). iOS: the App Group container `group.com.esd.sis`, so
   a notification extension can reach it later; the app support directory if the

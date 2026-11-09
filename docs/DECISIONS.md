@@ -669,3 +669,14 @@ Nothing contacts the site before that tap.
 - Old builds never get a reaction push: a device gets one only after its build registers with `reaction_push` true (Android and iOS builds that draw reactions).
 - A retry, a clear or a relock sends nothing from the database; the edge claim and limits keep forged calls to at most one extra push (accepted, see SECURITY.md).
 - With "hide sensitive content" on, the lock screen shows "SIS" instead of the sender's name.
+
+## 2026-11-09 — A phone storage error never erases the chat keys
+
+**Decision.** On Android the three secure storages (pickle key `sis.olm.pickle.key`, store key `sis.store.key`, Supabase session `sis.supabase.session`) are built with `AndroidOptions(resetOnError: false)`. No other Android option is changed (cipher, namespace and migration options trigger the plugin's own wipe path). A read that throws means "storage not ready, try later", never "key absent": the pickle key and store key are created only after a clean null read. The key directory controller retries on its ladder (2 s to 60 s); after 5 failed reads in a row (about one minute) it shows the state `KeysStorageStuck` and keeps retrying. Only the user may choose a new identity; that action does not exist yet (same open step as `KeysIdentityLost`). A failed session read counts as "no session this run" and deletes nothing, so the app still starts. The push readers (peek, reaction opener) treat a throw as "cannot open now" and show the plain notification.
+
+**Why.** flutter_secure_storage 11.2.0 defaults `resetOnError` to true, which on a read error deletes the entry (and on a broken wrapping key deletes everything); the app then made a new key and lost the chat identity for good. Plugin issues 941, 1282 and 1208 show real devices hitting resets and unguarded loops.
+
+**Consequences.**
+- A key that is truly corrupt or restored onto a new phone never heals by itself: the app keeps retrying until the user chooses a new identity.
+- Known upstream limit, open plugin issue 1298: the Android RSA key pair is re-created when its lookup returns null, which destroys the wrapped key. This flag does not prevent it; only an upstream fix or a plugin patch would.
+- No migration: the option is read per call and the stored data is unchanged.

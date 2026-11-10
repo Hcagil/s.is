@@ -96,9 +96,9 @@ select case when to_regprocedure('app_private.private_pack_version()') is not nu
 SQL
   liveversion=$(run_sql_out "$live" | tr -d '[:space:]') || fail 'could not read the live pack version'
   if [ "$liveversion" != "$PRIVATE_PACK_VERSION" ]; then
-    # While the release workflow still installs a pack itself, this script may only re-install the live version.
-    if [ ! -f .github/workflows/release.yml ] || grep -q 'private-server' .github/workflows/release.yml; then
-      echo '::error::the pack version differs from the live one and the release workflow still installs a pack' >&2
+    # While any GitHub workflow or action still installs a pack, this script may only re-install the live version.
+    if [ ! -f .github/workflows/release.yml ] || [ -d .github/actions/private-server ] || grep -rq 'private-server' .github/workflows; then
+      echo '::error::the pack version differs from the live one and a GitHub workflow or action still installs a pack' >&2
       exit 3
     fi
   fi

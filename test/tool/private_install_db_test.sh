@@ -213,6 +213,21 @@ wf_none
 baseline "$OLDV"
 run 'wf_none' "$P" "$CA" "$B64" "$V"
 expect 'wf_none' 3 f "$OLDV"
+# c2. another workflow file mentions private-server: refused
+wf_without
+printf '      - name: private-server\n' > "$box/src/.github/workflows/other.yml"
+baseline "$OLDV"
+run 'other workflow mentions private-server' "$P" "$CA" "$B64" "$V"
+expect 'other workflow mentions private-server' 3 f "$OLDV"
+rm -f "$box/src/.github/workflows/other.yml"
+
+# c3. the private-server action folder is present beside a clean release.yml: refused
+wf_without
+mkdir -p "$box/src/.github/actions/private-server"
+baseline "$OLDV"
+run 'action folder present' "$P" "$CA" "$B64" "$V"
+expect 'action folder present' 3 f "$OLDV"
+rm -rf "$box/src/.github/actions/private-server"
 
 # d. wf_without
 wf_without

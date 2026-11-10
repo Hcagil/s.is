@@ -153,6 +153,19 @@ import UserNotifications
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "ShareIntakePlugin") {
       ShareIntakePlugin.register(with: registrar)
     }
+    // Support help: two phone facts (model id and OS version); never the phone's name or any id.
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "DeviceFacts") {
+      let channel = FlutterMethodChannel(name: "sis/device_facts", binaryMessenger: registrar.messenger())
+      channel.setMethodCallHandler { call, result in
+        guard call.method == "facts" else { result(FlutterMethodNotImplemented); return }
+        var u = utsname()
+        uname(&u)
+        let machine = withUnsafePointer(to: &u.machine) {
+          $0.withMemoryRebound(to: CChar.self, capacity: Int(_SYS_NAMELEN)) { String(cString: $0) }
+        }
+        result(["model": machine, "os": UIDevice.current.systemVersion])
+      }
+    }
     // Replies typed into a private chat's notification (see handleEncryptedReply): Dart takes them once.
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "EncryptedReply") {
       let channel = FlutterMethodChannel(name: "sis/encrypted_reply", binaryMessenger: registrar.messenger())

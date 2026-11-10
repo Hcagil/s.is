@@ -9,6 +9,7 @@
 #   mint                                    new session for the existing bot (the old one ends)
 #   on | off                                the OFF switch (stops every path at the next statement)
 #   list                                    contacts the bot may chat with
+#   devices                                 the five phone facts per person (support view)
 #   list-add <user_id|email> | list-remove <user_id>
 #   rename <text>                           set the bot's display name (1 to 80 characters)
 #   revoke                                  OFF + delete every session + delete the local token file
@@ -180,6 +181,12 @@ end \$\$" >/dev/null
     sql "select k.contact_id, p.display_name from app_private.bot_contacts k
            left join public.profiles p on p.user_id = k.contact_id order by k.added_at" ;;
 
+  devices)
+    # Support view: the five phone facts per person, newest first (this computer only).
+    sql "select p.display_name, d.model, d.os_version, d.app_version, d.build, d.installer, d.updated_at
+           from app_private.member_device d left join public.profiles p on p.user_id = d.user_id
+           order by d.updated_at desc" ;;
+
   list-add)
     t=${1:-}
     if [[ $t =~ $EMAIL_RE ]]; then
@@ -218,5 +225,5 @@ end \$\$" >/dev/null
     shred -u "$STATE" 2>/dev/null || rm -f "$STATE"
     echo deleted ;;
 
-  *) die "usage: tool/sis_bot_admin.sh bootstrap [--debug id] | mint | on | off | list | list-add <user|email> | list-remove <user> | rename <text> | revoke | delete" ;;
+  *) die "usage: tool/sis_bot_admin.sh bootstrap [--debug id] | mint | on | off | list | devices | list-add <user|email> | list-remove <user> | rename <text> | revoke | delete" ;;
 esac

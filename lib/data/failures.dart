@@ -10,22 +10,13 @@ import 'package:web_socket_channel/web_socket_channel.dart'
 import '../core/failure.dart';
 
 /// No network or the server did not answer in time.
-String get offlineMessage => failureText(
-  'No connection. Check your internet and try again.',
-  'Bağlantı yok. İnternetinizi kontrol edip tekrar deneyin.',
-);
+String get offlineMessage => failureStrings.failOffline;
 
 /// The server answered with an error.
-String get serverMessage => failureText(
-  'Something went wrong on our side. Try again.',
-  'Bizden kaynaklı bir sorun oluştu. Tekrar deneyin.',
-);
+String get serverMessage => failureStrings.failServer;
 
 /// Anything else.
-String get genericMessage => failureText(
-  'Something went wrong. Try again.',
-  'Bir şeyler ters gitti. Tekrar deneyin.',
-);
+String get genericMessage => failureStrings.failGeneric;
 
 /// The one place an SDK error becomes words a member reads. The raw error goes to the device log, never to the screen.
 Failure readableFailure(Object e) {

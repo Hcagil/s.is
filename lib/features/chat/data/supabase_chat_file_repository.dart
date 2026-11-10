@@ -171,12 +171,7 @@ final class SupabaseChatFileRepository implements ChatFileRepository {
           .createSignedUrl(attachmentPath, 600);
       final response = await client.send(http.Request('GET', Uri.parse(url)));
       if (response.statusCode != 200) {
-        return Err(
-          NetworkFailure.localized(
-            'This file is not available.',
-            'Bu dosya kullanılamıyor.',
-          ),
-        );
+        return Err(NetworkFailure.localized((s) => s.failFileUnavailable));
       }
       final total = response.contentLength;
       var received = 0;
@@ -192,12 +187,7 @@ final class SupabaseChatFileRepository implements ChatFileRepository {
       }
       if (expectedSize != null && await part.length() != expectedSize) {
         await part.delete();
-        return Err(
-          NetworkFailure.localized(
-            'This file is not available.',
-            'Bu dosya kullanılamıyor.',
-          ),
-        );
+        return Err(NetworkFailure.localized((s) => s.failFileUnavailable));
       }
       await part.rename(destPath);
       return const Ok(null);
@@ -211,10 +201,7 @@ final class SupabaseChatFileRepository implements ChatFileRepository {
           const DeniedFailure(),
         StorageException(:final statusCode)
             when statusCode == '400' || statusCode == '404' =>
-          NetworkFailure.localized(
-            'This file is not available.',
-            'Bu dosya kullanılamıyor.',
-          ),
+          NetworkFailure.localized((s) => s.failFileUnavailable),
         _ => readableFailure(e),
       });
     } finally {

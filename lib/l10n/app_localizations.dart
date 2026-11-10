@@ -623,7 +623,7 @@ abstract class AppLocalizations {
   /// Notice when the maps app could not be opened
   ///
   /// In en, this message translates to:
-  /// **'No maps app could open this place.'**
+  /// **'No maps app could open this place. Install a maps app and try again.'**
   String get locationOpenFailed;
 
   /// Shown under the place search when nothing matches
@@ -743,7 +743,7 @@ abstract class AppLocalizations {
   /// Notice when a sixth chat is pinned
   ///
   /// In en, this message translates to:
-  /// **'You can pin up to 5 chats.'**
+  /// **'You can pin up to 5 chats. Unpin one to pin another.'**
   String get chatPinLimit;
 
   /// Chat line when someone pins a message
@@ -1061,13 +1061,13 @@ abstract class AppLocalizations {
   /// Notice after the profile picture was removed
   ///
   /// In en, this message translates to:
-  /// **'Profile picture removed'**
+  /// **'Profile photo removed'**
   String get settingsPictureRemoved;
 
   /// Notice after the profile picture was changed
   ///
   /// In en, this message translates to:
-  /// **'Profile picture updated'**
+  /// **'Profile photo updated'**
   String get settingsPictureUpdated;
 
   /// Privacy switch for the online status
@@ -1109,7 +1109,7 @@ abstract class AppLocalizations {
   /// Heading above the profile picture audience options
   ///
   /// In en, this message translates to:
-  /// **'Profile picture visibility'**
+  /// **'Who can see my profile photo'**
   String get settingsAvatarVisibility;
 
   /// Profile picture audience: everyone
@@ -1607,7 +1607,7 @@ abstract class AppLocalizations {
   /// Explains the old messages switch
   ///
   /// In en, this message translates to:
-  /// **'New member sees history'**
+  /// **'New members see earlier messages'**
   String get addMembersOldHint;
 
   /// Note on the add members page for a non-admin: the group switch decides about history
@@ -1787,7 +1787,7 @@ abstract class AppLocalizations {
   /// Picture menu: remove the picture
   ///
   /// In en, this message translates to:
-  /// **'Remove picture'**
+  /// **'Remove photo'**
   String get avatarRemove;
 
   /// Notice when the camera fails
@@ -2009,13 +2009,13 @@ abstract class AppLocalizations {
   /// Notice
   ///
   /// In en, this message translates to:
-  /// **'Group picture removed'**
+  /// **'Group photo removed'**
   String get groupPictureRemoved;
 
   /// Notice
   ///
   /// In en, this message translates to:
-  /// **'Group picture updated'**
+  /// **'Group photo updated'**
   String get groupPictureUpdated;
 
   /// Member count under the group name
@@ -2069,7 +2069,7 @@ abstract class AppLocalizations {
   /// Notice
   ///
   /// In en, this message translates to:
-  /// **'That could not be opened.'**
+  /// **'This item could not be opened. Pick another one.'**
   String get attachOpenFailed;
 
   /// Header of the photo grid
@@ -2195,7 +2195,7 @@ abstract class AppLocalizations {
   /// Helper under the display name field
   ///
   /// In en, this message translates to:
-  /// **'Shown to other members. Need not be unique.'**
+  /// **'Others see this name. Two people can have the same name.'**
   String get profileDisplayNameHint;
 
   /// Label of the tag field
@@ -2207,7 +2207,7 @@ abstract class AppLocalizations {
   /// Helper under the tag field
   ///
   /// In en, this message translates to:
-  /// **'Must be unique. Use 3 to 20 letters, digits or _.'**
+  /// **'Nobody else can have this tag. Use 3 to 20 letters, digits or _.'**
   String get profileTagHint;
 
   /// Sign-in screen description
@@ -2327,7 +2327,7 @@ abstract class AppLocalizations {
   /// Body of the blocking update screen
   ///
   /// In en, this message translates to:
-  /// **'This version is no longer supported. Please update to keep using SIS.'**
+  /// **'Update SIS to keep using it. This version is no longer supported.'**
   String get updateRequiredBody;
 
   /// Button on the blocking update screen
@@ -2363,7 +2363,7 @@ abstract class AppLocalizations {
   /// Reason shown on the start-up error screen when start-up itself failed
   ///
   /// In en, this message translates to:
-  /// **'SIS could not start. Please try again.'**
+  /// **'SIS could not start. Try again.'**
   String get statusStartBootstrap;
 
   /// Menu card row on a custom theme
@@ -2465,13 +2465,13 @@ abstract class AppLocalizations {
   /// Theme editor background tab label
   ///
   /// In en, this message translates to:
-  /// **'Pick background color'**
+  /// **'Pick a background color'**
   String get themePickBackground;
 
   /// Theme editor my messages tab label
   ///
   /// In en, this message translates to:
-  /// **'Pick my message bubble color'**
+  /// **'Pick a color for your messages'**
   String get themePickMine;
 
   /// Tooltip and label of the tile that makes my bubble follow the accent
@@ -2879,7 +2879,7 @@ abstract class AppLocalizations {
   /// Search field hint on the send-a-contact page
   ///
   /// In en, this message translates to:
-  /// **'Search contacts'**
+  /// **'Search phone contacts'**
   String get contactSearchHint;
 
   /// Button that sends the picked phone contact
@@ -2969,7 +2969,7 @@ abstract class AppLocalizations {
   /// Auto-download row
   ///
   /// In en, this message translates to:
-  /// **'When connected on Wi-Fi'**
+  /// **'When connected to Wi-Fi'**
   String get autoDownloadWifi;
 
   /// Auto-download row
@@ -3101,13 +3101,13 @@ abstract class AppLocalizations {
   /// Notice when a shrunk video is still over the size limit
   ///
   /// In en, this message translates to:
-  /// **'This video is too large to send.'**
+  /// **'This video is too large to send. Pick a smaller one.'**
   String get videoTooBig;
 
   /// Notice after picked videos could not be read or copied
   ///
   /// In en, this message translates to:
-  /// **'{count, plural, =1{This video could not be sent. Please try again.} other{{count} videos could not be sent. Please try again.}}'**
+  /// **'{count, plural, =1{This video could not be sent. Try again.} other{{count} videos could not be sent. Try again.}}'**
   String videoPickFailed(int count);
 
   /// Notice when shrinking a video failed
@@ -3611,7 +3611,7 @@ abstract class AppLocalizations {
   /// Title of the cut-out step
   ///
   /// In en, this message translates to:
-  /// **'Cut-out'**
+  /// **'Remove background'**
   String get makerCutoutTitle;
 
   /// Choice: keep the whole picture
@@ -3623,7 +3623,7 @@ abstract class AppLocalizations {
   /// Choice: keep only the subject
   ///
   /// In en, this message translates to:
-  /// **'Cut-out'**
+  /// **'No background'**
   String get makerCut;
 
   /// Brush that erases parts
@@ -3953,7 +3953,7 @@ abstract class AppLocalizations {
   /// Admin chat reply text
   ///
   /// In en, this message translates to:
-  /// **'Apple step failed for {email}: {reason}. The allowlist row is saved; type the command again to retry.'**
+  /// **'Type the command again to retry. The Apple step failed for {email}: {reason}. The allowlist row is saved.'**
   String adminFail(String email, String reason);
 
   /// Admin chat reply text
@@ -4091,7 +4091,7 @@ abstract class AppLocalizations {
   /// Admin chat reply text
   ///
   /// In en, this message translates to:
-  /// **'Apple step failed for {email}: {reason}. The allowlist row is already removed; type the command again to retry.'**
+  /// **'Type the command again to retry. The Apple step failed for {email}: {reason}. The allowlist row is already removed.'**
   String adminFailRm(String email, String reason);
 
   /// Admin chat: why the Apple step failed
@@ -4451,7 +4451,7 @@ abstract class AppLocalizations {
   /// Staff chat command reply
   ///
   /// In en, this message translates to:
-  /// **'Too many commands. Please try again in a minute.'**
+  /// **'Too many commands. Wait a minute and try again.'**
   String get salesRate;
 
   /// Staff chat command reply
@@ -4579,6 +4579,186 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{name} closed the group'**
   String eventClosed(String name);
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'Could not check this person\'s encryption keys. Try again.'**
+  String get failPeerKeysCheck;
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'='**
+  String get failNameEmpty;
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'You don\'t have permission to do that.'**
+  String get failDenied;
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'Too many searches. Try again in a little while.'**
+  String get failSearchLimit;
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'You have reached the sticker limit.'**
+  String get failStickerLimit;
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'Could not create the sticker.'**
+  String get failStickerCreate;
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'This poll is closed.'**
+  String get failPollClosed;
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'This video could not be prepared.'**
+  String get failVideoPrepare;
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'Canceled.'**
+  String get failCanceled;
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'Location is turned off for SIS.'**
+  String get failLocationOff;
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'Could not find your position. Check that location is on.'**
+  String get failPositionNotFound;
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'SIS needs your real email address. In Apple\'s sign-in choose Share My Email and try again.'**
+  String get failAppleEmail;
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'Setting up encryption. Try again in a moment.'**
+  String get failEncryptionSetup;
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save the encryption keys on this phone.'**
+  String get failKeysSave;
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong. Try again.'**
+  String get failGeneric;
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'No connection. Check your internet and try again.'**
+  String get failOffline;
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong on our side. Try again.'**
+  String get failServer;
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'Could not sign in. Try again.'**
+  String get failSignIn;
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'Sign-in canceled.'**
+  String get failSignInCanceled;
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save the message on this phone.'**
+  String get failMessageSave;
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'Place search isn\'t available right now.'**
+  String get failPlaceSearch;
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'This file is not available.'**
+  String get failFileUnavailable;
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'This photo is not available.'**
+  String get failPhotoUnavailable;
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'That tag was just taken. Choose another one.'**
+  String get failTagTaken;
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'That name or tag is not allowed.'**
+  String get failNameNotAllowed;
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'Use at least 3 characters'**
+  String get failTagShort;
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'Use at most 20 characters'**
+  String get failTagLong;
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'Start with a letter'**
+  String get failTagStart;
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'Use letters, digits and _ only'**
+  String get failTagChars;
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'Use at most {max} characters'**
+  String failNameTooLong(int max);
 }
 
 class _AppLocalizationsDelegate

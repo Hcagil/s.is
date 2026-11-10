@@ -15,6 +15,11 @@
 #     older body); version function not matching the content hash; content not
 #     matching its version (extra statement; `select 1;` with the current
 #     version); a failing statement mid-pack (all or nothing); bad mode argument;
+#   - db mode, live version differs from PRIVATE_PACK_VERSION: exit 3 and nothing installed when a
+#     workflow file mentions private_install.sh, PRIVATE_SQL_B64 or private-server, also through a symlink,
+#     also when a workflow file is unreadable, or the private-server action dir exists or release.yml is
+#     missing; a plain release.yml installs; the same-version re-install is unaffected (db is faked by a
+#     docker stand-in that feeds the SQL to the local database).
 #   - after every run no temp file is left (repo tree, /tmp), and every file
 #     handed to the CLI with -f was mode 600 while it existed.
 # Fixtures are built at run time: neutral SQL made here, or the private pack read
@@ -173,6 +178,132 @@ if [ -s "$box/modes" ]; then
 else
   fail 'the CLI never got a -f file (mode not checkable)'
 fi
+
+# --- db mode: refuse when a workflow still installs a pack (live version differs)
+# fake docker
+mkdir -p "$box/bin"
+REALDOCKER=$(command -v docker)
+{
+  echo '#!/usr/bin/env bash'
+  echo '[ "$1" = run ] || exit 99'
+  echo 'f=; prev=; for a in "$@"; do [ "$prev" = -f ] && f=$a; prev=$a; done'
+  echo '[ -n "$f" ] || exit 98'
+  echo "exec \"$REALDOCKER\" exec -i supabase_db_s.is psql -U postgres -v ON_ERROR_STOP=1 -X -qAt < \"\$f\""
+} >"$box/bin/docker"
+chmod +x "$box/bin/docker"
+
+# mkwf
+mkwf() {
+  mkdir -p "$1/tool" "$1/.github/workflows"
+  cp "$repo/tool/private_install.sh" "$repo/tool/private_check.sql" "$1/tool/"
+  echo 'name: release' >"$1/.github/workflows/release.yml"
+}
+
+# Fixture
+mkdir -p "$box/pg"; chmod 700 "$box/pg"
+printf '127.0.0.1:5432:postgres:postgres:pw1x\n' >"$box/pg/pgpass"; chmod 600 "$box/pg/pgpass"
+printf 'x\n' >"$box/pg/ca.crt"; chmod 600 "$box/pg/ca.crt"
+
+# Function
+dbcase() {
+  local name=$1 dir=$2 want=$3 state=$4 code=0 out
+  baseline
+  if [ "$state" = same ]; then
+    db -c "create or replace function app_private.private_pack_version() returns text language sql as \$\$ select '$V'::text \$\$;" >/dev/null
+  fi
+  out=$(cd "$dir" && env PRIVATE_EXPECTED=1 PRIVATE_SQL_B64="$GOOD" PRIVATE_PACK_VERSION="$V" PRIVATE_DB_PGPASS="$box/pg/pgpass" PRIVATE_DB_CA="$box/pg/ca.crt" PATH="$box/bin:$PATH" tool/private_install.sh db 2>&1) || code=$?
+  [ "$code" = "$want" ] || fail "$name: exit $code, want $want ($out)"
+  if [ "$want" = 3 ]; then
+    [ "$(marker)" = - ] || fail "$name: installed despite refusal"
+    if [ "$state" = stale ]; then
+      [ "$(installed_version)" = vbaseline ] || fail "$name: version changed despite refusal"
+    fi
+    case "$out" in
+      *'still installs a pack'*) ;;
+      *) fail "$name: no refusal message: $out" ;;
+    esac
+  fi
+  if [ "$want" = 0 ]; then
+    [ "$(marker)" != - ] || fail "$name: not installed"
+  fi
+  echo "$name: exit $code"
+}
+
+# 1
+DIR="$box/wf/1"
+mkwf "$DIR"
+dbcase 'db normal release.yml' "$DIR" 0 stale
+
+# 2
+DIR="$box/wf/2"
+mkwf "$DIR"
+printf 'name: x\nrun: tool/private_install.sh db\n' >"$DIR/.github/workflows/x.yml"
+dbcase 'db workflow mentions private_install.sh' "$DIR" 3 stale
+
+# 3
+DIR="$box/wf/3"
+mkwf "$DIR"
+printf 'name: x\nenv:\n  PRIVATE_SQL_B64: x\n' >"$DIR/.github/workflows/x.yml"
+dbcase 'db workflow mentions PRIVATE_SQL_B64' "$DIR" 3 stale
+
+# 4
+DIR="$box/wf/4"
+mkwf "$DIR"
+printf 'name: x\nuses: ./.github/actions/private-server\n' >"$DIR/.github/workflows/x.yml"
+dbcase 'db workflow mentions private-server' "$DIR" 3 stale
+
+# 5
+DIR="$box/wf/5"
+mkwf "$DIR"
+printf 'run: tool/private_install.sh db\n' >"$box/outside_5.yml"
+ln -s "$box/outside_5.yml" "$DIR/.github/workflows/linked.yml"
+dbcase 'db symlinked workflow mentions the script' "$DIR" 3 stale
+
+# 6
+DIR="$box/wf/6"
+mkwf "$DIR"
+printf 'name: y\n' >"$DIR/.github/workflows/y.yml"
+chmod 000 "$DIR/.github/workflows/y.yml"
+if [ "$(id -u)" = 0 ]; then
+  echo 'skip: unreadable workflow (root)'
+else
+  dbcase 'db unreadable workflow' "$DIR" 3 stale
+fi
+chmod 600 "$DIR/.github/workflows/y.yml"
+
+# 7
+DIR="$box/wf/7"
+mkwf "$DIR"
+mkdir -p "$DIR/.github/actions/private-server"
+dbcase 'db action dir present' "$DIR" 3 stale
+
+# 8
+DIR="$box/wf/8"
+mkwf "$DIR"
+rm "$DIR/.github/workflows/release.yml"
+printf 'name: z\n' >"$DIR/.github/workflows/z.yml"
+dbcase 'db release.yml missing' "$DIR" 3 stale
+
+# 9
+DIR="$box/wf/9"
+mkwf "$DIR"
+printf 'name: x\nrun: tool/private_install.sh db\n' >"$DIR/.github/workflows/x.yml"
+dbcase 'db same version, workflow mentions the script' "$DIR" 0 same
+
+# 10
+DIR="$box/wf/10"
+mkwf "$DIR"
+printf 'name: y\n' >"$DIR/.github/workflows/y.yml"
+chmod 000 "$DIR/.github/workflows/y.yml"
+if [ "$(id -u)" = 0 ]; then
+  echo 'skip: unreadable workflow (root)'
+else
+  dbcase 'db same version, unreadable workflow' "$DIR" 0 same
+fi
+chmod 600 "$DIR/.github/workflows/y.yml"
+
+# baseline
+baseline
 
 db -c 'drop table if exists public.qa_f_marker; drop table if exists public.qa_f_other;' >/dev/null
 [ "$fails" = 0 ] && echo 'private_install_test: all passed' || { echo "private_install_test: $fails failed"; exit 1; }

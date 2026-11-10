@@ -289,7 +289,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get locationCancel => 'Cancel';
 
   @override
-  String get locationOpenFailed => 'No maps app could open this place.';
+  String get locationOpenFailed =>
+      'No maps app could open this place. Install a maps app and try again.';
 
   @override
   String get locationNoResults => 'No places found';
@@ -352,7 +353,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatMenuUnpin => 'Unpin chat';
 
   @override
-  String get chatPinLimit => 'You can pin up to 5 chats.';
+  String get chatPinLimit =>
+      'You can pin up to 5 chats. Unpin one to pin another.';
 
   @override
   String eventPinned(String name) {
@@ -531,10 +533,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsSaved => 'Saved';
 
   @override
-  String get settingsPictureRemoved => 'Profile picture removed';
+  String get settingsPictureRemoved => 'Profile photo removed';
 
   @override
-  String get settingsPictureUpdated => 'Profile picture updated';
+  String get settingsPictureUpdated => 'Profile photo updated';
 
   @override
   String get settingsShowOnline => 'Show when I am online';
@@ -557,7 +559,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'While this is off, you can\'t see when others read yours.';
 
   @override
-  String get settingsAvatarVisibility => 'Profile picture visibility';
+  String get settingsAvatarVisibility => 'Who can see my profile photo';
 
   @override
   String get settingsAvatarEveryone => 'Everyone';
@@ -840,7 +842,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get addMembersOldTitle => 'Show earlier messages';
 
   @override
-  String get addMembersOldHint => 'New member sees history';
+  String get addMembersOldHint => 'New members see earlier messages';
 
   @override
   String get addMembersAdminDecides =>
@@ -971,7 +973,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get avatarChoose => 'Choose from gallery';
 
   @override
-  String get avatarRemove => 'Remove picture';
+  String get avatarRemove => 'Remove photo';
 
   @override
   String get cameraFailed => 'The camera could not take a photo.';
@@ -1027,7 +1029,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get bubbleDeletedByAdmin => 'Deleted by an admin';
 
   @override
-  String get chatLockedMessage => 'This message could not be opened.';
+  String get chatLockedMessage =>
+      'This message could not be opened. Ask the sender to send it again.';
 
   @override
   String get chatOpeningMessage => 'Opening message…';
@@ -1106,10 +1109,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuClose => 'Close menu';
 
   @override
-  String get groupPictureRemoved => 'Group picture removed';
+  String get groupPictureRemoved => 'Group photo removed';
 
   @override
-  String get groupPictureUpdated => 'Group picture updated';
+  String get groupPictureUpdated => 'Group photo updated';
 
   @override
   String groupMemberCount(int count) {
@@ -1146,7 +1149,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get attachOpenFailedSome => 'Some photos could not be opened.';
 
   @override
-  String get attachOpenFailed => 'That could not be opened.';
+  String get attachOpenFailed =>
+      'This item could not be opened. Pick another one.';
 
   @override
   String get attachRecentPhotos => 'Recent photos';
@@ -1223,14 +1227,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get profileDisplayNameHint =>
-      'Shown to other members. Need not be unique.';
+      'Others see this name. Two people can have the same name.';
 
   @override
   String get profileTag => 'Tag';
 
   @override
   String get profileTagHint =>
-      'Must be unique. Use 3 to 20 letters, digits or _.';
+      'Nobody else can have this tag. Use 3 to 20 letters, digits or _.';
 
   @override
   String get signInBody => 'Messaging for the people you know.';
@@ -1246,7 +1250,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get statusDeniedBody =>
-      'This account is not approved for SIS right now.';
+      'This Google account can\'t use SIS yet. Ask the person who invited you to add this email, or sign out and use another Google account.';
 
   @override
   String get replacedTitle => 'You signed in on another phone';
@@ -1303,7 +1307,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get updateRequiredBody =>
-      'This version is no longer supported. Please update to keep using SIS.';
+      'Update SIS to keep using it. This version is no longer supported.';
 
   @override
   String get updateNow => 'Update now';
@@ -1331,7 +1335,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get commonConversation => 'Conversation';
 
   @override
-  String get statusStartBootstrap => 'SIS could not start. Please try again.';
+  String get statusStartBootstrap => 'SIS could not start. Try again.';
 
   @override
   String get appearanceRename => 'Rename';
@@ -1384,10 +1388,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get themePickAccent => 'Pick an accent color';
 
   @override
-  String get themePickBackground => 'Pick background color';
+  String get themePickBackground => 'Pick a background color';
 
   @override
-  String get themePickMine => 'Pick my message bubble color';
+  String get themePickMine => 'Pick a color for your messages';
 
   @override
   String get themeMineFollow => 'Follow accent';
@@ -1631,7 +1635,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get contactPickerTitle => 'Send a contact';
 
   @override
-  String get contactSearchHint => 'Search contacts';
+  String get contactSearchHint => 'Search phone contacts';
 
   @override
   String get contactSend => 'Send contact';
@@ -1680,7 +1684,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get autoDownloadMobile => 'When using mobile data';
 
   @override
-  String get autoDownloadWifi => 'When connected on Wi-Fi';
+  String get autoDownloadWifi => 'When connected to Wi-Fi';
 
   @override
   String get autoDownloadRoaming => 'When roaming';
@@ -1770,15 +1774,16 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get videoTooBig => 'This video is too large to send.';
+  String get videoTooBig =>
+      'This video is too large to send. Pick a smaller one.';
 
   @override
   String videoPickFailed(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '$count videos could not be sent. Please try again.',
-      one: 'This video could not be sent. Please try again.',
+      other: '$count videos could not be sent. Try again.',
+      one: 'This video could not be sent. Try again.',
     );
     return '$_temp0';
   }
@@ -2060,13 +2065,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get makerCancel => 'Cancel';
 
   @override
-  String get makerCutoutTitle => 'Cut-out';
+  String get makerCutoutTitle => 'Remove background';
 
   @override
   String get makerWhole => 'Whole image';
 
   @override
-  String get makerCut => 'Cut-out';
+  String get makerCut => 'No background';
 
   @override
   String get makerErase => 'Erase';
@@ -2254,7 +2259,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String adminFail(String email, String reason) {
-    return 'Apple step failed for $email: $reason. The allowlist row is saved; type the command again to retry.';
+    return 'Type the command again to retry. The Apple step failed for $email: $reason. The allowlist row is saved.';
   }
 
   @override
@@ -2337,7 +2342,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String adminFailRm(String email, String reason) {
-    return 'Apple step failed for $email: $reason. The allowlist row is already removed; type the command again to retry.';
+    return 'Type the command again to retry. The Apple step failed for $email: $reason. The allowlist row is already removed.';
   }
 
   @override
@@ -2546,7 +2551,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get salesFail => 'Vega did not answer. Please try again later.';
+  String get salesFail => 'The service did not answer. Try again later.';
 
   @override
   String get salesOff => 'This command is turned off.';
@@ -2557,7 +2562,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get salesRate => 'Too many commands. Please try again in a minute.';
+  String get salesRate => 'Too many commands. Wait a minute and try again.';
 
   @override
   String salesSwOn(String cmd) {
@@ -2625,7 +2630,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get groupCloseAction => 'Close group';
 
   @override
-  String get groupCloseDebugWarning => 'Tester feedback stops.';
+  String get groupCloseDebugWarning =>
+      'Testers send their feedback to this group. If you close it, they can\'t send feedback here again.';
 
   @override
   String composerGroupClosed(String name) {
@@ -2638,5 +2644,103 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String eventClosed(String name) {
     return '$name closed the group';
+  }
+
+  @override
+  String get failPeerKeysCheck =>
+      'Could not check this person\'s encryption keys. Try again.';
+
+  @override
+  String get failNameEmpty => 'Enter a name';
+
+  @override
+  String get failDenied => 'You don\'t have permission to do that.';
+
+  @override
+  String get failSearchLimit =>
+      'Too many searches. Try again in a little while.';
+
+  @override
+  String get failStickerLimit => 'You have reached the sticker limit.';
+
+  @override
+  String get failStickerCreate => 'Could not create the sticker.';
+
+  @override
+  String get failPollClosed => 'This poll is closed.';
+
+  @override
+  String get failVideoPrepare => 'This video could not be prepared.';
+
+  @override
+  String get failCanceled => 'Canceled.';
+
+  @override
+  String get failLocationOff => 'Location is turned off for SIS.';
+
+  @override
+  String get failPositionNotFound =>
+      'Could not find your position. Check that location is on.';
+
+  @override
+  String get failAppleEmail =>
+      'SIS needs your real email address. In Apple\'s sign-in choose Share My Email and try again.';
+
+  @override
+  String get failEncryptionSetup =>
+      'Setting up encryption. Try again in a moment.';
+
+  @override
+  String get failKeysSave =>
+      'Could not save the encryption keys on this phone.';
+
+  @override
+  String get failGeneric => 'Something went wrong. Try again.';
+
+  @override
+  String get failOffline => 'No connection. Check your internet and try again.';
+
+  @override
+  String get failServer => 'Something went wrong on our side. Try again.';
+
+  @override
+  String get failSignIn => 'Could not sign in. Try again.';
+
+  @override
+  String get failSignInCanceled => 'Sign-in canceled.';
+
+  @override
+  String get failMessageSave => 'Could not save the message on this phone.';
+
+  @override
+  String get failPlaceSearch => 'Place search isn\'t available right now.';
+
+  @override
+  String get failFileUnavailable => 'This file is not available.';
+
+  @override
+  String get failPhotoUnavailable => 'This photo is not available.';
+
+  @override
+  String get failTagTaken => 'That tag was just taken. Choose another one.';
+
+  @override
+  String get failNameNotAllowed => 'That name or tag is not allowed.';
+
+  @override
+  String get failTagShort => 'Use at least 3 characters';
+
+  @override
+  String get failTagLong => 'Use at most 20 characters';
+
+  @override
+  String get failTagStart => 'Start with a letter';
+
+  @override
+  String get failTagChars => 'Use letters, digits and _ only';
+
+  @override
+  String failNameTooLong(int max) {
+    return 'Use at most $max characters';
   }
 }

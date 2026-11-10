@@ -1069,7 +1069,7 @@ void main() {
       expect(byKey('close-debug-warning'), findsOneWidget);
       expect(
         textOf(byKey('close-debug-warning')),
-        contains('Tester feedback stops.'),
+        contains(l10nEn.groupCloseDebugWarning),
       );
       await tapKey(t, 'close-cancel');
     });

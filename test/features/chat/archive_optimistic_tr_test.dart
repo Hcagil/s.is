@@ -22,6 +22,7 @@ import '../../support/archive_fakes.dart';
 import '../../support/fakes.dart';
 import '../../support/sis_ui.dart' as ui;
 import '../../support/video_fakes.dart';
+import '../../support/l10n.dart';
 
 const config = RuntimeConfig(
   supabaseUrl: 'https://x.supabase.co',
@@ -205,7 +206,7 @@ void main() {
     await t.pumpAndSettle();
 
     await openArchived(t);
-    expect(find.text('Arşivlenen sohbetler'), findsWidgets);
+    expect(find.text(l10nTr.archivedChatsTitle), findsWidgets);
 
     final g1 = await partial(t, 'c1');
     expect(find.text('Arşivden çıkar'), findsOneWidget);

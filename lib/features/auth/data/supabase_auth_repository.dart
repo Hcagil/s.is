@@ -16,12 +16,8 @@ import '../domain/member.dart';
 /// What a member reads when sign-in fails. SDK and backend error text can carry
 /// a token or an ID, so it never reaches the screen or the log: only the type
 /// or code does.
-String get signInFailedMessage => failureText(
-  'Could not sign in. Try again.',
-  'Oturum açılamadı. Tekrar deneyin.',
-);
-String get signInCanceledMessage =>
-    failureText('Sign-in canceled.', 'Oturum açma iptal edildi.');
+String get signInFailedMessage => failureStrings.failSignIn;
+String get signInCanceledMessage => failureStrings.failSignInCanceled;
 
 /// [AuthRepository] backed by Google native sign-in and Supabase Auth.
 final class SupabaseAuthRepository implements AuthRepository {

@@ -33,6 +33,7 @@ import 'package:sis/features/update/application/update_controller.dart';
 import '../../support/fakes.dart';
 import '../../support/group_settings_fakes.dart';
 import '../../support/video_fakes.dart';
+import '../../support/l10n.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya Kaya', tag: 'maya');
 const bob = Member(userId: 'ub', displayName: 'Bob Stone', tag: 'bobby');
@@ -429,7 +430,7 @@ void main() {
         expect(byKey('add-members-history'), findsOneWidget);
         expect(byKey('add-members-history-note'), findsNothing);
         expect(find.text('Show earlier messages'), findsOneWidget);
-        expect(find.text('New member sees history'), findsOneWidget);
+        expect(find.text(l10nEn.addMembersOldHint), findsOneWidget);
         final switchTile = t.widget<SisSwitchTile>(
           byKey('add-members-history'),
         );
@@ -518,7 +519,7 @@ void main() {
         await clubMembers(t, w);
         await tapKey(t, 'add-members');
         expect(find.text('Önceki mesajları göster'), findsOneWidget);
-        expect(find.text('Yeni üye geçmişi görür'), findsOneWidget);
+        expect(find.text(l10nTr.addMembersOldHint), findsOneWidget);
         await drain(t);
       });
 

@@ -51,6 +51,7 @@ import '../../support/fakes.dart';
 import '../../support/gallery_paging.dart' hide steps;
 import '../../support/sis_ui.dart';
 import '../../support/video_fakes.dart';
+import '../../support/l10n.dart';
 
 // Three real, distinct 4x4 PNGs: whose picture is shown is part of the check.
 final red = base64Decode(
@@ -564,7 +565,7 @@ void main() {
       await steps(t);
       expect(find.byType(SisProgressLine), findsNothing);
       expect(
-        noticeSaying('Profile picture updated'),
+        noticeSaying(l10nEn.settingsPictureUpdated),
         findsOneWidget,
         reason: 'success is not reported',
       );
@@ -590,7 +591,7 @@ void main() {
       final upload = w.profile.avatarUploads.single;
       expect(upload.image.bytes, w.cropper.output);
       expect(upload.previousPath, mePath);
-      expect(noticeSaying('Profile picture updated'), findsOneWidget);
+      expect(noticeSaying(l10nEn.settingsPictureUpdated), findsOneWidget);
       expect(w.profile.profile.avatarPath, isNot(mePath));
       expect(w.bucket.containsKey(mePath), isFalse);
       expectPicture(byKey('profile-avatar'), w.cropper.output, 'after');
@@ -656,7 +657,7 @@ void main() {
       expect(w.profile.avatarRemovals, [mePath]);
       expect(w.bucket.containsKey(mePath), isFalse);
       expect(
-        noticeSaying('Profile picture removed'),
+        noticeSaying(l10nEn.settingsPictureRemoved),
         findsOneWidget,
         reason: 'removal is not reported',
       );
@@ -679,7 +680,7 @@ void main() {
       await cropAndUse(t);
 
       expect(noticeSaying('No connection'), findsOneWidget);
-      expect(noticeSaying('Profile picture updated'), findsNothing);
+      expect(noticeSaying(l10nEn.settingsPictureUpdated), findsNothing);
       expect(find.byType(SisProgressLine), findsNothing);
       expectPicture(byKey('profile-avatar'), red, 'after a failed upload');
       expect(t.takeException(), isNull);
@@ -695,7 +696,7 @@ void main() {
       await tapKey(t, 'profile-avatar-edit');
       await act(t, byKey('avatar-remove'));
       expect(noticeSaying('No connection'), findsOneWidget);
-      expect(noticeSaying('Profile picture removed'), findsNothing);
+      expect(noticeSaying(l10nEn.settingsPictureRemoved), findsNothing);
       expectPicture(byKey('profile-avatar'), red, 'after a failed removal');
       await drainNotice(t);
     });
@@ -737,7 +738,7 @@ void main() {
       expect(call.image?.bytes, w.cropper.output);
       expect(call.image?.contentType, 'image/jpeg');
       expect(call.previousPath, isNull);
-      expect(noticeSaying('Group picture updated'), findsOneWidget);
+      expect(noticeSaying(l10nEn.groupPictureUpdated), findsOneWidget);
       expectPicture(byKey('group-avatar'), w.cropper.output, 'group page');
       Navigator.of(t.element(find.byType(GroupScreen)))
           .popUntil((r) => r.isFirst);
@@ -798,7 +799,7 @@ void main() {
       expect(call.image, isNull);
       expect(call.previousPath, clubPath);
       expect(w.bucket.containsKey(clubPath), isFalse);
-      expect(noticeSaying('Group picture removed'), findsOneWidget);
+      expect(noticeSaying(l10nEn.groupPictureRemoved), findsOneWidget);
       expectInitials(byKey('group-avatar'), 'Club', 'after remove');
       await drainNotice(t);
     });
@@ -815,7 +816,7 @@ void main() {
       await cropAndUse(t);
 
       expect(notice, findsOneWidget, reason: 'the refusal is not reported');
-      expect(noticeSaying('Group picture updated'), findsNothing);
+      expect(noticeSaying(l10nEn.groupPictureUpdated), findsNothing);
       expectPicture(byKey('group-avatar'), blue, 'after a refusal');
       expect(t.takeException(), isNull);
       await drainNotice(t);

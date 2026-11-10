@@ -9,6 +9,7 @@ import 'package:sis/features/chat/domain/shared_location.dart';
 import 'package:sis/features/chat/domain/video.dart';
 
 import 'message_search_screens_test.dart' show World, type, byKey, settle;
+import '../../support/l10n.dart';
 
 Message _hit(String id, String body, int minute) => Message(
   id: id,
@@ -20,11 +21,8 @@ Message _hit(String id, String body, int minute) => Message(
 
 void main() {
   for (final (locale, words) in [
-    (
-      const Locale('en'),
-      ['Location', 'Video', 'This message could not be opened.'],
-    ),
-    (const Locale('tr'), ['Konum', 'Video', 'Bu mesaj açılamadı.']),
+    (const Locale('en'), ['Location', 'Video', l10nEn.chatLockedMessage]),
+    (const Locale('tr'), ['Konum', 'Video', l10nTr.chatLockedMessage]),
   ]) {
     testWidgets('search results in ${locale.languageCode}', (t) async {
       t.platformDispatcher.localesTestValue = [locale];

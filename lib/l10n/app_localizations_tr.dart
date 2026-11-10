@@ -132,7 +132,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get chatUnarchive => 'Arşivden çıkar';
 
   @override
-  String get archivedChatsTitle => 'Arşivlenen sohbetler';
+  String get archivedChatsTitle => 'Arşivlenmiş sohbetler';
 
   @override
   String archivedChatsCount(int count) {
@@ -284,7 +284,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get locationCancel => 'İptal et';
 
   @override
-  String get locationOpenFailed => 'Hiçbir harita uygulaması bu yeri açamadı.';
+  String get locationOpenFailed =>
+      'Bu yeri hiçbir harita uygulaması açamadı. Bir harita uygulaması yükleyip tekrar deneyin.';
 
   @override
   String get locationNoResults => 'Yer bulunamadı';
@@ -341,13 +342,14 @@ class AppLocalizationsTr extends AppLocalizations {
   String get messageActionPin => 'Mesajı sabitle';
 
   @override
-  String get messageActionUnpin => 'Mesajın sabitlemesini kaldır';
+  String get messageActionUnpin => 'Mesaj sabitlemesini kaldır';
 
   @override
   String get chatMenuUnpin => 'Sabitlemeyi kaldır';
 
   @override
-  String get chatPinLimit => 'En fazla 5 sohbet sabitleyebilirsiniz.';
+  String get chatPinLimit =>
+      'En fazla 5 sohbet sabitleyebilirsiniz. Yenisini sabitlemek için birinin sabitlemesini kaldırın.';
 
   @override
   String eventPinned(String name) {
@@ -442,7 +444,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get messageActionDeleteForMe => 'Benim için sil';
 
   @override
-  String get messageActionDeleteForEveryone => 'Herkes için sil';
+  String get messageActionDeleteForEveryone => 'Herkesten sil';
 
   @override
   String messageSeenBy(int count) {
@@ -549,7 +551,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get settingsShowReadHint =>
-      'Bu kapalıyken başkalarının sizin mesajlarınızı ne zaman okuduğunu göremezsiniz.';
+      'Bu kapalıyken başkalarının mesajlarınızı ne zaman okuduğunu göremezsiniz.';
 
   @override
   String get settingsAvatarVisibility => 'Profil fotoğrafını kimler görsün';
@@ -672,7 +674,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get alertChoiceOff => 'Kapalı';
 
   @override
-  String get notifExplainerTitle => 'SIS yeni mesajlardan sizi haberdar edecek';
+  String get notifExplainerTitle => 'SIS yeni mesajları size bildirecek';
 
   @override
   String get commonYou => 'Siz';
@@ -835,7 +837,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get addMembersOldTitle => 'Önceki mesajları göster';
 
   @override
-  String get addMembersOldHint => 'Yeni üye geçmişi görür';
+  String get addMembersOldHint => 'Yeni üyeler önceki mesajları görür';
 
   @override
   String get addMembersAdminDecides =>
@@ -1022,7 +1024,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get bubbleDeletedByAdmin => 'Bir yönetici tarafından silindi';
 
   @override
-  String get chatLockedMessage => 'Bu mesaj açılamadı.';
+  String get chatLockedMessage =>
+      'Bu mesaj açılamadı. Gönderenden mesajı yeniden göndermesini isteyin.';
 
   @override
   String get chatOpeningMessage => 'Mesaj açılıyor…';
@@ -1140,7 +1143,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get attachOpenFailedSome => 'Bazı fotoğraflar açılamadı.';
 
   @override
-  String get attachOpenFailed => 'Açılamadı.';
+  String get attachOpenFailed => 'Bu öğe açılamadı. Başka birini seçin.';
 
   @override
   String get attachRecentPhotos => 'Son fotoğraflar';
@@ -1172,7 +1175,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get attachFasterBody =>
-      'Galeri burada hemen yüklensin diye erişime izin verin. Siz göndermeden hiçbir şey yüklenmez.';
+      'Galerinizin burada görünmesi için erişime izin verin. Siz göndermeden hiçbir şey yüklenmez.';
 
   @override
   String get attachOpenSettings => 'Ayarları aç';
@@ -1201,7 +1204,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String tagFree(String tag) {
-    return '@$tag müsait';
+    return '@$tag kullanılabilir';
   }
 
   @override
@@ -1217,14 +1220,14 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get profileDisplayNameHint =>
-      'Diğer üyelere görünür. Benzersiz olması gerekmez.';
+      'Diğer üyeler bu adı görür. Aynı ad başkalarında da olabilir.';
 
   @override
   String get profileTag => 'Etiket';
 
   @override
   String get profileTagHint =>
-      'Benzersiz olmalı. 3-20 karakter; harf, rakam veya _ kullanabilirsiniz.';
+      'Başka kimse bu etiketi kullanamaz. 3-20 harf, rakam veya _ kullanın.';
 
   @override
   String get signInBody => 'Tanıdığınız insanlarla mesajlaşma.';
@@ -1240,7 +1243,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get statusDeniedTitle => 'Erişim reddedildi';
 
   @override
-  String get statusDeniedBody => 'Bu hesap şu an SIS için onaylı değil.';
+  String get statusDeniedBody =>
+      'Bu Google hesabı henüz SIS\'i kullanamıyor. Davet eden kişiden bu e-postayı eklemesini isteyin ya da oturumu kapatıp başka bir Google hesabıyla oturum açın.';
 
   @override
   String get replacedTitle => 'Başka bir telefonda oturum açtınız';
@@ -1296,7 +1300,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get updateRequiredBody =>
-      'Bu sürüm artık desteklenmiyor. SIS\'i kullanmaya devam etmek için lütfen güncelleyin.';
+      'SIS\'i kullanmaya devam etmek için güncelleyin. Bu sürüm artık desteklenmiyor.';
 
   @override
   String get updateNow => 'Şimdi güncelle';
@@ -1374,7 +1378,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get themePickBackground => 'Arka plan rengini seçin';
 
   @override
-  String get themePickMine => 'Mesaj balonumun rengini seçin';
+  String get themePickMine => 'Mesaj balonunuz için bir renk seçin';
 
   @override
   String get themeMineFollow => 'Vurgu rengini kullan';
@@ -1485,7 +1489,7 @@ class AppLocalizationsTr extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '$count sohbet sil',
+      other: '$count sohbeti sil',
     );
     return '$_temp0';
   }
@@ -1746,7 +1750,8 @@ class AppLocalizationsTr extends AppLocalizations {
   }
 
   @override
-  String get videoTooBig => 'Bu video gönderilemeyecek kadar büyük.';
+  String get videoTooBig =>
+      'Bu video göndermek için çok büyük. Daha küçük bir video seçin.';
 
   @override
   String videoPickFailed(int count) {
@@ -1845,7 +1850,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get voiceDictationUnavailable =>
-      'Bu telefonda bu dilde yazdırma kullanılamıyor.';
+      'Telefonunuzda bu dil için sesle yazma kullanılamıyor.';
 
   @override
   String get voiceSlideToCancel => 'İptal etmek için kaydırın';
@@ -2031,13 +2036,13 @@ class AppLocalizationsTr extends AppLocalizations {
   String get makerCancel => 'İptal et';
 
   @override
-  String get makerCutoutTitle => 'Kes';
+  String get makerCutoutTitle => 'Arka planı kaldır';
 
   @override
   String get makerWhole => 'Tüm görsel';
 
   @override
-  String get makerCut => 'Kesilmiş';
+  String get makerCut => 'Arka plansız';
 
   @override
   String get makerErase => 'Sil';
@@ -2137,7 +2142,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String makerSavedTo(String name) {
-    return 'Kaydedildi: $name';
+    return '$name albümüne kaydedildi';
   }
 
   @override
@@ -2218,14 +2223,14 @@ class AppLocalizationsTr extends AppLocalizations {
   String get adminP1 => 'Apple’a davet gönderiliyor…';
 
   @override
-  String get adminP2 => 'Apple yavaş. Tekrar deniyor (2/3)…';
+  String get adminP2 => 'Apple yavaş. Tekrar deneniyor (2/3)…';
 
   @override
   String get adminP3 => 'Apple kabul etti. Davet e-postası yollanıyor.';
 
   @override
   String adminFail(String email, String reason) {
-    return '$email için Apple adımı başarısız: $reason. İzin listesi kaydedildi; tekrar denemek için komutu yeniden yazın.';
+    return 'Komutu yeniden yazarak tekrar deneyin. $email için Apple adımı başarısız oldu: $reason. İzin listesi satırı kaydedildi.';
   }
 
   @override
@@ -2238,7 +2243,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String adminFwdBody(String email, String link) {
-    return 'Merhaba! SIS’i Android ile test edebilirsin.\n1. Bu bağlantıyı aç ve daveti kabul et: $link\n2. Google Play’den SIS’i yükle.\n3. Şu e-postayla oturum aç: $email';
+    return 'Merhaba! SIS’i Android ile test edebilirsiniz.\n1. Bu bağlantıyı açın ve daveti kabul edin: $link\n2. Google Play’den SIS’i yükleyin.\n3. Şu e-postayla oturum açın: $email';
   }
 
   @override
@@ -2301,14 +2306,14 @@ class AppLocalizationsTr extends AppLocalizations {
   }
 
   @override
-  String get adminR2 => 'Apple yavaş. Tekrar deniyor (2/3)…';
+  String get adminR2 => 'Apple yavaş. Tekrar deneniyor (2/3)…';
 
   @override
   String get adminR3 => 'TestFlight’tan çıkarıldı.';
 
   @override
   String adminFailRm(String email, String reason) {
-    return '$email için Apple adımı başarısız: $reason. İzin listesi satırı zaten kaldırıldı; tekrar denemek için komutu yeniden yazın.';
+    return 'Komutu yeniden yazarak tekrar deneyin. $email için Apple adımı başarısız oldu: $reason. İzin listesi satırı zaten kaldırıldı.';
   }
 
   @override
@@ -2337,7 +2342,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get adminRate =>
-      'Çok fazla komut. Bir dakika bekleyin ve tekrar deneyin.';
+      'Çok fazla komut. Bir dakika bekleyip tekrar deneyin.';
 
   @override
   String get adminKeep => 'İptal edildi: bu kart artık geçerli değil.';
@@ -2518,8 +2523,7 @@ class AppLocalizationsTr extends AppLocalizations {
   }
 
   @override
-  String get salesFail =>
-      'Vega yanıt vermedi. Lütfen daha sonra tekrar deneyin.';
+  String get salesFail => 'Hizmet yanıt vermedi. Daha sonra tekrar deneyin.';
 
   @override
   String get salesOff => 'Bu komut kapalı.';
@@ -2531,7 +2535,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get salesRate =>
-      'Çok fazla komut. Lütfen bir dakika sonra tekrar deneyin.';
+      'Çok fazla komut. Bir dakika bekleyip tekrar deneyin.';
 
   @override
   String salesSwOn(String cmd) {
@@ -2600,7 +2604,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get groupCloseDebugWarning =>
-      'Test kullanıcılarının geri bildirimi durur.';
+      'Test kullanıcıları geri bildirimlerini bu gruba gönderiyor. Grubu kapatırsanız buraya artık geri bildirim gönderemezler.';
 
   @override
   String composerGroupClosed(String name) {
@@ -2613,5 +2617,103 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String eventClosed(String name) {
     return '$name grubu kapattı';
+  }
+
+  @override
+  String get failPeerKeysCheck =>
+      'Bu kişinin şifreleme anahtarları kontrol edilemedi. Tekrar deneyin.';
+
+  @override
+  String get failNameEmpty => 'Bir ad girin';
+
+  @override
+  String get failDenied => 'Bunu yapma izniniz yok.';
+
+  @override
+  String get failSearchLimit =>
+      'Çok fazla arama yaptınız. Biraz sonra tekrar deneyin.';
+
+  @override
+  String get failStickerLimit => 'Çıkartma sınırına ulaştınız.';
+
+  @override
+  String get failStickerCreate => 'Çıkartma oluşturulamadı.';
+
+  @override
+  String get failPollClosed => 'Bu anket kapandı.';
+
+  @override
+  String get failVideoPrepare => 'Bu video hazırlanamadı.';
+
+  @override
+  String get failCanceled => 'İptal edildi.';
+
+  @override
+  String get failLocationOff => 'SIS için konum kapalı.';
+
+  @override
+  String get failPositionNotFound =>
+      'Konumunuz bulunamadı. Konumunuzun açık olduğundan emin olun.';
+
+  @override
+  String get failAppleEmail =>
+      'SIS gerçek e-posta adresinizi gerektirir. Apple ile oturum açarken E-postamı Paylaş\'ı seçip tekrar deneyin.';
+
+  @override
+  String get failEncryptionSetup =>
+      'Şifreleme hazırlanıyor. Biraz sonra tekrar deneyin.';
+
+  @override
+  String get failKeysSave => 'Şifreleme anahtarları bu telefona kaydedilemedi.';
+
+  @override
+  String get failGeneric => 'Bir şeyler ters gitti. Tekrar deneyin.';
+
+  @override
+  String get failOffline =>
+      'Bağlantı yok. İnternetinizi kontrol edip tekrar deneyin.';
+
+  @override
+  String get failServer => 'Bizden kaynaklı bir sorun oluştu. Tekrar deneyin.';
+
+  @override
+  String get failSignIn => 'Oturum açılamadı. Tekrar deneyin.';
+
+  @override
+  String get failSignInCanceled => 'Oturum açma iptal edildi.';
+
+  @override
+  String get failMessageSave => 'Mesaj bu telefona kaydedilemedi.';
+
+  @override
+  String get failPlaceSearch => 'Yer arama şu an kullanılamıyor.';
+
+  @override
+  String get failFileUnavailable => 'Bu dosya kullanılamıyor.';
+
+  @override
+  String get failPhotoUnavailable => 'Bu fotoğraf kullanılamıyor.';
+
+  @override
+  String get failTagTaken => 'Bu etiket az önce alındı. Başka bir tane seçin.';
+
+  @override
+  String get failNameNotAllowed => 'Bu ad veya etiket kullanılamaz.';
+
+  @override
+  String get failTagShort => 'En az 3 karakter olmalı';
+
+  @override
+  String get failTagLong => 'En fazla 20 karakter olabilir';
+
+  @override
+  String get failTagStart => 'Harfle başlamalı';
+
+  @override
+  String get failTagChars => 'Yalnızca harf, rakam ve _ kullanılabilir';
+
+  @override
+  String failNameTooLong(int max) {
+    return 'En fazla $max karakter olabilir';
   }
 }

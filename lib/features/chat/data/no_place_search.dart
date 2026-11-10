@@ -16,14 +16,8 @@ final class NoPlaceSearch implements PlaceSearch {
   }) => Future.value(const Ok(<PlaceSuggestion>[]));
 
   @override
-  Future<Result<Place>> resolve(PlaceSuggestion suggestion) => Future.value(
-    Err(
-      NetworkFailure.localized(
-        "Place search isn't available right now.",
-        'Yer arama şu an kullanılamıyor.',
-      ),
-    ),
-  );
+  Future<Result<Place>> resolve(PlaceSuggestion suggestion) =>
+      Future.value(Err(NetworkFailure.localized((s) => s.failPlaceSearch)));
 
   @override
   Future<Result<Place?>> reverse(GeoPoint point) =>

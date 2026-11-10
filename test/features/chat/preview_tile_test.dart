@@ -23,6 +23,7 @@ import 'package:sis/l10n/app_localizations.dart';
 
 import '../../support/fakes.dart';
 import '../../support/video_fakes.dart';
+import '../../support/l10n.dart';
 
 const _me = Member(userId: 'u1', displayName: 'Maya');
 const _bob = Member(userId: 'u2', displayName: 'Bob');
@@ -131,9 +132,9 @@ void main() {
     'a locked last message nobody waits on says could not be opened',
     (t) async {
       await _pump(t, const Locale('en'), lockedBodyPlaceholder);
-      expect(_preview('This message could not be opened.'), findsOneWidget);
+      expect(_preview(l10nEn.chatLockedMessage), findsOneWidget);
       await _pump(t, const Locale('tr'), lockedBodyPlaceholder);
-      expect(_preview('Bu mesaj açılamadı.'), findsOneWidget);
+      expect(_preview(l10nTr.chatLockedMessage), findsOneWidget);
     },
   );
 }

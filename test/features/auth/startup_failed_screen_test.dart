@@ -8,10 +8,8 @@ import 'package:sis/features/auth/presentation/status_screens.dart';
 import '../../support/l10n.dart';
 
 void main() {
-  const enBody =
-      'Restart the app. If it keeps failing, please try again later.\n\nSIS could not start. Please try again.';
-  const trBody =
-      'Uygulamayı yeniden başlatın. Yine olmazsa lütfen daha sonra tekrar deneyin.\n\nSIS başlatılamadı. Tekrar deneyin.';
+  final enBody = l10nEn.statusStartBody(l10nEn.statusStartBootstrap);
+  final trBody = l10nTr.statusStartBody(l10nTr.statusStartBootstrap);
 
   testWidgets('StartupFailedScreen shows correct body in English', (
     tester,

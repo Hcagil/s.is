@@ -7,21 +7,21 @@ void main() {
     test('English, count 1', () {
       expect(
         l10nEn.videoPickFailed(1),
-        equals('This video could not be sent. Please try again.'),
+        equals('This video could not be sent. Try again.'),
       );
     });
 
     test('English, count 2', () {
       expect(
         l10nEn.videoPickFailed(2),
-        equals('2 videos could not be sent. Please try again.'),
+        equals('2 videos could not be sent. Try again.'),
       );
     });
 
     test('English, count 5', () {
       expect(
         l10nEn.videoPickFailed(5),
-        equals('5 videos could not be sent. Please try again.'),
+        equals('5 videos could not be sent. Try again.'),
       );
     });
 

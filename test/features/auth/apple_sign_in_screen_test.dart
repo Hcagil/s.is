@@ -136,7 +136,7 @@ void main() {
       await t.pumpAndSettle();
       await tapApple(t);
 
-      expect(find.textContaining('not approved for SIS'), findsOneWidget);
+      expect(find.textContaining(l10nEn.statusDeniedBody), findsOneWidget);
       expect(find.byType(SignInScreen), findsNothing);
     }, variant: ios);
 

@@ -69,22 +69,16 @@ String normaliseTag(String input) {
 /// FREE is a separate question only the server can answer.
 String? tagProblem(String tag) {
   if (tag.length < 3) {
-    return failureText('Use at least 3 characters', 'En az 3 karakter olmalı');
+    return failureStrings.failTagShort;
   }
   if (tag.length > 20) {
-    return failureText(
-      'Use at most 20 characters',
-      'En fazla 20 karakter olabilir',
-    );
+    return failureStrings.failTagLong;
   }
   if (!RegExp(r'^[a-z]').hasMatch(tag)) {
-    return failureText('Start with a letter', 'Harfle başlamalı');
+    return failureStrings.failTagStart;
   }
   if (!RegExp(r'^[a-z0-9_]+$').hasMatch(tag)) {
-    return failureText(
-      'Use letters, digits and _ only',
-      'Yalnızca harf, rakam ve _ kullanılabilir',
-    );
+    return failureStrings.failTagChars;
   }
   return null;
 }
@@ -92,12 +86,9 @@ String? tagProblem(String tag) {
 /// Why [name] cannot be used as a display name, or null when it can.
 String? displayNameProblem(String name) {
   final trimmed = name.trim();
-  if (trimmed.isEmpty) return failureText('Enter a name', 'Bir ad gir');
+  if (trimmed.isEmpty) return failureStrings.failNameEmpty;
   if (trimmed.length > maxDisplayNameLength) {
-    return failureText(
-      'Use at most $maxDisplayNameLength characters',
-      'En fazla $maxDisplayNameLength karakter olabilir',
-    );
+    return failureStrings.failNameTooLong(maxDisplayNameLength);
   }
   return null;
 }

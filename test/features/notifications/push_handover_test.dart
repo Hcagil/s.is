@@ -371,7 +371,7 @@ void main() {
       // the active one.
       auth.allowed = false;
       await launch(t, auth, p);
-      expect(find.textContaining('not approved for SIS'), findsOneWidget);
+      expect(find.textContaining(l10nEn.statusDeniedBody), findsOneWidget);
       await t.tap(find.text('Sign out'));
       await settle(t);
       expect(auth.signOuts, 1);
@@ -391,7 +391,7 @@ void main() {
 
       auth.allowed = false;
       await launch(t, auth, p);
-      expect(find.textContaining('not approved for SIS'), findsOneWidget);
+      expect(find.textContaining(l10nEn.statusDeniedBody), findsOneWidget);
       await t.tap(find.text('Sign out'));
       await settle(t);
       expect(auth.signOuts, 1);
@@ -573,12 +573,12 @@ void main() {
       final auth = FakeAuth(session: true, allowed: false, member: ava);
       final p = ProfileFake(profile: profileOf(ava));
       await launch(t, auth, p);
-      expect(find.textContaining('not approved for SIS'), findsOneWidget);
+      expect(find.textContaining(l10nEn.statusDeniedBody), findsOneWidget);
       await kill(t);
       await latePush(t);
 
       await launch(t, auth, p);
-      expect(find.textContaining('not approved for SIS'), findsOneWidget);
+      expect(find.textContaining(l10nEn.statusDeniedBody), findsOneWidget);
 
       expectLateGone();
     });
@@ -973,7 +973,7 @@ void main() {
       c.invalidate(runtimeConfigProvider);
       c.invalidate(sessionControllerProvider);
       await settle(t);
-      expect(find.textContaining('not approved for SIS'), findsOneWidget);
+      expect(find.textContaining(l10nEn.statusDeniedBody), findsOneWidget);
       expect(await owner(), isNull, reason: 'Denied must reach forUser');
 
       await t.tap(find.text('Sign out'));

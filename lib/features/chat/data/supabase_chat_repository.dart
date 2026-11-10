@@ -91,8 +91,7 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
         when statusCode == '401' || statusCode == '403' =>
       const DeniedFailure(),
     StorageException() => NetworkFailure.localized(
-      'This photo is not available.',
-      'Bu fotoğraf kullanılamıyor.',
+      (s) => s.failPhotoUnavailable,
     ),
     _ => readableFailure(e),
   };
@@ -830,7 +829,7 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
       }
       if (e is JoinCancelled) {
         leaveChannel(_client, channel, controller);
-        return Err(NetworkFailure.localized('Canceled.', 'İptal edildi.'));
+        return Err(NetworkFailure.localized((s) => s.failCanceled));
       }
 
       // An unreachable server throws an SDK type (WebSocketChannelException,

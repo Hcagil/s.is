@@ -41,11 +41,11 @@ void main() {
     );
     expect(
       chatPreviewLine(l10nEn, lockedBodyPlaceholder),
-      'This message could not be opened.',
+      l10nEn.chatLockedMessage,
     );
     expect(
       chatPreviewLine(l10nTr, lockedBodyPlaceholder),
-      'Bu mesaj açılamadı.',
+      l10nTr.chatLockedMessage,
     );
   });
 

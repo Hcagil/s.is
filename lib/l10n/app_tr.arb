@@ -363,7 +363,7 @@
   "replacedUnsentDeleted": "{count, plural, other{Bu telefondan gönderilmemiş {count} mesaj silindi.}}",
   "statusConnectTitle": "Bağlanılamadı",
   "statusStartTitle": "SIS başlatılamadı",
-  "statusStartBody": "Uygulamayı yeniden başlatın. Yine olmazsa uygulamayı kaldırıp tekrar yükleyin.\n\n{reason}",
+  "statusStartBody": "Uygulamayı yeniden başlatın. Yine olmazsa lütfen daha sonra tekrar deneyin.\n\n{reason}",
   "updateAvailable": "Güncelleme var",
   "updateLater": "Sonra",
   "updateAction": "Güncelle",

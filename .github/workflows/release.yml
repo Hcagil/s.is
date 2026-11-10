@@ -132,7 +132,14 @@ jobs:
           path: docker/cargo-tools
           key: cargo-tools-${{ runner.os }}-${{ hashFiles('docker/Dockerfile') }}
       - name: Build toolchain image
-        run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose build flutter
+        run: |
+          # Image downloads (apt, sdkmanager) sometimes drop; retry, a real build break still fails.
+          for attempt in 1 2 3; do
+            LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose build flutter && exit 0
+            echo "::warning::toolchain image build failed (attempt $attempt of 3)"
+            if [ "$attempt" -lt 3 ]; then sleep 30; fi
+          done
+          exit 1
       - name: Keep the Rust codegen tools for the next run
         if: steps.cargo-tools.outputs.cache-hit != 'true'
         run: docker compose run --rm -T flutter sh -c 'cp "$CARGO_HOME/bin/flutter_rust_bridge_codegen" "$CARGO_HOME/bin/cbindgen" "$CARGO_HOME/bin/cargo-deny" /workspace/docker/cargo-tools/'

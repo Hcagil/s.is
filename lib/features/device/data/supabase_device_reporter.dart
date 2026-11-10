@@ -1,6 +1,4 @@
-import 'dart:io';
-
-import 'package:device_info_plus/device_info_plus.dart';
+import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -11,10 +9,15 @@ import '../domain/device_reporter.dart';
 /// Sends five facts only: model, OS version, app version, build number,
 /// install source. Never the phone's name or any id. Best effort: never
 /// throws, one call per app start.
+///
+/// Model and OS version come from the app's own native channel
+/// `sis/device_facts`.
 final class SupabaseDeviceReporter implements DeviceReporter {
   SupabaseDeviceReporter(this._client);
 
   final SupabaseClient _client;
+
+  static const _channel = MethodChannel('sis/device_facts');
 
   @override
   Future<void> report() async {
@@ -23,21 +26,10 @@ final class SupabaseDeviceReporter implements DeviceReporter {
       final build = int.tryParse(pkg.buildNumber);
       if (build == null) return;
 
-      final String model;
-      final String os;
-
-      final plugin = DeviceInfoPlugin();
-      if (Platform.isAndroid) {
-        final a = await plugin.androidInfo;
-        model = a.model;
-        os = a.version.release;
-      } else if (Platform.isIOS) {
-        final i = await plugin.iosInfo;
-        model = i.utsname.machine;
-        os = i.systemVersion;
-      } else {
-        return;
-      }
+      final facts = await _channel.invokeMapMethod<String, String>('facts');
+      if (facts == null) return;
+      final model = facts['model'] ?? '';
+      final os = facts['os'] ?? '';
 
       await _client.rpc(
         'report_device_info',

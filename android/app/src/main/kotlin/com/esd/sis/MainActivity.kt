@@ -28,6 +28,7 @@ private const val SPEECH_CHANNEL = "sis/speech"
 private const val SHARE_CHANNEL = "sis/share_intake"
 private const val REPLY_CHANNEL = "sis/encrypted_reply"
 private const val LAUNCH_TAP_CHANNEL = "sis/launch_tap"
+private const val DEVICE_FACTS_CHANNEL = "sis/device_facts"
 private const val REQUEST_TONE = 9103
 private const val REQUEST_ATTACHMENTS = 9101
 private const val REQUEST_PICTURE = 9102
@@ -104,6 +105,11 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, NETWORK_CHANNEL)
             .setMethodCallHandler { call, result ->
                 if (call.method == "isRoaming") result.success(isRoaming()) else result.notImplemented()
+            }
+        // Support help: two phone facts for the "what phone is this" report; nothing else is read.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DEVICE_FACTS_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                if (call.method == "facts") result.success(mapOf("model" to Build.MODEL, "os" to Build.VERSION.RELEASE)) else result.notImplemented()
             }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SPEECH_CHANNEL)
             .setMethodCallHandler { call, result ->

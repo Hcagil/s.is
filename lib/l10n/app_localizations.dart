@@ -2279,7 +2279,7 @@ abstract class AppLocalizations {
   /// Body of the start-up error screen
   ///
   /// In en, this message translates to:
-  /// **'Restart the app. If it keeps failing, reinstall it.\n\n{reason}'**
+  /// **'Restart the app. If it keeps failing, please try again later.\n\n{reason}'**
   String statusStartBody(String reason);
 
   /// Update banner

@@ -1,8 +1,8 @@
 begin;
-select plan(79);
+select plan(38);
 
 -- Staff registry. Written from the contract, not the migrations:
--- 1. app_private.staff_chats / staff_commands: RLS on, no policy, no grant.
+-- 1, 3. (gone: the staff tables and staff_load were dropped; staff_drop_test.sql checks they are gone)
 -- 2. public.staff_registry(): a thin wrapper over the private panel
 --    app_private.private_panel() (faked here, in this transaction); rows only
 --    for a caller with app access, not the bot account, and a current member
@@ -10,10 +10,6 @@ select plan(79);
 --    error. Each negative subject passes every gate but one (its positive
 --    control runs first). Columns arg and ui come through as the panel gives
 --    them. Panel missing (no private pack) or raising: zero rows, no error.
--- 3. app_private.staff_load(jsonb): no API role may run it; upserts; never
---    deletes chats; deletes commands only of the chat keys in the input;
---    aborts (and changes nothing) on empty / unknown / bad / too long input.
---    (Stays until the loader is dropped; no longer feeds the registry.)
 -- 5. sales_job_claim / sales_job_finish: service_role only.
 -- 6. conversations.staff_key: not client-writable, set by trigger on new staff
 --    chats, returned by chat_list().
@@ -66,41 +62,6 @@ begin
   return r;
 end $$;
 
-create function load(p jsonb) returns text language plpgsql as $$
-begin
-  perform app_private.staff_load(p);
-  return 'ok';
-exception when others then
-  return sqlstate || ':' || sqlerrm;
-end $$;
-
--- the same, plus the error DETAIL and HINT (both must stay empty: no echo of the input)
-create function loadx(p jsonb) returns text language plpgsql as $$
-declare d text; h text;
-begin
-  perform app_private.staff_load(p);
-  return 'ok';
-exception when others then
-  get stacked diagnostics d = pg_exception_detail, h = pg_exception_hint;
-  return sqlstate || ':' || sqlerrm || '|' || coalesce(d, '') || '|' || coalesce(h, '');
-end $$;
-
--- the canonical neutral rows
-create function rows_std(extra jsonb default '[]') returns jsonb language sql as $$
-  select jsonb_build_object(
-    'chats', jsonb_build_array(
-      jsonb_build_object('key','staff_a','title_en','Staff A','title_tr','Ekip A','sort',1),
-      jsonb_build_object('key','staff_b','title_en','Staff B','title_tr','Ekip B','sort',2)),
-    'commands', jsonb_build_array(
-      jsonb_build_object('chat_key','staff_a','word','/addios','handler','tester_add_ios'),
-      jsonb_build_object('chat_key','staff_a','word','/addandroid','handler','tester_add_android'),
-      jsonb_build_object('chat_key','staff_a','word','/remove','handler','tester_remove'),
-      jsonb_build_object('chat_key','staff_a','word','/list','handler','tester_list'),
-      jsonb_build_object('chat_key','staff_a','word','/saleson','handler','sales_on'),
-      jsonb_build_object('chat_key','staff_a','word','/salesoff','handler','sales_off'),
-      jsonb_build_object('chat_key','staff_b','word','/sales','handler','sales_total')) || extra) $$;
-
-create function ncmd() returns bigint language sql as $$ select count(*) from app_private.staff_commands $$;
 
 -- fixtures -------------------------------------------------------------------
 -- own  owner (allowlisted, active): staff_a chat, and command admin -> staff_b chat
@@ -129,7 +90,6 @@ select is((select count(*) from unnest(array['own','adm','rmv','lft','nax','mal'
           'fixture: all seven sessions are active');
 
 
-delete from app_private.staff_commands;
 insert into app_private.owners(user_id) values (u('own'));
 insert into app_private.command_admins(user_id) values (u('adm')), (u('rmv'));
 create table chat as
@@ -170,81 +130,6 @@ alter function app_private.private_panel() rename to private_panel_off;
 select is(reg('own'), '', 'a missing panel (no private pack): zero rows, no error');
 alter function app_private.private_panel_off() rename to private_panel;
 select is(reg('own'), (select a_b from want), 'control: the panel back, the rows are back');
-
--- 3 staff_load -------------------------------------------------------------------
-select ok(not has_function_privilege(r, 'app_private.staff_load(jsonb)', 'execute'), r || ' cannot execute staff_load')
-  from unnest(array['public', 'anon', 'authenticated', 'service_role']) r;
-select ok(not exists (select 1 from pg_proc p, aclexplode(p.proacl) a
-                       where p.oid = 'app_private.staff_load(jsonb)'::regprocedure and a.grantee = 0),
-          'staff_load is not granted to public');
-select as_('own');
-select throws_ok($$select app_private.staff_load('{}'::jsonb)$$, '42501', null, 'an authenticated caller is refused');
-reset role;
-
-select is(load(rows_std()), 'ok', 'staff_load accepts the neutral rows');
-select is(ncmd(), 7::bigint, 'seven commands loaded');
-select is(load(rows_std()), 'ok', 'a rerun is accepted');
-select is(ncmd(), 7::bigint, 'a rerun converges (no duplicates)');
-select is((select title_en || '|' || title_tr from app_private.staff_chats where key = 'staff_b'), 'Staff B|Ekip B', 'titles are upserted');
-
--- only the chat keys in the input lose commands; chats are never deleted
-select is(load(jsonb_build_object(
-  'chats', jsonb_build_array(jsonb_build_object('key','staff_a','title_en','A2')),
-  'commands', jsonb_build_array(jsonb_build_object('chat_key','staff_a','word','/list','handler','tester_list')))), 'ok',
-  'a load naming only staff_a is accepted');
-select is((select string_agg(chat_key || word, ',' order by chat_key, word) from app_private.staff_commands),
-          'staff_a/list,staff_b/sales', 'staff_a commands not in the input are removed; staff_b commands are kept');
-select is((select count(*) from app_private.staff_chats where key in ('staff_a', 'staff_b')), 2::bigint, 'no chat is deleted');
-select is(load(rows_std()), 'ok', 'fixture: full rows back');
-
--- every bad input aborts with the fixed error and changes nothing
-create table bad(name text, p jsonb);
-insert into bad values
-  ('null input', null),
-  ('empty object', '{}'),
-  ('no commands', jsonb_build_object('chats', rows_std()->'chats', 'commands', '[]'::jsonb)),
-  ('no chats', jsonb_build_object('chats', '[]'::jsonb, 'commands', rows_std()->'commands')),
-  ('chats not an array', jsonb_build_object('chats', '{}'::jsonb, 'commands', rows_std()->'commands')),
-  ('unknown chat key', jsonb_build_object('chats', jsonb_build_array(jsonb_build_object('key','staff_z')),
-     'commands', jsonb_build_array(jsonb_build_object('chat_key','staff_z','word','/xx','handler','tester_list')))),
-  ('command for a chat not in the input', jsonb_build_object('chats', jsonb_build_array(jsonb_build_object('key','staff_a')),
-     'commands', jsonb_build_array(jsonb_build_object('chat_key','staff_b','word','/xx','handler','tester_list')))),
-  ('command without chat key', jsonb_build_object('chats', jsonb_build_array(jsonb_build_object('key','staff_a')),
-     'commands', jsonb_build_array(jsonb_build_object('word','/xx','handler','tester_list'))));
-select is(load(p), 'P0001:staff_load: bad input', 'staff_load aborts with the fixed error: ' || name) from bad order by name;
-select ok((select bool_and(loadx(p) = 'P0001:staff_load: bad input||') from bad), 'bad-shape errors carry no detail and no hint');
--- bad or too long values: the loader's own checks abort with the same fixed error, no detail, no echo
-create table bad2(name text, p jsonb);
-insert into bad2 values
-  ('handler outside the seven', rows_std(jsonb_build_array(jsonb_build_object('chat_key','staff_a','word','/xx','handler','drop_all')))),
-  ('word without slash', rows_std(jsonb_build_array(jsonb_build_object('chat_key','staff_a','word','xx','handler','tester_list')))),
-  ('word too long', rows_std(jsonb_build_array(jsonb_build_object('chat_key','staff_a','word','/' || repeat('a', 33),'handler','tester_list')))),
-  ('help too long', rows_std(jsonb_build_array(jsonb_build_object('chat_key','staff_a','word','/xx','handler','tester_list','help_en',repeat('h', 201))))),
-  ('title too long', jsonb_build_object('chats', jsonb_build_array(jsonb_build_object('key','staff_a','title_en',repeat('t', 201))),
-     'commands', jsonb_build_array(jsonb_build_object('chat_key','staff_a','word','/list','handler','tester_list')))),
-  ('a number among the commands', jsonb_build_object('chats', jsonb_build_array(jsonb_build_object('key','staff_a','title_en','Changed')),
-     'commands', jsonb_build_array(jsonb_build_object('chat_key','staff_a','word','/zz','handler','tester_list'), 5))),
-  ('a string among the chats', jsonb_build_object('chats', jsonb_build_array(jsonb_build_object('key','staff_a','title_en','Changed'), 'staff_b'),
-     'commands', jsonb_build_array(jsonb_build_object('chat_key','staff_a','word','/zz','handler','tester_list')))),
-  ('an array among the commands', jsonb_build_object('chats', jsonb_build_array(jsonb_build_object('key','staff_a','title_en','Changed')),
-     'commands', jsonb_build_array(jsonb_build_object('chat_key','staff_a','word','/zz','handler','tester_list'), '[1]'::jsonb))),
-  ('a null among the chats', jsonb_build_object('chats', jsonb_build_array(jsonb_build_object('key','staff_a','title_en','Changed'), 'null'::jsonb),
-     'commands', jsonb_build_array(jsonb_build_object('chat_key','staff_a','word','/zz','handler','tester_list'))));
--- (the non-object cases each carry one valid, changing element: a partial write shows in the unchanged checks below)
-select is(loadx(p), 'P0001:staff_load: bad input||', 'staff_load aborts with the fixed error, no detail: ' || name) from bad2 order by name;
-select is((select string_agg(chat_key || ':' || word || ':' || handler, ',' order by chat_key, word) from app_private.staff_commands),
-          'staff_a:/addandroid:tester_add_android,staff_a:/addios:tester_add_ios,staff_a:/list:tester_list,staff_a:/remove:tester_remove,'
-          'staff_a:/salesoff:sales_off,staff_a:/saleson:sales_on,staff_b:/sales:sales_total',
-          'after every refused load the commands are unchanged');
-select is((select title_en from app_private.staff_chats where key = 'staff_a'), 'Staff A', 'after every refused load the titles are unchanged');
-
--- 1 tables closed ---------------------------------------------------------------
-select ok((select bool_and(relrowsecurity) from pg_class where oid in ('app_private.staff_chats'::regclass, 'app_private.staff_commands'::regclass)),
-          'RLS is on for both registry tables');
-select is((select count(*) from pg_policies where schemaname = 'app_private' and tablename in ('staff_chats', 'staff_commands')), 0::bigint,
-          'no policy on the registry tables');
-select ok(not has_table_privilege(r, 'app_private.' || t, 'select,insert,update,delete'), r || ' holds nothing on ' || t)
-  from unnest(array['staff_chats', 'staff_commands']) t, unnest(array['anon', 'authenticated']) r;
 
 -- 2 staff_registry --------------------------------------------------------------
 select ok(not has_function_privilege('anon', 'public.staff_registry()', 'execute'), 'anon cannot execute staff_registry');

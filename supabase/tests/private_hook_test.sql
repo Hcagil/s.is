@@ -1,5 +1,5 @@
 begin;
-select plan(134);
+select plan(112);
 
 -- Generic private hook. Written from the contract, not the migrations. The
 -- private functions are NOT part of the public code; here each one is a tiny
@@ -7,7 +7,7 @@ select plan(134);
 -- so the public side is driven the same with or without the real pack:
 --   app_private.private_dispatch(conv uuid, sender uuid, body text)
 --   app_private.private_answer(card uuid, yes boolean, conv uuid)
--- 1. staff_commands.handler accepts ^(private:)?[a-z_]{3,40}$ and nothing else.
+-- 1. (gone: the staff tables and their handler CHECK were dropped)
 -- 2. both chat gates call private_dispatch exactly once per accepted message,
 --    with the chat, the sender and the body unchanged; the public side runs no
 --    command of its own (no sales job, no tester change). Hook missing ->
@@ -157,32 +157,10 @@ select isnt(ca(), null, 'fixture: the owner has a staff_a chat');
 select isnt(cb('own'), null, 'fixture: the owner has a staff_b chat');
 select isnt(cb('adm'), null, 'fixture: the command admin has a staff_b chat');
 
-select lives_ok($$select app_private.staff_load(jsonb_build_object(
-  'chats', jsonb_build_array(
-    jsonb_build_object('key','staff_a','title_en','Staff A','title_tr','Ekip A','sort',1),
-    jsonb_build_object('key','staff_b','title_en','Staff B','title_tr','Ekip B','sort',2)),
-  'commands', jsonb_build_array(
-    jsonb_build_object('chat_key','staff_a','word','/remove','handler','tester_remove'),
-    jsonb_build_object('chat_key','staff_a','word','/addandroid','handler','tester_add_android'),
-    jsonb_build_object('chat_key','staff_a','word','/list','handler','tester_list'),
-    jsonb_build_object('chat_key','staff_b','word','/sales','handler','sales_total'))))$$,
-  'fixture: public rows loaded');
+
 update app_private.sales_state set off = false, amount = null, day = null, fetched_at = null, fail_count = 0;
 
--- 1 handler CHECK ------------------------------------------------------------------
-select is(try_sql(format($$insert into app_private.staff_commands(chat_key, word, handler) values (%L, %L, %L)$$, c, w, h)), 'ok',
-          'a private row is accepted: ' || h)
-  from (values ('staff_a','/fa','private:fake_cmd'), ('staff_b','/fb','private:fake_cmd'),
-               ('staff_a','/fboom','private:fake_boom'), ('staff_b','/fbboom','private:fake_boom'),
-               ('staff_a','/fpx','privatex_abc'), ('staff_a','/fpu','private_fake_cmd'),
-               ('staff_a','/fmax','private:' || repeat('a', 40))) v(c, w, h);
-select is(try_sql(format($$insert into app_private.staff_commands(chat_key, word, handler) values ('staff_a', '/zz', %L)$$, h)), 'err:23514',
-          'the handler CHECK refuses: ' || h)
-  from unnest(array['private:x''; drop table app_private.allowlist; --', 'private:a;b', 'private:ab',
-                    'private:' || repeat('a', 41), 'xprivate:abc', 'private:private:abc', 'Private:abc',
-                    'private: abc', 'private:abc ', 'private:abc$1', 'drop_all; --', 'ab', '']) h;
-select is(try_sql($$update app_private.staff_commands set handler = 'private:x''y' where word = '/fa'$$), 'err:23514',
-          'an update cannot write a crafted name either');
+
 
 
 -- consume what the chats were born with

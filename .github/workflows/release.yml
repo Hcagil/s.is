@@ -82,31 +82,8 @@ jobs:
           echo "code=$(( ${{ github.run_number }} + 100 ))" >> "$GITHUB_OUTPUT"
           echo "name=$(date -u +%y.%-m).$(git rev-list --count "${{ steps.pick.outputs.sha }}")" >> "$GITHUB_OUTPUT"
 
-  # The private part is proved on a throwaway database before anything is published. No job-level `if`: a skipped gate must never let a release through.
-  private-gate:
-    needs: scope
-    runs-on: ubuntu-24.04
-    environment: play-internal
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          ref: ${{ needs.scope.outputs.sha }}
-          fetch-depth: 0
-      # Mask, check, throwaway database, install, handler check and private tests: one shared definition (.github/actions/private-server), also used by server-scripts.yml.
-      - uses: ./.github/actions/private-server
-        with:
-          mode: local
-          ship: ${{ needs.scope.outputs.ship }}
-          expected: ${{ vars.PRIVATE_EXPECTED }}
-          words: ${{ secrets.PRIVATE_WORDS }}
-          sql-b64: ${{ secrets.PRIVATE_SQL_B64 }}
-          tests-b64: ${{ secrets.PRIVATE_TESTS_B64 }}
-          pack-version: ${{ secrets.PRIVATE_PACK_VERSION }}
-
   publish:
-    needs: [scope, private-gate]
+    needs: scope
     if: needs.scope.outputs.ship == 'true'
     runs-on: ubuntu-24.04
     environment: play-internal
@@ -144,11 +121,6 @@ jobs:
         with:
           ref: ${{ needs.scope.outputs.sha }}
           fetch-depth: 0
-      - name: Check the staff rows secret
-        env:
-          STAFF_ROWS: ${{ secrets.STAFF_ROWS_JSON }}
-        run: |
-          printf %s "$STAFF_ROWS" | jq -e '(.chats | type == "array" and length > 0) and (.commands | type == "array" and length > 0)' >/dev/null 2>&1 || { echo "::error::STAFF_ROWS_JSON is missing or malformed"; exit 1; }
       - name: Log in to the base image registry
         run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
         env:
@@ -227,29 +199,16 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
-      # The staff chat rows (titles, command words) live only in this secret. The JSON never enters the shell text:
-      # it is passed as base64, and every CLI line goes to /dev/null because an error would quote the query.
-      - name: Load the staff rows
+      # The public side alone must hash green against production; the private functions are installed from the owner's computer, never from GitHub.
+      - name: Check the private function hashes
         run: |
-          B64=$(printf %s "$STAFF_ROWS" | base64 -w0)
-          echo "::add-mask::$B64"
-          supabase db query --linked "select app_private.staff_load(convert_from(decode('$B64','base64'),'utf8')::jsonb) is not null" >/dev/null 2>&1 || { echo "::error::staff rows load failed"; exit 1; }
+          f=$(mktemp); trap 'rm -f "$f"' EXIT
+          # shellcheck disable=SC2016
+          { printf 'do $pk$ begin perform set_config(%s, %s, false); execute $pkw_$' "'private.expected'" "''"; cat tool/private_check.sql; printf '$pkw_$; end $pk$;\n'; } > "$f"
+          supabase db query --linked -f "$f" >/dev/null 2>&1 || { echo "::error::private function hash check failed"; exit 1; }
         env:
-          STAFF_ROWS: ${{ secrets.STAFF_ROWS_JSON }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
-
-      # The private functions (kept outside git) go in after the rows, then every private row is checked for its function (owned and locked down like the public ones). An empty secret is fine only while PRIVATE_EXPECTED is not 1. One shared definition (.github/actions/private-server), also used by server-scripts.yml.
-      - uses: ./.github/actions/private-server
-        with:
-          mode: linked
-          expected: ${{ vars.PRIVATE_EXPECTED }}
-          words: ${{ secrets.PRIVATE_WORDS }}
-          sql-b64: ${{ secrets.PRIVATE_SQL_B64 }}
-          tests-b64: ${{ secrets.PRIVATE_TESTS_B64 }}
-          pack-version: ${{ secrets.PRIVATE_PACK_VERSION }}
-          access-token: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          project-ref: ${{ secrets.SUPABASE_PROJECT_REF }}
       # storage-sweeper removes queued files from Storage for the cleanup jobs; optional like the sales function: a failure must never block the Play upload.
       - name: Deploy the storage sweeper
         id: sweeper

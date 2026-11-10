@@ -20,6 +20,7 @@ import '../../support/reaction_fakes.dart';
 import '../../support/location_fakes.dart';
 import '../../support/fakes.dart';
 import 'conversation_list_live_test.dart' show scope;
+import '../../support/l10n.dart';
 
 Finder k(String key) => find.byKey(ValueKey(key));
 
@@ -391,7 +392,7 @@ void main() {
       await t.pumpAndSettle();
       await t.tap(k('open-maps-confirm'));
       await t.pumpAndSettle();
-      expect(find.text('No maps app could open this place.'), findsWidgets);
+      expect(find.text(l10nEn.locationOpenFailed), findsWidgets);
       await t.pump(const Duration(seconds: 10));
       await t.pumpAndSettle();
     });

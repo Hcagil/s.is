@@ -26,6 +26,7 @@ import '../../support/group_settings_fakes.dart';
 import '../../support/pin_fakes.dart';
 import '../../support/sis_ui.dart' as ui;
 import '../../support/video_fakes.dart';
+import '../../support/l10n.dart';
 
 const config = RuntimeConfig(
   supabaseUrl: 'https://x.supabase.co',
@@ -461,7 +462,7 @@ void main() {
   testWidgets('16. Turkish A + D flow', (t) async {
     await pumpList(t, tr: true);
     await openDelete(t, ['c1', 'c2']);
-    expect(find.text('2 sohbet sil'), findsOneWidget);
+    expect(find.text(l10nTr.chatDeleteFewTitle(2)), findsOneWidget);
     noBox();
     await t.tap(byKey('delete-chat-cancel'));
     await t.pumpAndSettle();

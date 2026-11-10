@@ -24,6 +24,7 @@ import '../../support/fakes.dart';
 import '../../support/pin_fakes.dart';
 import '../../support/sis_ui.dart' as ui;
 import '../../support/video_fakes.dart';
+import '../../support/l10n.dart';
 
 const config = RuntimeConfig(
   supabaseUrl: 'https://x.supabase.co',
@@ -246,7 +247,7 @@ void main() {
     await t.tap(byKey('selection-pin'));
     await t.pump();
     await t.pump(const Duration(milliseconds: 100));
-    expect(find.text('You can pin up to 5 chats.'), findsOneWidget);
+    expect(find.text(l10nEn.chatPinLimit), findsOneWidget);
     expect(pins.calls, isEmpty);
     expect(find.byKey(const ValueKey('pinned-c6')), findsNothing);
     await ui.drainNotice(t);
@@ -264,7 +265,7 @@ void main() {
     await t.tap(byKey('selection-pin'));
     await t.pumpAndSettle();
     expect(find.byKey(const ValueKey('pinned-c1')), findsNothing);
-    expect(find.text('You can pin up to 5 chats.'), findsOneWidget);
+    expect(find.text(l10nEn.chatPinLimit), findsOneWidget);
     await ui.drainNotice(t);
   });
 
@@ -347,7 +348,7 @@ void main() {
     await t.pumpAndSettle();
     await t.tap(byKey('selection-pin'));
     await t.pumpAndSettle();
-    expect(find.text('You can pin up to 5 chats.'), findsNothing);
+    expect(find.text(l10nEn.chatPinLimit), findsNothing);
     expect(pins.calls, contains('chat:c6:true'));
     expect(byKey('pinned-c6'), findsOneWidget);
   });
@@ -361,7 +362,7 @@ void main() {
     await t.pumpAndSettle();
     await t.tap(byKey('selection-pin'));
     await t.pumpAndSettle();
-    expect(find.text('En fazla 5 sohbet sabitleyebilirsiniz.'), findsOneWidget);
+    expect(find.text(l10nTr.chatPinLimit), findsOneWidget);
     expect(byKey('pinned-c1'), findsNothing);
     await ui.drainNotice(t);
   });

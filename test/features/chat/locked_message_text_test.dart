@@ -22,8 +22,10 @@ import '../../support/l10n.dart';
 import '../../support/video_fakes.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
-const enLocked = 'This message could not be opened.';
-const trLocked = 'Bu mesaj açılamadı.';
+const enLocked =
+    'This message could not be opened. Ask the sender to send it again.';
+const trLocked =
+    'Bu mesaj açılamadı. Gönderenden mesajı yeniden göndermesini isteyin.';
 const enOpening = 'Opening message…';
 const trOpening = 'Mesaj açılıyor…';
 

@@ -20,6 +20,7 @@ import 'package:sis/features/chat/presentation/crop_screen.dart';
 
 import '../../support/fakes.dart';
 import '../../support/sis_ui.dart';
+import '../../support/l10n.dart';
 import 'avatar_widgets_test.dart'
     show
         World,
@@ -34,7 +35,7 @@ import 'avatar_widgets_test.dart'
         expectPicture,
         expectInitials;
 
-const failNotice = 'That could not be opened.';
+final failNotice = l10nEn.attachOpenFailed;
 const cropFail = 'That photo could not be used.';
 
 /// What the other app hands back: a decodable photo with a tag byte of its
@@ -98,7 +99,7 @@ void main() {
         );
         expect(w.profile.avatarUploads, hasLength(1));
         expect(w.profile.avatarUploads.single.image.bytes, w.cropper.output);
-        expect(noticeSaying('Profile picture updated'), findsOneWidget);
+        expect(noticeSaying(l10nEn.settingsPictureUpdated), findsOneWidget);
         expectPicture(byKey('profile-avatar'), w.cropper.output, 'profile');
         await drainNotice(t);
       });
@@ -201,7 +202,7 @@ void main() {
         final call = w.chat.groupAvatarCalls.single;
         expect(call.conversationId, 'g1');
         expect(call.image?.bytes, w.cropper.output);
-        expect(noticeSaying('Group picture updated'), findsOneWidget);
+        expect(noticeSaying(l10nEn.groupPictureUpdated), findsOneWidget);
         expectPicture(byKey('group-avatar'), w.cropper.output, 'group page');
         await drainNotice(t);
       });

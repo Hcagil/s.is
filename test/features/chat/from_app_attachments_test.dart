@@ -30,10 +30,11 @@ import '../../support/fakes.dart';
 import 'package:sis/l10n/app_localizations.dart';
 
 import '../../support/video_fakes.dart';
+import '../../support/l10n.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
 const capNotice = 'Only the first 10 photos were sent.';
-const failNotice = 'That could not be opened.';
+final failNotice = l10nEn.attachOpenFailed;
 
 class _SignedIn extends SessionController {
   @override

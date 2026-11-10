@@ -37,6 +37,7 @@ import '../support/last_session_fakes.dart';
 import '../support/sticker_fakes.dart';
 import '../support/video_fakes.dart';
 import '../support/voice_fakes.dart';
+import '../support/l10n.dart';
 
 const config = RuntimeConfig(
   supabaseUrl: 'https://x.supabase.co',
@@ -57,7 +58,7 @@ const trBody =
     'SIS aynı anda tek telefonda çalışır. Burada kullanmak için yeniden '
     'oturum açın; diğer telefonun oturumu kapanır.';
 const trButton = 'Oturum aç';
-final deniedText = find.textContaining('not approved for SIS');
+final deniedText = find.textContaining(l10nEn.statusDeniedBody);
 
 /// Material's phone glyphs, every style.
 final phoneIcons = <IconData>{

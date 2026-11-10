@@ -10,6 +10,8 @@ import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/l10n/app_localizations.dart';
 import 'package:sis/features/chat/presentation/admin_reply_bubble.dart';
 
+import '../../support/l10n.dart';
+
 const Member _member = Member(userId: 'u-d', displayName: 'Deniz');
 
 Conversation _adminConv() =>
@@ -217,10 +219,7 @@ void main() {
 
     test('rate', () {
       final result = adminPreviewLine(l, {'k': 'rate'});
-      expect(
-        result,
-        equals("Çok fazla komut. Bir dakika bekleyin ve tekrar deneyin."),
-      );
+      expect(result, equals(l10nTr.adminRate));
     });
 
     test('list', () {

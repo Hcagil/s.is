@@ -26,7 +26,7 @@ import '../../support/google_sign_in_stand_ins.dart';
 import '../../support/l10n.dart';
 
 const sentinel = 'SENTINEL-51c9-raw-exception-text';
-const startupSentence = 'SIS could not start. Please try again.';
+final startupSentence = l10nEn.statusStartBootstrap;
 const config = RuntimeConfig(
   supabaseUrl: 'http://supabase.test',
   supabasePublishableKey: 'publishable-key',

@@ -27,6 +27,7 @@ import 'package:sis/features/update/application/update_controller.dart';
 
 import '../support/fakes.dart';
 import '../support/video_fakes.dart';
+import '../support/l10n.dart';
 
 const ava = Member(userId: 'u1', displayName: 'Ava');
 const picture = 'profile/ub/1.jpg';
@@ -139,7 +140,7 @@ void main() {
     await t.pumpWidget(app(auth));
     await settle(t);
 
-    expect(find.textContaining('not approved for SIS'), findsOneWidget);
+    expect(find.textContaining(l10nEn.statusDeniedBody), findsOneWidget);
     expect(auth.signOuts, 0);
     expect(await gone(t, picture), isTrue, reason: 'a picture survived');
     expect(await gone(t, photo), isTrue, reason: 'a photo survived');

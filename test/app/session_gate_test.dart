@@ -16,6 +16,7 @@ import 'package:sis/features/update/domain/update_repository.dart';
 import '../support/fakes.dart';
 import '../support/sis_ui.dart';
 import '../support/video_fakes.dart';
+import '../support/l10n.dart';
 
 const config = RuntimeConfig(
   supabaseUrl: 'https://x.supabase.co',
@@ -74,7 +75,7 @@ void main() {
       app(FakeAuth(session: true, allowed: false), FakeUpdate()),
     );
     await t.pumpAndSettle();
-    expect(find.textContaining('not approved for SIS'), findsOneWidget);
+    expect(find.textContaining(l10nEn.statusDeniedBody), findsOneWidget);
   });
   testWidgets('allowed reaches the conversation list', (t) async {
     await t.pumpWidget(app(FakeAuth(session: true), FakeUpdate()));

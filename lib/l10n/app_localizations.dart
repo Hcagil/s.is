@@ -1883,7 +1883,7 @@ abstract class AppLocalizations {
   /// Shown in place of a message that this phone cannot open (bubble and chat-list preview)
   ///
   /// In en, this message translates to:
-  /// **'This message could not be opened.'**
+  /// **'This message could not be opened. Ask the sender to send it again.'**
   String get chatLockedMessage;
 
   /// Shown in place of a locked message this phone is still opening (bubble and chat-list preview)
@@ -2237,7 +2237,7 @@ abstract class AppLocalizations {
   /// Body of the access denied screen
   ///
   /// In en, this message translates to:
-  /// **'This account is not approved for SIS right now.'**
+  /// **'This Google account can\'t use SIS yet. Ask the person who invited you to add this email, or sign out and use another Google account.'**
   String get statusDeniedBody;
 
   /// Title of the screen shown on a phone that another phone replaced
@@ -4433,7 +4433,7 @@ abstract class AppLocalizations {
   /// Staff chat command reply
   ///
   /// In en, this message translates to:
-  /// **'Vega did not answer. Please try again later.'**
+  /// **'The service did not answer. Try again later.'**
   String get salesFail;
 
   /// Staff chat command reply
@@ -4559,7 +4559,7 @@ abstract class AppLocalizations {
   /// Extra red line in the close box of the Debug group
   ///
   /// In en, this message translates to:
-  /// **'Tester feedback stops.'**
+  /// **'Testers send their feedback to this group. If you close it, they can\'t send feedback here again.'**
   String get groupCloseDebugWarning;
 
   /// Footer of a closed group, instead of the composer

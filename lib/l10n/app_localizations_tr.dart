@@ -1024,7 +1024,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get bubbleDeletedByAdmin => 'Bir yönetici tarafından silindi';
 
   @override
-  String get chatLockedMessage => 'Bu mesaj açılamadı.';
+  String get chatLockedMessage =>
+      'Bu mesaj açılamadı. Gönderenden mesajı yeniden göndermesini isteyin.';
 
   @override
   String get chatOpeningMessage => 'Mesaj açılıyor…';
@@ -1242,7 +1243,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get statusDeniedTitle => 'Erişim reddedildi';
 
   @override
-  String get statusDeniedBody => 'Bu hesap şu an SIS için onaylı değil.';
+  String get statusDeniedBody =>
+      'Bu Google hesabı henüz SIS\'i kullanamıyor. Davet eden kişiden bu e-postayı eklemesini isteyin ya da oturumu kapatıp başka bir Google hesabıyla oturum açın.';
 
   @override
   String get replacedTitle => 'Başka bir telefonda oturum açtınız';
@@ -2521,8 +2523,7 @@ class AppLocalizationsTr extends AppLocalizations {
   }
 
   @override
-  String get salesFail =>
-      'Vega yanıt vermedi. Lütfen daha sonra tekrar deneyin.';
+  String get salesFail => 'Hizmet yanıt vermedi. Daha sonra tekrar deneyin.';
 
   @override
   String get salesOff => 'Bu komut kapalı.';
@@ -2603,7 +2604,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get groupCloseDebugWarning =>
-      'Test kullanıcılarının geri bildirimi durur.';
+      'Test kullanıcıları geri bildirimlerini bu gruba gönderiyor. Grubu kapatırsanız buraya artık geri bildirim gönderemezler.';
 
   @override
   String composerGroupClosed(String name) {

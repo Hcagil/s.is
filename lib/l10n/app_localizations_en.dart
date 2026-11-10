@@ -1029,7 +1029,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get bubbleDeletedByAdmin => 'Deleted by an admin';
 
   @override
-  String get chatLockedMessage => 'This message could not be opened.';
+  String get chatLockedMessage =>
+      'This message could not be opened. Ask the sender to send it again.';
 
   @override
   String get chatOpeningMessage => 'Opening message…';
@@ -1249,7 +1250,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get statusDeniedBody =>
-      'This account is not approved for SIS right now.';
+      'This Google account can\'t use SIS yet. Ask the person who invited you to add this email, or sign out and use another Google account.';
 
   @override
   String get replacedTitle => 'You signed in on another phone';
@@ -2550,7 +2551,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get salesFail => 'Vega did not answer. Please try again later.';
+  String get salesFail => 'The service did not answer. Try again later.';
 
   @override
   String get salesOff => 'This command is turned off.';
@@ -2629,7 +2630,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get groupCloseAction => 'Close group';
 
   @override
-  String get groupCloseDebugWarning => 'Tester feedback stops.';
+  String get groupCloseDebugWarning =>
+      'Testers send their feedback to this group. If you close it, they can\'t send feedback here again.';
 
   @override
   String composerGroupClosed(String name) {

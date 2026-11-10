@@ -222,8 +222,8 @@ for case in "1793485800|26.10.2" "1804248000|27.3.2"; do
     || fail "at @${case%%|*}, picked commit 2 of 3, run 77 gave [$(tr '\n' ' ' < "$tmp/v/out")], want code=177 name=${case#*|}"
 done
 
-# 2 publish: needs scope and private-gate, uses scope's version, computes none itself.
-[ "$(key "$tmp/publish" needs)" = '[scope, private-gate]' ] || fail "publish must need exactly scope and private-gate, got [$(key "$tmp/publish" needs)]"
+# 2 publish: needs exactly scope, uses scope's version, computes none itself.
+[ "$(key "$tmp/publish" needs)" = 'scope' ] || fail "publish must need exactly scope, got [$(key "$tmp/publish" needs)]"
 grep -q 'run_number' "$tmp/publish" && fail "publish computes its own version (run_number)"
 grep -qE 'pubspec\.yaml|steps\.v\.' "$tmp/publish" && fail "publish reads the version itself instead of from scope"
 grep -q -- '--build-number=${{ needs.scope.outputs.code }} --build-name=${{ needs.scope.outputs.name }}' "$tmp/publish" \

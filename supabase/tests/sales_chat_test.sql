@@ -1,20 +1,6 @@
 begin;
 select plan(139);
 
--- Neutral staff registry rows, loaded the way release loads the private file.
-do $fx$ begin perform app_private.staff_load($j${
-  "chats": [{"key":"staff_a","title_en":"Staff A","title_tr":"Ekip A","sort":1},
-            {"key":"staff_b","title_en":"Staff B","title_tr":"Ekip B","sort":2}],
-  "commands": [
-    {"chat_key":"staff_a","word":"/addios","handler":"tester_add_ios","help_en":"add ios","help_tr":"ios ekle","sort":1},
-    {"chat_key":"staff_a","word":"/addandroid","handler":"tester_add_android","help_en":"add android","help_tr":"android ekle","sort":2},
-    {"chat_key":"staff_a","word":"/remove","handler":"tester_remove","help_en":"remove","help_tr":"cikar","sort":3},
-    {"chat_key":"staff_a","word":"/list","handler":"tester_list","help_en":"list","help_tr":"liste","sort":4},
-    {"chat_key":"staff_a","word":"/saleson","handler":"sales_on","help_en":"on","help_tr":"ac","sort":5},
-    {"chat_key":"staff_a","word":"/salesoff","handler":"sales_off","help_en":"off","help_tr":"kapat","sort":6},
-    {"chat_key":"staff_b","word":"/sales","handler":"sales_total","help_en":"total","help_tr":"toplam","sort":1}]
-}$j$::jsonb); end $fx$;
-
 -- The second staff chat (staff_b): a command chat for command admins only.
 -- Its words (the ask, the switch, the rate limit, the cache, the audit) live
 -- in the private pack now (private_hook_test.sql covers the gate). The public

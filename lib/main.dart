@@ -86,6 +86,8 @@ import 'features/chat/data/supabase_poll_repository.dart';
 import 'features/chat/data/supabase_reaction_repository.dart';
 import 'features/chat/data/supabase_sticker_repository.dart';
 import 'features/chat/data/supabase_contacts_repository.dart';
+import 'features/device/application/device_report_controller.dart';
+import 'features/device/data/supabase_device_reporter.dart';
 import 'features/crypto/application/key_directory_controller.dart';
 import 'features/crypto/data/drift_olm_pickle_store.dart';
 import 'features/crypto/data/drift_security_code_store.dart';
@@ -547,6 +549,9 @@ Future<void> main() async {
           ),
           releaseNotesDeliveryProvider.overrideWithValue(
             SupabaseReleaseNotesDelivery(client),
+          ),
+          deviceReporterProvider.overrideWithValue(
+            SupabaseDeviceReporter(client),
           ),
         ],
         child: const SisApp(),

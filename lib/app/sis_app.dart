@@ -31,6 +31,7 @@ import '../features/notifications/application/push_controller.dart';
 import '../features/notifications/presentation/notification_explainer_screen.dart';
 import '../features/profile/application/profile_controller.dart';
 import '../features/profile/presentation/onboarding_screen.dart';
+import '../features/device/application/device_report_controller.dart';
 import '../features/update/application/release_notes_controller.dart';
 import '../features/update/application/update_controller.dart';
 import '../features/update/domain/update_state.dart';
@@ -337,6 +338,8 @@ class _SessionGateState extends ConsumerState<SessionGate> {
       // Asks for the What's new notes due for this build once per start,
       // for whoever is signed in.
       ref.listen(releaseNotesProvider, (_, _) {});
+      // Tells the server five phone facts once per start, for support.
+      ref.listen(deviceReportProvider, (_, _) {});
       // The app-icon unread number follows the chat list for whoever is
       // signed in (and clears when nobody is).
       ref.listen(badgeSyncProvider, (_, _) {});

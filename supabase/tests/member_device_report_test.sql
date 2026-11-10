@@ -1,5 +1,5 @@
 begin;
-select plan(23);
+select plan(25);
 insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data) values
  ('00000000-0000-0000-0000-0000000000e5','erin@mail.test',now(),'{"full_name":"Erin"}'),
  ('00000000-0000-0000-0000-0000000000f6','frank@mail.test',now(),'{"full_name":"Frank"}'),
@@ -67,6 +67,17 @@ select public.report_device_info('   ','','  ',null::integer,'');
 reset role;
 select is((select model from app_private.member_device where user_id='00000000-0000-0000-0000-0000000000e5'), 'unknown', 'model unknown');
 select is((select build from app_private.member_device where user_id='00000000-0000-0000-0000-0000000000e5'), 0::int, 'build 0');
+
+-- F an allowlisted, activated user is refused without a live session (2 assertions)
+-- erin: allowlisted and active, but her JWT carries no session_id
+select test_as('00000000-0000-0000-0000-0000000000e5', null);
+select throws_ok($$select public.report_device_info('x','y','z',1,'w')$$, '42501', 'not permitted', 'an allowlisted user whose JWT has no session_id is refused');
+reset role;
+-- frank: allowlisted and active, then his session is revoked (gone from auth.sessions)
+delete from auth.sessions where id = 'f6f6f6f6-0000-0000-0000-000000000001';
+select test_as('00000000-0000-0000-0000-0000000000f6','f6f6f6f6-0000-0000-0000-000000000001');
+select throws_ok($$select public.report_device_info('x','y','z',1,'w')$$, '42501', 'not permitted', 'an allowlisted user whose session was revoked is refused');
+reset role;
 
 select * from finish();
 rollback;

@@ -201,8 +201,8 @@ expect_exit 0 "SIS_SERVICE_KEY is ignored when the key file is set" env SIS_SERV
 check "admin list shows both contacts" bash -c "grep -q '$BOB' '$BOX/list' && grep -q '$DAN' '$BOX/list'"
 # devices: the support view of the five phone facts per person (this computer only).
 sql "insert into app_private.member_device(user_id, model, os_version, app_version, build, installer) values ('$BOB','Pixel Test','14','1.2.3',45,'com.android.vending')" >/dev/null
-"$ADMIN" devices >"$BOX/devices" 2>&1 || true
-check "admin devices shows the five facts of a person" bash -c "grep -q 'Pixel Test' '$BOX/devices' && grep -q '1.2.3' '$BOX/devices' && grep -q 'com.android.vending' '$BOX/devices'"
+expect_exit 0 "admin devices" "$ADMIN" devices
+check "admin devices shows the five facts of a person (model, os, app version, build, installer)" grep -qF '|Pixel Test|14|1.2.3|45|com.android.vending|' "$BOX/out"
 sql "delete from app_private.member_device where user_id = '$BOB'" >/dev/null
 
 # 5 read, send, start ---------------------------------------------------------------

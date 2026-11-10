@@ -1761,7 +1761,7 @@
   "@eventClosed": {"description": "Group event line when an admin closes the group", "placeholders": {"name": {"type": "String"}}},
   "failPeerKeysCheck": "Could not check this person's encryption keys. Try again.",
   "@failPeerKeysCheck": {"description": "Error text shown to the member"},
-  "failNameEmpty": "=",
+  "failNameEmpty": "Enter a name",
   "@failNameEmpty": {"description": "Error text shown to the member"},
   "failDenied": "You don't have permission to do that.",
   "@failDenied": {"description": "Error text shown to the member"},

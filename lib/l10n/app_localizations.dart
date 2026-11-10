@@ -4589,7 +4589,7 @@ abstract class AppLocalizations {
   /// Error text shown to the member
   ///
   /// In en, this message translates to:
-  /// **'='**
+  /// **'Enter a name'**
   String get failNameEmpty;
 
   /// Error text shown to the member

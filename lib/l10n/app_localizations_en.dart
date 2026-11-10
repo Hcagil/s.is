@@ -2651,7 +2651,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Could not check this person\'s encryption keys. Try again.';
 
   @override
-  String get failNameEmpty => '=';
+  String get failNameEmpty => 'Enter a name';
 
   @override
   String get failDenied => 'You don\'t have permission to do that.';

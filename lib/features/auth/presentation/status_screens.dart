@@ -12,6 +12,7 @@ class StatusScreen extends StatelessWidget {
     this.reason,
     required this.onPressed,
     this.replaced = false,
+    this.removed = false,
     this.unsentDeleted = 0,
     this.onSignInApple,
     this.appleButton,
@@ -25,6 +26,18 @@ class StatusScreen extends StatelessWidget {
          key: key,
          icon: Icons.lock_outline,
          denied: true,
+         onPressed: onSignOut,
+       );
+
+  /// Was allowed on this phone before and was taken off the allowed list; one button signs out.
+  const StatusScreen.removed({
+    Key? key,
+    required Future<void> Function() onSignOut,
+  }) : this._(
+         key: key,
+         icon: Icons.lock_outline,
+         denied: true,
+         removed: true,
          onPressed: onSignOut,
        );
 
@@ -62,6 +75,7 @@ class StatusScreen extends StatelessWidget {
   final IconData icon;
   final bool denied;
   final bool replaced;
+  final bool removed;
   final int unsentDeleted;
   final String? reason;
   final Future<void> Function() onPressed;
@@ -75,12 +89,16 @@ class StatusScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    final title = replaced
+    final title = removed
+        ? l.removedTitle
+        : replaced
         ? l.replacedTitle
         : denied
         ? l.statusDeniedTitle
         : l.statusConnectTitle;
-    final message = replaced
+    final message = removed
+        ? l.removedBody
+        : replaced
         ? l.replacedBody
         : denied
         ? l.statusDeniedBody

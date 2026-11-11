@@ -360,6 +360,8 @@
   "replacedTitle": "Başka bir telefonda oturum açtınız",
   "replacedBody": "SIS aynı anda tek telefonda çalışır. Burada kullanmak için yeniden oturum açın; diğer telefonun oturumu kapanır.",
   "replacedSignIn": "Oturum aç",
+  "removedTitle": "Artık SIS'i kullanamazsınız",
+  "removedBody": "Bunun bir hata olduğunu düşünüyorsanız sizi davet eden kişiye sorun.",
   "replacedUnsentDeleted": "{count, plural, other{Bu telefondan gönderilmemiş {count} mesaj silindi.}}",
   "statusConnectTitle": "Bağlanılamadı",
   "statusStartTitle": "SIS başlatılamadı",

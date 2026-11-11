@@ -44,6 +44,14 @@ final class DeniedFailure extends Failure {
   String get message => failureStrings.failDenied;
 }
 
+/// The server says this account is not on the allowed list ('not_allowed'): never allowed, or removed. The session controller decides which screen by the stored last-session marker.
+final class NotAllowedFailure extends Failure {
+  const NotAllowedFailure();
+
+  @override
+  String get message => failureStrings.failDenied;
+}
+
 /// A server search limit hit ('RLMT1'); the screen shows its own line.
 final class SearchLimitFailure extends Failure {
   const SearchLimitFailure();

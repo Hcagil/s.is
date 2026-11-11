@@ -191,6 +191,8 @@ class SessionController extends AsyncNotifier<SessionState> {
     final repo = ref.read(authRepositoryProvider);
     if (!signedIn) return const SignedOut();
     switch (await repo.activateSession()) {
+      case Err(failure: NotAllowedFailure()):
+        return _hadSession ? const Removed() : const Denied();
       case Err(:final failure):
         return SessionError(failure.message);
       case Ok(value: false):
@@ -240,6 +242,12 @@ class SessionController extends AsyncNotifier<SessionState> {
     final answer = await repo.activateSession();
     if (!ref.mounted || rev != _revision) return;
     switch (answer) {
+      case Err(failure: NotAllowedFailure()):
+        _revision++;
+        _retryTimer?.cancel();
+        _lastSignedIn = false;
+        state = const AsyncData(Removed());
+        await _wipeMarker();
       case Err():
         final i = _attempt < sessionRetryDelays.length
             ? _attempt
@@ -287,6 +295,13 @@ class SessionController extends AsyncNotifier<SessionState> {
     final answer = await ref.read(authRepositoryProvider).activateSession();
     if (!ref.mounted || rev != _revision || state.value is! Allowed) return;
     if (answer case Ok(value: false)) await _replaced();
+    if (answer case Err(failure: NotAllowedFailure())) {
+      _revision++;
+      _retryTimer?.cancel();
+      _lastSignedIn = false;
+      state = const AsyncData(Removed());
+      await _wipeMarker();
+    }
   }
 
   /// Another phone holds the session. The state is assigned before any await,

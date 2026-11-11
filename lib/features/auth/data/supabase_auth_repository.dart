@@ -214,7 +214,12 @@ final class SupabaseAuthRepository implements AuthRepository {
   @override
   Future<Result<bool>> activateSession() async {
     try {
-      return Ok(await _client.rpc('activate_session') == true);
+      final answer = await _client.rpc('activate_session_status');
+      return switch (answer) {
+        'active' => const Ok(true),
+        'not_allowed' => const Err(NotAllowedFailure()),
+        _ => const Ok(false), // 'replaced' or unknown: the old false
+      };
     } catch (e) {
       return Err(readableFailure(e));
     }

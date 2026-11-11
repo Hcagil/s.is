@@ -1257,6 +1257,13 @@ class AppLocalizationsTr extends AppLocalizations {
   String get replacedSignIn => 'Oturum aç';
 
   @override
+  String get removedTitle => 'Artık SIS\'i kullanamazsınız';
+
+  @override
+  String get removedBody =>
+      'Bunun bir hata olduğunu düşünüyorsanız sizi davet eden kişiye sorun.';
+
+  @override
   String replacedUnsentDeleted(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

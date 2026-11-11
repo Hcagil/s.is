@@ -1263,6 +1263,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get replacedSignIn => 'Sign in';
 
   @override
+  String get removedTitle => 'You no longer have access to SIS';
+
+  @override
+  String get removedBody =>
+      'Ask the person who invited you if you think this is a mistake.';
+
+  @override
   String replacedUnsentDeleted(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

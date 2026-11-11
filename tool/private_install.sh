@@ -97,7 +97,9 @@ SQL
   liveversion=$(run_sql_out "$live" | tr -d '[:space:]') || fail 'could not read the live pack version'
   if [ "$liveversion" != "$PRIVATE_PACK_VERSION" ]; then
     # While any GitHub workflow or action still installs a pack, this script may only re-install the live version.
-    if [ ! -f .github/workflows/release.yml ] || [ -d .github/actions/private-server ] || grep -rq 'private-server' .github/workflows; then
+    # grep: 0 = match, 1 = none, 2 = error (unreadable file); only 1 is safe. -R follows symlinked files.
+    wf_hit=0; grep -RqE 'private-server|private_install\.sh|PRIVATE_SQL_B64' .github/workflows || wf_hit=$?
+    if [ ! -f .github/workflows/release.yml ] || [ -d .github/actions/private-server ] || [ "$wf_hit" -ne 1 ]; then
       echo '::error::the pack version differs from the live one and a GitHub workflow or action still installs a pack' >&2
       exit 3
     fi

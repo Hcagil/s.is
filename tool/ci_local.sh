@@ -6,7 +6,9 @@
 # Not replayed: the iOS jobs (build, signed build; need macOS and Apple secrets,
 # GitHub CI only), the classify/documentation jobs, and the "Restore Firebase
 # config" secret step (android/app/google-services.json is copied from the main
-# checkout's .private/firebase/ when missing).
+# checkout's .private/firebase/ when missing), and the runner-only "Install Pillow"
+# step (a venv for the SIS Bot tool test; this machine has its own Python).
+# Local only: "Wipe leftover Supabase stack" and "Private functions and tests".
 #
 # The database job starts from zero like CI: any leftover stack and its data
 # are wiped first, and the stack is stopped at the end (never `down -v`).
@@ -71,7 +73,7 @@ service_key() {
   "${CI[@]}" run --rm supabase status -o env | sed -n 's/^SECRET_KEY="\(.*\)"/\1/p'
 }
 
-layer_rules() { tool/check_pattern.sh && tool/check_release_clean.sh && test/tool/check_pattern_test.sh && test/tool/whats_new_note_test.sh && test/tool/ios_release_test.sh && test/tool/workflow_pipes_test.sh && test/tool/asc_signing_test.py && test/tool/ios_signing_bootstrap_test.py && test/tool/asc_tester_test.py && test/tool/vault_names_test.py && test/tool/admin_apple_workflow_test.sh && test/tool/sis_bot_watch_test.sh && test/tool/sis_bot_length_test.sh && test/tool/check_pr_body_test.py && test/tool/check_release_clean_test.sh && test/tool/sis_test_send_test.sh && test/tool/private_install_db_test.sh && test/tool/ci_local_cache_test.sh; }
+layer_rules() { tool/check_pattern.sh && tool/check_release_clean.sh && test/tool/check_pattern_test.sh && test/tool/whats_new_note_test.sh && test/tool/ios_release_test.sh && test/tool/workflow_pipes_test.sh && test/tool/asc_signing_test.py && test/tool/ios_signing_bootstrap_test.py && test/tool/asc_tester_test.py && test/tool/vault_names_test.py && test/tool/admin_apple_workflow_test.sh && test/tool/sis_bot_watch_test.sh && test/tool/sis_bot_length_test.sh && test/tool/check_pr_body_test.py && test/tool/release_scope_test.sh && test/tool/check_release_clean_test.sh && test/tool/sis_test_send_test.sh && test/tool/private_install_db_test.sh && test/tool/ci_local_cache_test.sh; }
 
 bundle() {
   test -f android/app/google-services.json \
@@ -135,6 +137,14 @@ private_scripts() {
   rm -rf supabase/tests/private
 }
 
+# The public side of the private function hashes: a changed function body with a forgotten hash fails here, not at release.
+private_hashes() {
+  local f; f=$(mktemp)
+  { printf 'do $pk$ begin perform set_config(%s, %s, false); execute $pkw_$' "'private.expected'" "''"; cat tool/private_check.sql; printf '$pkw_$; end $pk$;\n'; } > "$f"
+  docker compose run --rm -v "$f:/tmp/private_check.sql:ro" supabase db query --local -f /tmp/private_check.sql || { rm -f "$f"; return 1; }
+  rm -f "$f"
+}
+
 job_android() {
   step "Build development image" "${CI[@]}" build || return 1
   step "Resolve dependencies" "${CI[@]}" run --rm flutter flutter pub get || return 1
@@ -144,6 +154,7 @@ job_android() {
   step "Build the Rust library for the Dart tests" "${CI[@]}" run --rm flutter cargo build --release --manifest-path rust/Cargo.toml || return 1
   step "Rust tests" "${CI[@]}" run --rm flutter cargo test --manifest-path rust/Cargo.toml || return 1
   step "Rust advisories" "${CI[@]}" run --rm flutter cargo deny --manifest-path rust/Cargo.toml check -W unmaintained advisories || return 1
+  step "Rust licences" "${CI[@]}" run --rm flutter cargo deny --manifest-path rust/Cargo.toml check licenses || return 1
   step "Cargokit build tool tests" "${CI[@]}" run --rm flutter sh -c 'cd rust_builder/cargokit/build_tool && dart pub get && for t in test/*_test.dart; do dart run "$t" || exit 1; done' || return 1
   step "Test" "${CI[@]}" run --rm -e TZ=JST-9 flutter flutter test || return 1
   step "Firebase config present" test -f android/app/google-services.json || return 1
@@ -160,14 +171,15 @@ job_database() {
   step "Wipe leftover Supabase stack" docker compose run --rm supabase stop --no-backup || return 1
   step "Start Supabase and replay migrations" docker compose run --rm supabase start -x "$SKIP" || return 1
   step "Lint database" docker compose run --rm supabase db lint --level error || return 1
+  step "Check the private function hashes" private_hashes || return 1
   step "Test database" docker compose run --rm supabase test db || return 1
+  step "Edge function tests" edge_tests || return 1
   step "Build development image" "${CI[@]}" build flutter || return 1
   step "Build the Rust library for the Dart tests" "${CI[@]}" run --rm flutter cargo build --release --manifest-path rust/Cargo.toml || return 1
   step "Wait until Realtime delivers" "${CI[@]}" run --rm flutter flutter test --run-skipped --tags warmup test/integration/realtime_warmup_test.dart || return 1
   step "Repository integration tests" integration || return 1
   # The integration tests run before the private pack: the registry fixture adds a stand-in panel only when none exists.
   step "Private functions and tests" private_scripts || return 1
-  step "Edge function tests" edge_tests || return 1
   step "SIS Bot tool test" env SIS_BOT_TEST_COMPOSE="${CI[*]}" test/tool/sis_bot_tool_test.sh || return 1
   step "Test sender admin tool test" env SIS_BOT_TEST_COMPOSE="${CI[*]}" test/tool/sis_test_account_admin_test.sh
 }

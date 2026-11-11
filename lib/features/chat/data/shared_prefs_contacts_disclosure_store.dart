@@ -8,14 +8,14 @@ import '../domain/phone_book.dart';
 final class SharedPrefsContactsDisclosureStore
     implements ContactsDisclosureStore {
   /// Creates the store.
-  const SharedPrefsContactsDisclosureStore([this._userId]);
+  const SharedPrefsContactsDisclosureStore(this._userId);
 
-  final String? Function()? _userId;
+  final String? Function() _userId;
 
-  String get _key => 'sis.contacts.disclosure.${_userId?.call() ?? ''}';
+  String get _key => 'sis.contacts.disclosure.${_userId() ?? ''}';
 
   // A signed-in check that finds no user must not share a flag across accounts.
-  bool get _noUser => _userId != null && (_userId.call() ?? '').isEmpty;
+  bool get _noUser => (_userId() ?? '').isEmpty;
 
   @override
   Future<bool> accepted() async {

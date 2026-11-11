@@ -12,7 +12,7 @@ void main() {
   test('a fresh phone has not accepted the disclosure', () async {
     SharedPreferences.setMockInitialValues({});
     expect(
-      await const SharedPrefsContactsDisclosureStore().accepted(),
+      await SharedPrefsContactsDisclosureStore(() => 'u1').accepted(),
       isFalse,
     );
   });

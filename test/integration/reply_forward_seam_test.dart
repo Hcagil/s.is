@@ -351,6 +351,11 @@ void main() {
       // Scoped to pane a: cora's own pane may by now also show a
       // "Forwarded" label on the arrived copy, and the two must not be
       // confused with each other.
+      await until(
+        t,
+        () => within('a', find.text('Forwarded')).evaluate().isNotEmpty,
+        'reid\'s "Forwarded" snackbar to appear',
+      );
       expect(within('a', find.text('Forwarded')), findsOneWidget);
       // The SnackBar sits over the composer; let it dismiss before the
       // reply flow taps there.

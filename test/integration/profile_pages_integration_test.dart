@@ -93,13 +93,29 @@ final _photoBytes = base64Decode(
 /// naming it as its attachment_path passes ownership -- and, for the folder
 /// check in the same policy, so [path] must already start with the
 /// conversation id it is inserted into.
-Future<void> _uploadPhoto(SupabaseClient c, String path) => c.storage
-    .from('attachments')
-    .uploadBinary(
-      path,
-      _photoBytes,
-      fileOptions: const FileOptions(contentType: 'image/png'),
-    );
+Future<void> _uploadPhoto(SupabaseClient c, String path) async {
+  // Storage can answer 500 under a burst of parallel uploads; a retry that
+  // finds the object already there (409) is success.
+  for (var attempt = 1; attempt <= 3; attempt++) {
+    try {
+      await c.storage
+          .from('attachments')
+          .uploadBinary(
+            path,
+            _photoBytes,
+            fileOptions: const FileOptions(contentType: 'image/png'),
+          );
+      return;
+    } on StorageException catch (e) {
+      if (e.statusCode?.startsWith('5') ?? false) {
+        if (attempt == 3) rethrow;
+        continue;
+      }
+      if (e.statusCode == '409' && attempt > 1) return;
+      rethrow;
+    }
+  }
+}
 
 /// One message written straight into the table, the way the app's own
 /// inserts land (the server sets id and created_at) -- except the upload,

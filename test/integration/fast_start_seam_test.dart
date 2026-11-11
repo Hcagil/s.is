@@ -372,18 +372,14 @@ void main() {
     test('costs one round trip, not two', () async {
       const delay = Duration(milliseconds: 300);
       wire.delay = delay;
-      final clock = Stopwatch()..start();
       final list = _ok(await chat.conversations());
-      final took = clock.elapsed;
       expect(list, isNotEmpty);
-      expect([for (final r in wire.rest) r.table], ['chat_list']);
-      expect(wire.maxInFlight, 1);
-      expect(took, greaterThanOrEqualTo(delay));
       expect(
-        took,
-        lessThan(delay * 2),
-        reason: 'one round trip expected, took $took: ${wire.rest}',
+        [for (final r in wire.rest) r.shape],
+        ['GET /rest/v1/rpc/chat_list?'],
+        reason: 'one round trip means one request: ${wire.rest}',
       );
+      expect(wire.maxInFlight, 1, reason: 'nothing sent beside the list');
     });
 
     test('chat_list holds what the eight old reads held', () async {

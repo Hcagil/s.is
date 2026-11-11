@@ -770,6 +770,7 @@
   "messageDeleteTooLate": "Çok geç: {hours} saat geçti",
   "adminHint": "Komutlar için / yazın",
   "cmdArgEmail": "E-posta",
+  "cmdArgTag": "Etiket",
   "cmdRowLabel": "{command}, {meaning}",
   "salesNotEnc": "Uçtan uca şifreli değil",
   "groupCloseTitle": "Grup kapatılsın mı?",

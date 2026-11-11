@@ -359,6 +359,9 @@ class _SessionGateState extends ConsumerState<SessionGate> {
           hiddenEmail: hiddenEmail,
           appleButton: appleSignInButton,
         ),
+      AsyncData(value: Removed()) => StatusScreen.removed(
+        onSignOut: notifier.signOut,
+      ),
       AsyncData(value: Denied()) => StatusScreen.denied(
         onSignOut: notifier.signOut,
       ),

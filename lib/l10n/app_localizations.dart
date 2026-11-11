@@ -2258,6 +2258,18 @@ abstract class AppLocalizations {
   /// **'Sign in'**
   String get replacedSignIn;
 
+  /// Title of the screen shown to a user who was removed from the allowed list
+  ///
+  /// In en, this message translates to:
+  /// **'You no longer have access to SIS'**
+  String get removedTitle;
+
+  /// Body of the removed-from-allowed-list screen
+  ///
+  /// In en, this message translates to:
+  /// **'Ask the person who invited you if you think this is a mistake.'**
+  String get removedBody;
+
   /// Line on the replaced-phone screen: how many unsent messages were deleted
   ///
   /// In en, this message translates to:

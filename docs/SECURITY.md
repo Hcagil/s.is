@@ -257,6 +257,11 @@ All are `security definer` with `set search_path = ''`.
   one and the user is allowed. Token refreshes keep the session, so a replaced
   device can never re-claim access by refreshing. Returns `true` when
   this device now holds the active session.
+- `public.activate_session_status()` — the same claim, answering text for the
+  current app: `'active'`, `'replaced'` (allowed, another session is active)
+  or `'not_allowed'` (email not on the allowlist, checked first). SECURITY
+  DEFINER, `search_path = ''`, revoked from public/anon, granted to
+  authenticated. `activate_session()` stays unchanged for old builds.
 
 Consequence: one active device per user; tokens from a replaced device can
 never regain access. Every read, write, RPC and Realtime delivery of
@@ -585,9 +590,11 @@ deletes the marker), a new session id, an older marker (kept until the next
 confirmation overwrites it) -- the gated path runs as before and nothing is
 shown until the server answers.
 
-Behind the stored list the app asks `activate_session()`. `true`: confirmed,
-and `confirmedAt` moves (only a server `true` ever moves it). `false` (revoked,
-or replaced on another device): the Denied screen is assigned in the same
+Behind the stored list the app asks `activate_session_status()`. `'active'`: confirmed,
+and `confirmedAt` moves (only a server `'active'` ever moves it). `'replaced'`
+(another device holds the session) or `'not_allowed'` (taken off the allowlist;
+with a stored marker the plain "no access" screen, without one the Denied
+screen): the screen is assigned in the same
 frame, every open page is closed (a chat opened from a notification in the
 unconfirmed window never stays on top of it), then the marker, the message store
 with its key, the push feed file and the photo cache are wiped. A refresh token the server rejects: signed out

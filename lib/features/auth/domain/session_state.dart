@@ -45,6 +45,11 @@ final class Denied extends SessionState {
   const Denied();
 }
 
+/// Was allowed on this phone before (a last-session marker exists) but is no longer on the allowed list. Still a [Denied], so every place that ends a session treats it the same; only the screen differs.
+final class Removed extends Denied {
+  const Removed();
+}
+
 /// This phone was replaced: the member signed in on another phone, which now
 /// holds the one active session. This phone is signed out and its account data
 /// is gone, unsent messages included.

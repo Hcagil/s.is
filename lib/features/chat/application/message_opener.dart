@@ -351,6 +351,8 @@ class StoreMessageOpener implements MessageOpener {
               await store.upsertAll([
                 m.withPlain(env.text, env.card, sealed: hash),
               ]);
+              // Hidden while this write waited on the disk: take the row out again.
+              if (_forgotten.contains(m.id)) await store.remove(m.id);
               savedByEngine = true;
             }),
     );
@@ -370,6 +372,7 @@ class StoreMessageOpener implements MessageOpener {
         // The ratchet moved, so this message can never be opened again: the engine saved the text with it (see save above); this write repeats it for an engine that does not run the save, and keeps it in memory even if it fails.
         try {
           if (!savedByEngine) await store?.upsertAll([plain]);
+          if (_forgotten.contains(m.id)) await store?.remove(m.id);
           // A deletion that landed while decrypting wins over the text.
           final near = await store?.around(m.conversationId, m.id, each: 0);
           final now = near?.where((s) => s.id == m.id).firstOrNull;

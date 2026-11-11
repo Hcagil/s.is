@@ -347,5 +347,7 @@ insert into app_private.allowlist(email) values
   ('clo-boss@integration.test'),
   ('clo-mate@integration.test'),
   ('clo-other@integration.test'),
+  -- removed tester status (test/integration/removed_tester_status_test.dart)
+  ('removed-status@integration.test'),
   ('sis-destek-bot@example.com')
 on conflict do nothing;

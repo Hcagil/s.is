@@ -1,4 +1,3 @@
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/chat/application/message_opener.dart';

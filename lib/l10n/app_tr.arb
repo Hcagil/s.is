@@ -422,7 +422,7 @@
   "chatDeleteCancel": "İptal et",
   "chatDeleteUndo": "Geri al",
   "chatDeleteChat": "Sohbeti sil",
-  "chatDeleteSure": "**{name}** ile olan sohbet kalıcı olarak silinsin mi?",
+  "chatDeleteSure": "**{name}** ile olan sohbet sadece sizin için silinsin mi? {name} sohbeti görmeye devam eder.",
   "chatDeletedUndo": "Sohbet silindi",
   "chatLeaveGroupTitle": "Gruptan ayrılmak ister misiniz?",
   "chatDeleteLeaveSure": "**{name}** grubunu silmek ve gruptan ayrılmak istediğinizden emin misiniz?",

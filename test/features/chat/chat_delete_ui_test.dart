@@ -289,7 +289,13 @@ void main() {
     await openDelete(t, ['c1']);
     expect(find.text('Delete chat'), findsWidgets);
     expect(boldShown(t, 'Bob Stone'), isTrue);
-    expect(rich('Permanently delete the chat with Bob Stone?'), findsOneWidget);
+    expect(
+      rich(
+        'Delete the chat with Bob Stone just for you? Bob Stone will still have it.',
+      ),
+      findsOneWidget,
+    );
+    expect(rich('Permanently'), findsNothing);
     noBox();
     await t.tap(byKey('delete-chat-cancel'));
     await t.pumpAndSettle();
@@ -299,6 +305,28 @@ void main() {
     expect(byKey('chat-undo-bar'), findsNothing, reason: 'cancel started it');
     await runOut(t);
     expect(w.del.calls, isEmpty, reason: 'cancel reached the server');
+  });
+
+  testWidgets('4b. one-to-one delete text: only the first name is bold', (
+    t,
+  ) async {
+    await pumpList(t);
+    await openDelete(t, ['c1']);
+    var boldCount = 0;
+    for (final r in t.widgetList<RichText>(find.byType(RichText))) {
+      if (!r.text.toPlainText().contains('just for you')) continue;
+      r.text.visitChildren((span) {
+        if (span is TextSpan &&
+            (span.text ?? '').contains('Bob Stone') &&
+            (span.style?.fontWeight ?? FontWeight.normal).value >=
+                FontWeight.w600.value) {
+          boldCount++;
+        }
+        return true;
+      });
+    }
+    expect(boldCount, 1);
+    expect(rich(' will still have it.'), findsOneWidget);
   });
 
   testWidgets('5. B OK hides the 1:1 for me only', (t) async {
@@ -450,7 +478,13 @@ void main() {
     await pumpList(t, tr: true);
     await openDelete(t, ['c1']);
     expect(find.text('Sohbeti sil'), findsWidgets);
-    expect(rich('ile olan sohbet kalıcı olarak silinsin mi?'), findsOneWidget);
+    expect(
+      rich(
+        'Bob Stone ile olan sohbet sadece sizin için silinsin mi? Bob Stone sohbeti görmeye devam eder.',
+      ),
+      findsOneWidget,
+    );
+    expect(rich('kalıcı'), findsNothing);
     expect(boldShown(t, 'Bob Stone'), isTrue);
     noBox();
     expect(find.text('İptal et'), findsOneWidget);

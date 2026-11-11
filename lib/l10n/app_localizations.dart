@@ -2633,7 +2633,7 @@ abstract class AppLocalizations {
   /// Delete dialog for one person; the name between ** is shown bold
   ///
   /// In en, this message translates to:
-  /// **'Permanently delete the chat with **{name}**?'**
+  /// **'Delete the chat with **{name}** just for you? {name} will still have it.'**
   String chatDeleteSure(String name);
 
   /// Undo bar after deleting one chat

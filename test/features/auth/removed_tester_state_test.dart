@@ -176,5 +176,51 @@ void main() {
         await end(t);
       },
     );
+
+    testWidgets(
+      'no marker, first check fails (network), retry then NotAllowedFailure -> Denied, never Removed',
+      (t) async {
+        final auth = ColdAuth();
+        final r = Rig(auth, MemoryLastSessionStore());
+        await flush(t);
+
+        r.auth.last.fail();
+        await flush(t);
+
+        expect(r.state, isA<SessionError>());
+        r.c.read(sessionControllerProvider.notifier).retry();
+        await flush(t);
+
+        r.auth.last.fail(const NotAllowedFailure());
+        await flush(t);
+
+        expect(r.state, isA<Denied>());
+        expect(r.state, isNot(isA<Removed>()));
+        expect(r.states.map((s) => s.value).whereType<Removed>(), isEmpty);
+        await end(t);
+      },
+    );
+
+    testWidgets(
+      'fresh sign-in (no marker at start), confirmed, then NotAllowedFailure on recheck',
+      (t) async {
+        final auth = ColdAuth();
+        final r = Rig(auth, MemoryLastSessionStore());
+        await flush(t);
+
+        r.auth.last.allow();
+        await flush(t);
+        expect(r.state, isA<Allowed>());
+
+        r.c.read(sessionControllerProvider.notifier).recheck();
+        await flush(t);
+
+        r.auth.last.fail(const NotAllowedFailure());
+        await flush(t);
+
+        expect(r.state, isA<Removed>());
+        await end(t);
+      },
+    );
   });
 }

@@ -2557,6 +2557,9 @@ class AppLocalizationsTr extends AppLocalizations {
   String get cmdArgEmail => 'E-posta';
 
   @override
+  String get cmdArgTag => 'Etiket';
+
+  @override
   String cmdRowLabel(String command, String meaning) {
     return '$command, $meaning';
   }

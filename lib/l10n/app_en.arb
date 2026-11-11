@@ -1727,6 +1727,8 @@
   "@adminHint": {"description": "Admin chat field hint"},
   "cmdArgEmail": "Email",
   "@cmdArgEmail": {"description": "Command list argument hint"},
+  "cmdArgTag": "Tag",
+  "@cmdArgTag": {"description": "Label in the command list: this command needs an account tag"},
   "cmdRowLabel": "{command}, {meaning}",
   "@cmdRowLabel": {"description": "Screen reader label of one command row", "placeholders": {"command": {"type": "String"}, "meaning": {"type": "String"}}},
   "salesNotEnc": "Not end-to-end encrypted",

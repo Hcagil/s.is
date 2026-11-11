@@ -60,7 +60,13 @@ String? adminReplyText(
   if (text == null || m['help'] != true) return text;
   if (commands.isEmpty) return text;
   return '$text\n\n${l.adminHelpHeader}\n'
-      '${commands.map((c) => '${c.name}${c.takesEmail ? ' ${l.cmdArgEmail}' : ''} - ${c.help(lang)}').join('\n')}';
+      '${commands.map((c) => '${c.name}${_argLabel(l, c)} - ${c.help(lang)}').join('\n')}';
+}
+
+/// The argument label after a command name, with a leading space; empty for none.
+String _argLabel(AppLocalizations l, StaffCommand c) {
+  if (c.takesTag) return ' ${l.cmdArgTag}';
+  return c.takesEmail ? ' ${l.cmdArgEmail}' : '';
 }
 
 /// The one-line chat-list preview of an admin reply in the reader's language.

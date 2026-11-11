@@ -43,6 +43,9 @@ class StaffCommand {
   /// Whether this command takes an email argument.
   bool get takesEmail => arg == 'email';
 
+  /// Whether this command takes an account tag argument.
+  bool get takesTag => arg == 'tag';
+
   /// Returns the help text in [lang], falling back to English.
   String help(String lang) =>
       lang == 'tr' && helpTr.isNotEmpty ? helpTr : helpEn;

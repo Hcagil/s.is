@@ -4484,6 +4484,12 @@ abstract class AppLocalizations {
   /// **'Email'**
   String get cmdArgEmail;
 
+  /// Label in the command list: this command needs an account tag
+  ///
+  /// In en, this message translates to:
+  /// **'Tag'**
+  String get cmdArgTag;
+
   /// Screen reader label of one command row
   ///
   /// In en, this message translates to:

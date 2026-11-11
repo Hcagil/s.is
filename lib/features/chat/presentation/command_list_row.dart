@@ -49,10 +49,10 @@ class CommandRow extends StatelessWidget {
           color: brand.text,
         ),
         children: [
-          if (command.takesEmail) ...[
+          if (command.takesEmail || command.takesTag) ...[
             const WidgetSpan(child: SizedBox(width: 6)),
             TextSpan(
-              text: l.cmdArgEmail,
+              text: command.takesTag ? l.cmdArgTag : l.cmdArgEmail,
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w400,

@@ -203,4 +203,62 @@ void main() {
         );
     await expectLater(reactionOpener(null)(p), throwsA(anything));
   });
+
+  test('no store key: null, and the store file is never looked for', () async {
+    final p = await bobReacts();
+    FlutterSecureStorage.setMockInitialValues({pickleKeyName: hex(alice.pk)});
+    var asked = 0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('plugins.flutter.io/path_provider'),
+          (call) async {
+            if (call.method == 'getApplicationSupportDirectory') {
+              asked++;
+            }
+            return alice.h.dir.path;
+          },
+        );
+    expect(await reactionOpener(null)(p), isNull);
+    expect(
+      asked,
+      0,
+      reason: 'a missing key must stop before the store is opened',
+    );
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+            const MethodChannel('plugins.flutter.io/path_provider'),
+            null,
+          ),
+    );
+  });
+
+  test('no pickle key: null, and the store file is never looked for', () async {
+    final p = await bobReacts();
+    FlutterSecureStorage.setMockInitialValues({storeKeyName: alice.keyHex});
+    var asked = 0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('plugins.flutter.io/path_provider'),
+          (call) async {
+            if (call.method == 'getApplicationSupportDirectory') {
+              asked++;
+            }
+            return alice.h.dir.path;
+          },
+        );
+    expect(await reactionOpener(null)(p), isNull);
+    expect(
+      asked,
+      0,
+      reason: 'a missing key must stop before the store is opened',
+    );
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+            const MethodChannel('plugins.flutter.io/path_provider'),
+            null,
+          ),
+    );
+  });
 }

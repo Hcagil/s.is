@@ -1479,7 +1479,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String chatDeleteSure(String name) {
-    return 'Permanently delete the chat with **$name**?';
+    return 'Delete the chat with **$name** just for you? $name will still have it.';
   }
 
   @override

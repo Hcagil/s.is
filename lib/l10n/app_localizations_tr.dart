@@ -1467,7 +1467,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String chatDeleteSure(String name) {
-    return '**$name** ile olan sohbet kalıcı olarak silinsin mi?';
+    return '**$name** ile olan sohbet sadece sizin için silinsin mi? $name sohbeti görmeye devam eder.';
   }
 
   @override

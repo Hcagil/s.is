@@ -819,3 +819,5 @@ when a collaborator leaves or a dependency is suspected compromised.
 - A confirmation card is answered only by `public.admin_answer`, which keeps the card's life (key and kind must match, owner and membership are checked) and hands private cards to the pack; any other card is stale.
 - The install on the owner's computer checks the pack on the live database (the release only runs the public-side hash check against production): pack version equals the proven version, the public functions it relies on are unchanged (hash list in `tool/private_check.sql`), and every `private_*` function is owned like the gate, definer, empty search_path and not executable by any API role.
 - Deployment details and the real names are kept in the private notes.
+
+- Any future login role (database user that can log in) inherits PUBLIC execute on `net.*` (outbound HTTP) and `cron.schedule/unschedule`; a read-only role for tools must have those revoked first, which is why the bot's phone-detail read is a function and not a role.

@@ -79,10 +79,10 @@ class Line extends http.BaseClient {
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     if (offline) {
-      if (request.url.path.endsWith('/rpc/activate_session')) refusedChecks++;
+      if (request.url.path.contains('/rpc/activate_session')) refusedChecks++;
       throw const SocketException('Connection refused (test: offline)');
     }
-    if (request.url.path.endsWith('/rpc/activate_session')) {
+    if (request.url.path.contains('/rpc/activate_session')) {
       activations++;
       final hold = _hold;
       if (hold != null) await hold.future;
@@ -263,7 +263,7 @@ void main() {
   tearDownAll(() => service.dispose());
 
   test('removed from the allowlist: the next start shows the stored state, '
-      'then Replaced (a false with a marker), the marker is wiped, and RLS returns zero rows', () async {
+      'then Removed (the server says not allowed), the marker is wiped, and RLS returns zero rows', () async {
     final p = await phone('csa@integration.test');
     final partner = await phone('csz@integration.test');
     final chat = SupabaseChatRepository(p.client);
@@ -285,7 +285,7 @@ void main() {
 
     await offAllowlist(p, 'csa@integration.test');
     final run = Run(p);
-    await run.until(() => run.state is Replaced, 'Replaced');
+    await run.until(() => run.state is Removed, 'Removed');
     expect(
       isUnconfirmed(run.states.first),
       isTrue,
@@ -345,12 +345,12 @@ void main() {
     expect(isUnconfirmed(run.state!), isTrue, reason: 'still unconfirmed');
 
     p.line.releaseChecks();
-    await run.until(() => run.state is Replaced, 'Replaced');
+    await run.until(() => run.state is Removed, 'Removed');
     run.c.dispose();
   });
 
   test('revoked while the phone was offline: the stored state while the '
-      'ladder retries, then Replaced within one retry of reconnecting', () async {
+      'ladder retries, then Removed within one retry of reconnecting', () async {
     final p = await phone('csd@integration.test');
     await firstRun(p);
     await offAllowlist(p, 'csd@integration.test');
@@ -372,8 +372,8 @@ void main() {
     p.line.offline = false;
     // The ladder's longest wait up to here is its next step; the first is 2 s.
     await run.until(
-      () => run.state is Replaced,
-      'Replaced after reconnecting',
+      () => run.state is Removed,
+      'Removed after reconnecting',
       timeout: const Duration(seconds: 12),
     );
     expect(

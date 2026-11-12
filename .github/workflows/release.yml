@@ -295,8 +295,10 @@ jobs:
                 echo "PR #$pr" >&2
                 gh api "repos/${GITHUB_REPOSITORY}/pulls/$pr" --jq 'select(.author_association | IN("OWNER","MEMBER","COLLABORATOR")) | .body' </dev/null | tr -d '\r' || exit 1
               done)
-          note=$(printf '%s\n' "$bodies" | sed -n 's/^For users: *//p' | sed '/^[[:space:]]*$/d')
-          note_tr=$(printf '%s\n' "$bodies" | sed -n -e 's/^For users (TR): *//p' -e 's/^Kullanıcılar için: *//p' | sed '/^[[:space:]]*$/d')
+          # Each line once (first position kept); the fallback line only once, last.
+          dedupe() { awk -v fb="$1" '$0==fb{f=1;next} !seen[$0]++{print} END{if(f)print fb}'; }
+          note=$(printf '%s\n' "$bodies" | sed -n 's/^For users: *//p' | sed '/^[[:space:]]*$/d' | dedupe "Background improvements.")
+          note_tr=$(printf '%s\n' "$bodies" | sed -n -e 's/^For users (TR): *//p' -e 's/^Kullanıcılar için: *//p' | sed '/^[[:space:]]*$/d' | dedupe "Arka planda iyileştirmeler.")
           note=${note:0:1900}
           note_tr=${note_tr:0:1900}
           echo "Note: $note"

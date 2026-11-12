@@ -5,8 +5,10 @@ import '../../../app/theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../application/admin_panels_controller.dart';
 import '../application/admin_panels_state.dart';
+import 'admin_dashboard_view.dart';
 import 'admin_link_view.dart';
 import 'admin_questions_view.dart';
+import 'admin_talk_view.dart';
 import 'admin_tasks_view.dart';
 
 Future<void> showAdminPanels(BuildContext context) => Navigator.of(context)
@@ -87,12 +89,8 @@ class _AdminPanelsScreenState extends ConsumerState<AdminPanelsScreen>
           AdminGate.ready => switch (_index) {
             1 => const AdminQuestionsView(key: ValueKey('admin-panel-1')),
             2 => const AdminTasksView(key: ValueKey('admin-panel-2')),
-            _ => Center(
-              child: Text(switch (_index) {
-                0 => l.adminTalk,
-                _ => l.adminDashboard,
-              }, key: ValueKey('admin-panel-$_index')),
-            ),
+            3 => const AdminDashboardView(key: ValueKey('admin-panel-3')),
+            _ => const AdminTalkView(key: ValueKey('admin-panel-0')),
           },
         },
       ),

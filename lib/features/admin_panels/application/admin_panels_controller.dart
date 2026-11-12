@@ -333,9 +333,13 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     return f;
   }
 
-  /// One message from the owner to the manager.
-  Future<Failure?> sendTalk(String text) =>
-      _send({'answer_id': _newAnswerId(), 'kind': 'talk', 'text': text});
+  /// One message from the owner to the manager, into [conv] when one is open.
+  Future<Failure?> sendTalk(String text, {String? conv}) => _send({
+    'answer_id': _newAnswerId(),
+    'kind': 'talk',
+    'text': text,
+    'conv': ?conv,
+  });
 
   Future<void> _apply(Result<AdminStatus?> r) async {
     if (!ref.mounted) return;

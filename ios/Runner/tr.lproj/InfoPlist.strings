@@ -17,3 +17,4 @@
 
 /* Konuşma tanıma izin penceresi (iPhone bir kez sorar, sonra Ayarlar). */
 "NSSpeechRecognitionUsageDescription" = "Sesinizi mesaj kutusunda yazıya çevirebilmek için konuşma tanımaya izin verin. Telefonunuzda çalışır.";
+"NSFaceIDUsageDescription" = "Admin Panellerini açmak için Face ID'yi kullanabilirsiniz.";

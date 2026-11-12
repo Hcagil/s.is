@@ -857,5 +857,5 @@
   "adminUnlockNoLock": "Admin Panellerini açmak için telefonunuzun Ayarlar bölümünden ekran kilidi (PIN, desen, parmak izi veya yüz tanıma) ayarlayın, sonra buraya dönün.",
   "adminUnlockCancelled": "Admin Panelleri kapalı kaldı. Görmek için telefonunuzun kilidini açın.",
   "adminUnlockRetry": "Kilidi aç",
-  "adminTalkTruncated": "Eski mesajlar gösterilmiyor"
+  "adminTalkTruncated": "Burada yalnızca son mesajlar gösteriliyor."
 }

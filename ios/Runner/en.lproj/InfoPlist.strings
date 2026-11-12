@@ -14,3 +14,4 @@
 
 /* The speech recognition prompt (iPhone asks once, then Settings). */
 "NSSpeechRecognitionUsageDescription" = "Allow speech recognition to turn your voice into text in the message box. It runs on your phone.";
+"NSFaceIDUsageDescription" = "You can use Face ID to open Admin Panels.";

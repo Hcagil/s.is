@@ -78,7 +78,7 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>NSFaceIDUsageDescription</key>
-	<string>Use Face ID to open the admin panels.</string>
+	<string>You can use Face ID to open Admin Panels.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Allow camera access to take a photo and send it in the chat. The photo is only uploaded when you send it.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

@@ -1915,6 +1915,6 @@
   "@adminUnlockCancelled": {"description": "Admin panels screen text"},
   "adminUnlockRetry": "Unlock",
   "@adminUnlockRetry": {"description": "Admin panels screen text"},
-  "adminTalkTruncated": "Older messages not shown",
+  "adminTalkTruncated": "Only the latest messages are shown here.",
   "@adminTalkTruncated": {"description": "Admin panels screen text"}
 }

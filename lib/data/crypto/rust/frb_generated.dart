@@ -3,6 +3,7 @@
 
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
+import 'api/admin_view_crypto.dart';
 import 'api/olm.dart';
 
 import 'dart:async';
@@ -69,7 +70,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -579034159;
+  int get rustContentHash => -1129313075;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -160,6 +161,35 @@ abstract class RustLibApi extends BaseApi {
   });
 
   String crateApiOlmOlmSessionSessionId({required OlmSession that});
+
+  String crateApiAdminViewCryptoAdminViewCode({
+    required List<int> phonePublic,
+    required List<int> computerPublic,
+  });
+
+  AdminViewKeyPair crateApiAdminViewCryptoAdminViewGenerateKeypair();
+
+  Uint8List crateApiAdminViewCryptoAdminViewOpen({
+    required List<int> mySecret,
+    required List<int> peerPublic,
+    required int dir,
+    required int epoch,
+    required BigInt seq,
+    required List<int> wire,
+  });
+
+  Uint8List crateApiAdminViewCryptoAdminViewPublicKey({
+    required List<int> secret,
+  });
+
+  Uint8List crateApiAdminViewCryptoAdminViewSeal({
+    required List<int> mySecret,
+    required List<int> peerPublic,
+    required int dir,
+    required int epoch,
+    required BigInt seq,
+    required List<int> plaintext,
+  });
 
   Future<void> crateApiOlmInitApp();
 
@@ -873,6 +903,172 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  String crateApiAdminViewCryptoAdminViewCode({
+    required List<int> phonePublic,
+    required List<int> computerPublic,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_prim_u_8_loose(phonePublic, serializer);
+          sse_encode_list_prim_u_8_loose(computerPublic, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 23)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiAdminViewCryptoAdminViewCodeConstMeta,
+        argValues: [phonePublic, computerPublic],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAdminViewCryptoAdminViewCodeConstMeta =>
+      const TaskConstMeta(
+        debugName: "admin_view_code",
+        argNames: ["phonePublic", "computerPublic"],
+      );
+
+  @override
+  AdminViewKeyPair crateApiAdminViewCryptoAdminViewGenerateKeypair() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 24)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_admin_view_key_pair,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiAdminViewCryptoAdminViewGenerateKeypairConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAdminViewCryptoAdminViewGenerateKeypairConstMeta =>
+      const TaskConstMeta(
+        debugName: "admin_view_generate_keypair",
+        argNames: [],
+      );
+
+  @override
+  Uint8List crateApiAdminViewCryptoAdminViewOpen({
+    required List<int> mySecret,
+    required List<int> peerPublic,
+    required int dir,
+    required int epoch,
+    required BigInt seq,
+    required List<int> wire,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_prim_u_8_loose(mySecret, serializer);
+          sse_encode_list_prim_u_8_loose(peerPublic, serializer);
+          sse_encode_u_8(dir, serializer);
+          sse_encode_u_32(epoch, serializer);
+          sse_encode_u_64(seq, serializer);
+          sse_encode_list_prim_u_8_loose(wire, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 25)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_prim_u_8_strict,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiAdminViewCryptoAdminViewOpenConstMeta,
+        argValues: [mySecret, peerPublic, dir, epoch, seq, wire],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAdminViewCryptoAdminViewOpenConstMeta =>
+      const TaskConstMeta(
+        debugName: "admin_view_open",
+        argNames: ["mySecret", "peerPublic", "dir", "epoch", "seq", "wire"],
+      );
+
+  @override
+  Uint8List crateApiAdminViewCryptoAdminViewPublicKey({
+    required List<int> secret,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_prim_u_8_loose(secret, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 26)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_prim_u_8_strict,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiAdminViewCryptoAdminViewPublicKeyConstMeta,
+        argValues: [secret],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAdminViewCryptoAdminViewPublicKeyConstMeta =>
+      const TaskConstMeta(
+        debugName: "admin_view_public_key",
+        argNames: ["secret"],
+      );
+
+  @override
+  Uint8List crateApiAdminViewCryptoAdminViewSeal({
+    required List<int> mySecret,
+    required List<int> peerPublic,
+    required int dir,
+    required int epoch,
+    required BigInt seq,
+    required List<int> plaintext,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_prim_u_8_loose(mySecret, serializer);
+          sse_encode_list_prim_u_8_loose(peerPublic, serializer);
+          sse_encode_u_8(dir, serializer);
+          sse_encode_u_32(epoch, serializer);
+          sse_encode_u_64(seq, serializer);
+          sse_encode_list_prim_u_8_loose(plaintext, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 27)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_prim_u_8_strict,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiAdminViewCryptoAdminViewSealConstMeta,
+        argValues: [mySecret, peerPublic, dir, epoch, seq, plaintext],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAdminViewCryptoAdminViewSealConstMeta =>
+      const TaskConstMeta(
+        debugName: "admin_view_seal",
+        argNames: [
+          "mySecret",
+          "peerPublic",
+          "dir",
+          "epoch",
+          "seq",
+          "plaintext",
+        ],
+      );
+
+  @override
   Future<void> crateApiOlmInitApp() {
     return handler.executeNormal(
       NormalTask(
@@ -881,7 +1077,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 23,
+            funcId: 28,
             port: port_,
           );
         },
@@ -906,7 +1102,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_box_autoadd_olm_ciphertext(message, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 24)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 29)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -938,7 +1134,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_String(signingKey, serializer);
           sse_encode_String(message, serializer);
           sse_encode_String(signature, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 25)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 30)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1051,6 +1247,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  AdminViewKeyPair dco_decode_admin_view_key_pair(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return AdminViewKeyPair(
+      secret: dco_decode_list_prim_u_8_strict(arr[0]),
+      public: dco_decode_list_prim_u_8_strict(arr[1]),
+    );
+  }
+
+  @protected
   bool dco_decode_bool(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as bool;
@@ -1117,6 +1325,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   int dco_decode_u_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as int;
+  }
+
+  @protected
+  BigInt dco_decode_u_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dcoDecodeU64(raw);
   }
 
   @protected
@@ -1241,6 +1455,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  AdminViewKeyPair sse_decode_admin_view_key_pair(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_secret = sse_decode_list_prim_u_8_strict(deserializer);
+    var var_public = sse_decode_list_prim_u_8_strict(deserializer);
+    return AdminViewKeyPair(secret: var_secret, public: var_public);
+  }
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint8() != 0;
@@ -1314,6 +1538,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   int sse_decode_u_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint32();
+  }
+
+  @protected
+  BigInt sse_decode_u_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getBigUint64();
   }
 
   @protected
@@ -1450,6 +1680,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_admin_view_key_pair(
+    AdminViewKeyPair self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_prim_u_8_strict(self.secret, serializer);
+    sse_encode_list_prim_u_8_strict(self.public, serializer);
+  }
+
+  @protected
   void sse_encode_bool(bool self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint8(self ? 1 : 0);
@@ -1526,6 +1766,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_u_32(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint32(self);
+  }
+
+  @protected
+  void sse_encode_u_64(BigInt self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putBigUint64(self);
   }
 
   @protected

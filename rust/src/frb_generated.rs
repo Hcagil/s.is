@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -579034159;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1129313075;
 
 // Section: executor
 
@@ -1057,6 +1057,183 @@ fn wire__crate__api__olm__OlmSession_session_id_impl(
         },
     )
 }
+fn wire__crate__api__admin_view_crypto__admin_view_code_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "admin_view_code",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_phone_public = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_computer_public = <Vec<u8>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, String>((move || {
+                let output_ok = crate::api::admin_view_crypto::admin_view_code(
+                    api_phone_public,
+                    api_computer_public,
+                )?;
+                std::result::Result::Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__admin_view_crypto__admin_view_generate_keypair_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "admin_view_generate_keypair",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            transform_result_sse::<_, String>((move || {
+                let output_ok = crate::api::admin_view_crypto::admin_view_generate_keypair()?;
+                std::result::Result::Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__admin_view_crypto__admin_view_open_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "admin_view_open",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_my_secret = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_peer_public = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_dir = <u8>::sse_decode(&mut deserializer);
+            let api_epoch = <u32>::sse_decode(&mut deserializer);
+            let api_seq = <u64>::sse_decode(&mut deserializer);
+            let api_wire = <Vec<u8>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, String>((move || {
+                let output_ok = crate::api::admin_view_crypto::admin_view_open(
+                    api_my_secret,
+                    api_peer_public,
+                    api_dir,
+                    api_epoch,
+                    api_seq,
+                    api_wire,
+                )?;
+                std::result::Result::Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__admin_view_crypto__admin_view_public_key_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "admin_view_public_key",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_secret = <Vec<u8>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, String>((move || {
+                let output_ok = crate::api::admin_view_crypto::admin_view_public_key(api_secret)?;
+                std::result::Result::Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__admin_view_crypto__admin_view_seal_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "admin_view_seal",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_my_secret = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_peer_public = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_dir = <u8>::sse_decode(&mut deserializer);
+            let api_epoch = <u32>::sse_decode(&mut deserializer);
+            let api_seq = <u64>::sse_decode(&mut deserializer);
+            let api_plaintext = <Vec<u8>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, String>((move || {
+                let output_ok = crate::api::admin_view_crypto::admin_view_seal(
+                    api_my_secret,
+                    api_peer_public,
+                    api_dir,
+                    api_epoch,
+                    api_seq,
+                    api_plaintext,
+                )?;
+                std::result::Result::Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__olm__init_app_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1214,6 +1391,18 @@ impl SseDecode for String {
     }
 }
 
+impl SseDecode for crate::api::admin_view_crypto::AdminViewKeyPair {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_secret = <Vec<u8>>::sse_decode(deserializer);
+        let mut var_public = <Vec<u8>>::sse_decode(deserializer);
+        return crate::api::admin_view_crypto::AdminViewKeyPair {
+            secret: var_secret,
+            public: var_public,
+        };
+    }
+}
+
 impl SseDecode for bool {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1287,6 +1476,13 @@ impl SseDecode for u32 {
     }
 }
 
+impl SseDecode for u64 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        deserializer.cursor.read_u64::<NativeEndian>().unwrap()
+    }
+}
+
 impl SseDecode for u8 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1322,7 +1518,7 @@ fn pde_ffi_dispatcher_primary_impl(
 ) {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        23 => wire__crate__api__olm__init_app_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__olm__init_app_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -1395,8 +1591,27 @@ fn pde_ffi_dispatcher_sync_impl(
         20 => wire__crate__api__olm__OlmSession_from_pickle_impl(ptr, rust_vec_len, data_len),
         21 => wire__crate__api__olm__OlmSession_pickle_impl(ptr, rust_vec_len, data_len),
         22 => wire__crate__api__olm__OlmSession_session_id_impl(ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__olm__olm_pre_key_session_id_impl(ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__olm__olm_verify_impl(ptr, rust_vec_len, data_len),
+        23 => {
+            wire__crate__api__admin_view_crypto__admin_view_code_impl(ptr, rust_vec_len, data_len)
+        }
+        24 => wire__crate__api__admin_view_crypto__admin_view_generate_keypair_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        25 => {
+            wire__crate__api__admin_view_crypto__admin_view_open_impl(ptr, rust_vec_len, data_len)
+        }
+        26 => wire__crate__api__admin_view_crypto__admin_view_public_key_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        27 => {
+            wire__crate__api__admin_view_crypto__admin_view_seal_impl(ptr, rust_vec_len, data_len)
+        }
+        29 => wire__crate__api__olm__olm_pre_key_session_id_impl(ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__olm__olm_verify_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -1433,6 +1648,27 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<OlmSession>> for OlmSession {
     }
 }
 
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::admin_view_crypto::AdminViewKeyPair {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.secret.into_into_dart().into_dart(),
+            self.public.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::admin_view_crypto::AdminViewKeyPair
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::admin_view_crypto::AdminViewKeyPair>
+    for crate::api::admin_view_crypto::AdminViewKeyPair
+{
+    fn into_into_dart(self) -> crate::api::admin_view_crypto::AdminViewKeyPair {
+        self
+    }
+}
 // Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::olm::OlmCiphertext {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
@@ -1516,6 +1752,14 @@ impl SseEncode for String {
     }
 }
 
+impl SseEncode for crate::api::admin_view_crypto::AdminViewKeyPair {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<u8>>::sse_encode(self.secret, serializer);
+        <Vec<u8>>::sse_encode(self.public, serializer);
+    }
+}
+
 impl SseEncode for bool {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -1573,6 +1817,13 @@ impl SseEncode for u32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         serializer.cursor.write_u32::<NativeEndian>(self).unwrap();
+    }
+}
+
+impl SseEncode for u64 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        serializer.cursor.write_u64::<NativeEndian>(self).unwrap();
     }
 }
 

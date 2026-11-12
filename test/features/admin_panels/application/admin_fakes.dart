@@ -2,6 +2,7 @@
 import 'dart:async';
 
 import 'package:sis/core/failure.dart';
+import 'package:sis/features/admin_panels/domain/admin_answer.dart';
 import 'package:sis/features/admin_panels/domain/admin_panels_repository.dart';
 import 'package:sis/features/admin_panels/domain/admin_item.dart';
 import 'package:sis/features/admin_panels/domain/admin_snapshot_store.dart';
@@ -13,8 +14,10 @@ class FakeAdminRepository implements AdminPanelsRepository {
     AdminStatus(AdminLinkPhase.linked, epoch: 1),
   );
 
-  /// The result returned by [send].
-  Result<void> sendResult = const Ok(null);
+  /// When non-null, [send] returns it. When null, [send] returns Ok(AdminSentRef(sendEpoch, nextUpSeq++)).
+  Result<AdminSentRef?>? sendResult;
+  int sendEpoch = 1;
+  int nextUpSeq = 1;
 
   /// Queue of rows to return for successive [fetch] calls.
   List<List<AdminRow>> fetchQueue = [];
@@ -60,9 +63,9 @@ class FakeAdminRepository implements AdminPanelsRepository {
   }
 
   @override
-  Future<Result<void>> send(Map<String, Object?> message) async {
+  Future<Result<AdminSentRef?>> send(Map<String, Object?> message) async {
     sent.add(message);
-    return sendResult;
+    return sendResult ?? Ok(AdminSentRef(sendEpoch, nextUpSeq++));
   }
 
   @override
@@ -87,7 +90,7 @@ class FakeAdminUnlock implements AdminUnlock {
   /// The result to return from [authenticate].
   AdminUnlockResult result = AdminUnlockResult.ok;
 
-  /// If non‑null, [authenticate] will return this future.
+  /// If non-null, [authenticate] will return this future.
   Completer<AdminUnlockResult>? hold;
 
   /// Number of times [authenticate] was called.
@@ -157,6 +160,7 @@ AdminRow snapRow(
   int cursor = 5,
   List<AdminItem> items = const [],
   int epoch = 1,
+  List<AdminAnswerResult> results = const [],
 }) {
   return AdminRow(
     id: id,
@@ -169,6 +173,7 @@ AdminRow snapRow(
       cursor: cursor,
       truncated: false,
       items: items,
+      results: results,
     ),
   );
 }
@@ -180,11 +185,20 @@ AdminRow deltaRow(
   required int cursor,
   List<AdminItem> items = const [],
   int epoch = 1,
+  List<AdminAnswerResult> results = const [],
 }) {
   return AdminRow(
     id: id,
     epoch: epoch,
     seq: seq,
-    message: AdminDelta(cursor: cursor, items: items),
+    message: AdminDelta(cursor: cursor, items: items, results: results),
   );
 }
+
+/// Helper to create a successful [AdminAnswerResult].
+AdminAnswerResult okResult(int epoch, int upSeq) =>
+    AdminAnswerResult(epoch: epoch, upSeq: upSeq, ok: true);
+
+/// Helper to create a failed [AdminAnswerResult].
+AdminAnswerResult failResult(int epoch, int upSeq, AdminAnswerCode code) =>
+    AdminAnswerResult(epoch: epoch, upSeq: upSeq, ok: false, code: code);

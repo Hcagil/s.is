@@ -36,6 +36,7 @@ dependencies:
   intl: ^0.20.2
   latlong2: ^0.9.1
   light_compressor_v2: ^1.9.1
+  local_auth: ^3.0.2
   mime: ^2.0.0
   open_filex: ^4.7.0
   package_info_plus: ^10.2.1

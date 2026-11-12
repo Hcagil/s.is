@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,7 +14,7 @@ void main() {
 
   const keyName = 'sis.admin.panels';
 
-  AdminKeys _makeKeys({
+  AdminKeys makeKeys({
     List<int>? secret,
     List<int>? public,
     List<int>? pinned,
@@ -44,7 +45,7 @@ void main() {
 
   test('2. save then load round-trips every field', () async {
     final store = AdminKeyStore();
-    final keys = _makeKeys(
+    final keys = makeKeys(
       secret: List.filled(32, 1),
       public: List.filled(32, 2),
       pinned: List.filled(32, 3),
@@ -71,7 +72,7 @@ void main() {
 
   test('3. persistence across instances', () async {
     final store1 = AdminKeyStore();
-    final keys = _makeKeys(upSeq: 6, downSeq: 8);
+    final keys = makeKeys(upSeq: 6, downSeq: 8);
     await store1.save(keys);
 
     final store2 = AdminKeyStore();
@@ -95,7 +96,7 @@ void main() {
     await store.delete(); // should not throw
     expect(await store.load(), isNull);
 
-    final keys = _makeKeys();
+    final keys = makeKeys();
     await store.save(keys);
     await store.delete();
     expect(await store.load(), isNull);
@@ -103,7 +104,7 @@ void main() {
 
   test('5. withoutPin', () async {
     final store = AdminKeyStore();
-    final keys = _makeKeys(pinned: List.filled(32, 3));
+    final keys = makeKeys(pinned: List.filled(32, 3));
     final withoutPin = keys.withoutPin();
     expect(withoutPin.pinned, isNull);
     expect(withoutPin.pinnedEpoch, equals(0));
@@ -118,12 +119,12 @@ void main() {
   });
 
   group('6. unusable data', () {
-    Future<void> _writeRaw(String value) async {
+    Future<void> writeRaw(String value) async {
       await const FlutterSecureStorage().write(key: keyName, value: value);
     }
 
     test('not json', () async {
-      await _writeRaw('not json');
+      await writeRaw('not json');
       expect(await AdminKeyStore().load(), isNull);
     });
 
@@ -133,7 +134,7 @@ void main() {
         'sk': base64Encode(List.filled(32, 7)),
         'pk': base64Encode(List.filled(32, 8)),
       };
-      await _writeRaw(jsonEncode(data));
+      await writeRaw(jsonEncode(data));
       expect(await AdminKeyStore().load(), isNull);
     });
 
@@ -143,7 +144,7 @@ void main() {
         'sk': base64Encode(List.filled(31, 7)),
         'pk': base64Encode(List.filled(32, 8)),
       };
-      await _writeRaw(jsonEncode(data));
+      await writeRaw(jsonEncode(data));
       expect(await AdminKeyStore().load(), isNull);
     });
 
@@ -153,7 +154,7 @@ void main() {
         'sk': base64Encode(List.filled(32, 7)),
         'pk': base64Encode(List.filled(33, 8)),
       };
-      await _writeRaw(jsonEncode(data));
+      await writeRaw(jsonEncode(data));
       expect(await AdminKeyStore().load(), isNull);
     });
 
@@ -164,21 +165,18 @@ void main() {
         'pk': base64Encode(List.filled(32, 8)),
         'pin': base64Encode(List.filled(5, 9)),
       };
-      await _writeRaw(jsonEncode(data));
+      await writeRaw(jsonEncode(data));
       expect(await AdminKeyStore().load(), isNull);
     });
 
     test('missing pk', () async {
-      final data = {
-        'v': 1,
-        'sk': base64Encode(List.filled(32, 7)),
-      };
-      await _writeRaw(jsonEncode(data));
+      final data = {'v': 1, 'sk': base64Encode(List.filled(32, 7))};
+      await writeRaw(jsonEncode(data));
       expect(await AdminKeyStore().load(), isNull);
     });
 
     test('empty array', () async {
-      await _writeRaw('[]');
+      await writeRaw('[]');
       expect(await AdminKeyStore().load(), isNull);
     });
   });
@@ -186,7 +184,7 @@ void main() {
   test('7. read error is not swallowed', () async {
     // First store valid data
     final normalStore = AdminKeyStore();
-    final keys = _makeKeys();
+    final keys = makeKeys();
     await normalStore.save(keys);
 
     // Verify data exists
@@ -195,10 +193,7 @@ void main() {
 
     // Now use broken storage
     final brokenStore = AdminKeyStore(const _BrokenStorage());
-    await expectLater(
-      brokenStore.load(),
-      throwsA(isA<PlatformException>()),
-    );
+    await expectLater(brokenStore.load(), throwsA(isA<PlatformException>()));
 
     // Ensure data was not deleted
     final afterError = await const FlutterSecureStorage().read(key: keyName);

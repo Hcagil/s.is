@@ -205,16 +205,22 @@ void main() {
 
     test('a new id keeps only the new snapshot items', () {
       final assembler = AdminAssembler();
-      AdminItem item(String id) =>
-          AdminItem(id: id, kind: 'question', seq: 1, removed: false, fields: {});
-      AdminSnapshotPart part(String sid, int n, String itemId) => AdminSnapshotPart(
-        id: sid,
-        part: n,
-        parts: 2,
-        cursor: 5,
-        truncated: false,
-        items: [item(itemId)],
+      AdminItem item(String id) => AdminItem(
+        id: id,
+        kind: 'question',
+        seq: 1,
+        removed: false,
+        fields: {},
       );
+      AdminSnapshotPart part(String sid, int n, String itemId) =>
+          AdminSnapshotPart(
+            id: sid,
+            part: n,
+            parts: 2,
+            cursor: 5,
+            truncated: false,
+            items: [item(itemId)],
+          );
       assembler.addPart(part('A', 1, 'old-1'));
       assembler.addPart(part('B', 1, 'new-1'));
       final snapshot = assembler.addPart(part('B', 2, 'new-2'));
@@ -336,8 +342,20 @@ void main() {
   group('AdminSnapshot', () {
     test('full ignores removed items', () {
       final items = [
-        AdminItem(id: 'I-1', kind: 'question', seq: 1, removed: false, fields: {}),
-        AdminItem(id: 'I-2', kind: 'question', seq: 2, removed: true, fields: {}),
+        AdminItem(
+          id: 'I-1',
+          kind: 'question',
+          seq: 1,
+          removed: false,
+          fields: {},
+        ),
+        AdminItem(
+          id: 'I-2',
+          kind: 'question',
+          seq: 2,
+          removed: true,
+          fields: {},
+        ),
       ];
       final snapshot = AdminSnapshot.full(items, cursor: 1, truncated: false);
       expect(ids(snapshot), ['I-1']);
@@ -345,13 +363,33 @@ void main() {
 
     test('withDelta adds, replaces, removes', () {
       final base = AdminSnapshot.full(
-        [AdminItem(id: 'I-1', kind: 'question', seq: 1, removed: false, fields: {})],
+        [
+          AdminItem(
+            id: 'I-1',
+            kind: 'question',
+            seq: 1,
+            removed: false,
+            fields: {},
+          ),
+        ],
         cursor: 1,
         truncated: false,
       );
       final deltaItems = [
-        AdminItem(id: 'I-2', kind: 'question', seq: 2, removed: false, fields: {}),
-        AdminItem(id: 'I-1', kind: 'question', seq: 3, removed: true, fields: {}),
+        AdminItem(
+          id: 'I-2',
+          kind: 'question',
+          seq: 2,
+          removed: false,
+          fields: {},
+        ),
+        AdminItem(
+          id: 'I-1',
+          kind: 'question',
+          seq: 3,
+          removed: true,
+          fields: {},
+        ),
       ];
       final newSnap = base.withDelta(deltaItems, 2);
       expect(ids(newSnap), ['I-2']);
@@ -360,12 +398,26 @@ void main() {
 
     test('immutability of withDelta', () {
       final base = AdminSnapshot.full(
-        [AdminItem(id: 'I-1', kind: 'question', seq: 1, removed: false, fields: {})],
+        [
+          AdminItem(
+            id: 'I-1',
+            kind: 'question',
+            seq: 1,
+            removed: false,
+            fields: {},
+          ),
+        ],
         cursor: 1,
         truncated: false,
       );
       final deltaItems = [
-        AdminItem(id: 'I-2', kind: 'question', seq: 2, removed: false, fields: {}),
+        AdminItem(
+          id: 'I-2',
+          kind: 'question',
+          seq: 2,
+          removed: false,
+          fields: {},
+        ),
       ];
       final newSnap = base.withDelta(deltaItems, 2);
       expect(ids(base), ['I-1']);
@@ -375,7 +427,13 @@ void main() {
 
     test('toJson and tryFromJson round-trip', () {
       final items = [
-        AdminItem(id: 'I-1', kind: 'question', seq: 1, removed: false, fields: {'id': 'Q-1'}),
+        AdminItem(
+          id: 'I-1',
+          kind: 'question',
+          seq: 1,
+          removed: false,
+          fields: {'id': 'Q-1'},
+        ),
       ];
       final snap = AdminSnapshot.full(items, cursor: 5, truncated: true);
       final json = snap.toJson();

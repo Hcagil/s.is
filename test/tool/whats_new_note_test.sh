@@ -336,4 +336,28 @@ run_step v0.26.0+178 || fail "step failed with EN text only"
 [ "$(note_of)" = "$V"$'\nJust English.' ] || fail "EN text only: note was [$(note_of)]"
 same_note
 
+# 12 fallback and duplicate handling
+printf 'For users: Background improvements.\nFor users (TR): Arka planda iyileştirmeler.\n' > "$tmp/prs/10"
+printf 'For users: You can pick a sound.\nFor users (TR): Bir ses seçebilirsin.\n' > "$tmp/prs/11"
+printf 'For users: Background improvements.\nFor users (TR): Arka planda iyileştirmeler.\n' > "$tmp/prs/12"
+run_step v0.26.0+178 || fail "step exited non-zero with fallback and duplicate lines"
+expected="$V"$'\nYou can pick a sound.\nBackground improvements.\n---\n'"$S"$'\nBir ses seçebilirsin.\nArka planda iyileştirmeler.'
+[ "$(note_of)" = "$expected" ] || fail "fallback line repeated or not last: note was [$(note_of)]"
+
+# 12b three PRs all fallback only
+printf 'For users: Background improvements.\nFor users (TR): Arka planda iyileştirmeler.\n' > "$tmp/prs/10"
+printf 'For users: Background improvements.\nFor users (TR): Arka planda iyileştirmeler.\n' > "$tmp/prs/11"
+printf 'For users: Background improvements.\nFor users (TR): Arka planda iyileştirmeler.\n' > "$tmp/prs/12"
+run_step v0.26.0+178 || fail "step exited non-zero with only fallback lines"
+expected="$V"$'\n'"$EN_DEFAULT"$'\n---\n'"$S"$'\n'"$TR_DEFAULT"
+[ "$(note_of)" = "$expected" ] || fail "fallback only note was [$(note_of)]"
+
+# 12c two PRs with identical real line
+printf 'For users: Same.\nFor users (TR): Aynı.\n' > "$tmp/prs/10"
+printf 'For users: Same.\nFor users (TR): Aynı.\n' > "$tmp/prs/11"
+printf 'For users: Background improvements.\nFor users (TR): Arka planda iyileştirmeler.\n' > "$tmp/prs/12"
+run_step v0.26.0+178 || fail "step exited non-zero with duplicate real lines"
+expected="$V"$'\nSame.\nBackground improvements.\n---\n'"$S"$'\nAynı.\nArka planda iyileştirmeler.'
+[ "$(note_of)" = "$expected" ] || fail "duplicate real line not collapsed: note was [$(note_of)]"
+
 echo "whats_new_note_test: OK"

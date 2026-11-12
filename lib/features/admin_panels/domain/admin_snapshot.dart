@@ -79,4 +79,30 @@ final class AdminSnapshot {
     if (item == null) return null;
     return AdminDashboard.fromFields(item.fields);
   }
+
+  Map<String, Object?> toJson() => {
+    'cursor': cursor,
+    'truncated': truncated,
+    'items': [for (final i in _items.values) i.toJson()],
+  };
+
+  static AdminSnapshot? tryFromJson(Object? raw) {
+    try {
+      if (raw is! Map) return null;
+      final itemsRaw = raw['items'];
+      if (itemsRaw is! List) return null;
+      final cursor = raw['cursor'];
+      if (cursor is! int) return null;
+      final items = <AdminItem>[];
+      for (final entry in itemsRaw) {
+        if (entry is Map) {
+          items.add(AdminItem.fromJson(Map<String, Object?>.from(entry)));
+        }
+      }
+      final truncated = raw['truncated'] == true;
+      return AdminSnapshot.full(items, cursor: cursor, truncated: truncated);
+    } catch (_) {
+      return null;
+    }
+  }
 }

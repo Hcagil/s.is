@@ -22,6 +22,31 @@ final class AdminItem {
   final bool removed;
 
   final Map<String, Object?> fields;
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'kind': kind,
+    'seq': seq,
+    'removed': removed,
+    'fields': fields,
+  };
+
+  factory AdminItem.fromJson(Map<String, Object?> j) {
+    final id = j['id'] is String ? j['id'] as String : '';
+    final kind = j['kind'] is String ? j['kind'] as String : '';
+    final seq = j['seq'] is int ? j['seq'] as int : 0;
+    final removed = j['removed'] == true;
+    final fields = j['fields'] is Map
+        ? Map<String, Object?>.from(j['fields'] as Map)
+        : const <String, Object?>{};
+    return AdminItem(
+      id: id,
+      kind: kind,
+      seq: seq,
+      removed: removed,
+      fields: fields,
+    );
+  }
 }
 
 /// A decrypted message from the computer.

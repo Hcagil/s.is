@@ -7,6 +7,7 @@ import '../domain/admin_assembler.dart';
 import '../domain/admin_item.dart';
 import '../domain/admin_panels_repository.dart';
 import '../domain/admin_snapshot.dart';
+import '../domain/admin_snapshot_store.dart';
 import 'admin_panels_state.dart';
 
 /// The repository for the owner-only panels (set in main).
@@ -16,6 +17,11 @@ final adminPanelsRepositoryProvider = Provider<AdminPanelsRepository>(
 
 /// The phone unlock asked before the panels open (set in main).
 final adminUnlockProvider = Provider<AdminUnlock>(
+  (_) => throw UnimplementedError('override in main'),
+);
+
+/// Where the last complete snapshot is kept on the phone (set in main).
+final adminSnapshotStoreProvider = Provider<AdminSnapshotStore>(
   (_) => throw UnimplementedError('override in main'),
 );
 
@@ -39,6 +45,9 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
 
   /// The id of the newest down row fetched so far (this screen session).
   int _lastId = 0;
+
+  /// The epoch of the snapshot currently loaded or being built.
+  int? _epoch;
 
   /// The highest down sequence applied in this screen session, null before the first row.
   int? _sessionSeq;
@@ -115,6 +124,19 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     }
   }
 
+  /// The app went to the background: drops everything held in memory so the next open asks the unlock again. False (nothing done) while the unlock itself is running.
+  bool lock() {
+    if (state.gate == AdminGate.checking) return false;
+    _stop();
+    _lastId = 0;
+    _sessionSeq = null;
+    _epoch = null;
+    _resyncAt = null;
+    _assembler.reset();
+    state = const AdminPanelsState();
+    return true;
+  }
+
   /// Fetches what the computer sent.
   Future<void> refresh() async {
     if (_busy) return;
@@ -134,6 +156,8 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
             await _apply(st);
             return;
           }
+          if (_epoch != null && _epoch != s.epoch) _resetSync();
+          _epoch = s.epoch;
           final fetched = await repo.fetch(_lastId);
           if (!ref.mounted) return;
           switch (fetched) {
@@ -200,6 +224,13 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
 
     final seq = _sessionSeq;
     if (seq != null) await repo.saveLastDownSeq(epoch, seq);
+    if (has && rows.isNotEmpty) {
+      await ref
+          .read(adminSnapshotStoreProvider)
+          .save(
+            AdminSavedSnapshot(epoch: epoch, lastId: _lastId, snapshot: snap),
+          );
+    }
     if (!ref.mounted) return;
 
     state = state.copyWith(
@@ -223,6 +254,22 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
       hasSnapshot: false,
       syncing: false,
     );
+    unawaited(ref.read(adminSnapshotStoreProvider).clear());
+  }
+
+  /// Shows the snapshot saved on the phone at once (only when it belongs to [epoch]); later rows are fetched after its last id.
+  Future<void> _loadSaved(int epoch) async {
+    if (state.hasSnapshot) return;
+    final store = ref.read(adminSnapshotStoreProvider);
+    final saved = await store.load();
+    if (!ref.mounted || saved == null) return;
+    if (saved.epoch != epoch) {
+      await store.clear();
+      return;
+    }
+    _epoch = epoch;
+    _lastId = saved.lastId;
+    state = state.copyWith(snapshot: saved.snapshot, hasSnapshot: true);
   }
 
   /// Asks the computer for a full snapshot, at most once a minute.
@@ -310,8 +357,10 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
             clearFailure: true,
           );
           _schedule();
+          await _loadSaved(s.epoch);
           await refresh();
         } else {
+          _resetSync();
           state = state.copyWith(
             gate: AdminGate.link,
             link: s,

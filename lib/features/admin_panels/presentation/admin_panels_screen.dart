@@ -6,6 +6,8 @@ import '../../../l10n/app_localizations.dart';
 import '../application/admin_panels_controller.dart';
 import '../application/admin_panels_state.dart';
 import 'admin_link_view.dart';
+import 'admin_questions_view.dart';
+import 'admin_tasks_view.dart';
 
 Future<void> showAdminPanels(BuildContext context) => Navigator.of(context)
     .push<void>(MaterialPageRoute(builder: (_) => const AdminPanelsScreen()));
@@ -20,6 +22,7 @@ class AdminPanelsScreen extends ConsumerStatefulWidget {
 class _AdminPanelsScreenState extends ConsumerState<AdminPanelsScreen>
     with WidgetsBindingObserver {
   int _index = 0;
+  bool _locked = false;
 
   @override
   void initState() {
@@ -41,9 +44,17 @@ class _AdminPanelsScreenState extends ConsumerState<AdminPanelsScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState s) {
-    ref
-        .read(adminPanelsProvider.notifier)
-        .setForeground(s == AppLifecycleState.resumed);
+    final n = ref.read(adminPanelsProvider.notifier);
+    if (s == AppLifecycleState.paused || s == AppLifecycleState.hidden) {
+      // Background: lock; the unlock is asked again on return.
+      if (n.lock()) _locked = true;
+    } else if (s == AppLifecycleState.resumed) {
+      n.setForeground(true);
+      if (_locked) {
+        _locked = false;
+        n.open(AppLocalizations.of(context).adminUnlockReason);
+      }
+    }
   }
 
   @override
@@ -73,15 +84,16 @@ class _AdminPanelsScreenState extends ConsumerState<AdminPanelsScreen>
             buttonLabel: l.adminRetry,
             onPressed: _reopen,
           ),
-          AdminGate.ready => Center(
-            child: Text(switch (_index) {
-              0 => l.adminTalk,
-              1 => l.adminQuestions,
-              2 => l.adminTasks,
-              3 => l.adminDashboard,
-              _ => '',
-            }, key: ValueKey('admin-panel-$_index')),
-          ),
+          AdminGate.ready => switch (_index) {
+            1 => const AdminQuestionsView(key: ValueKey('admin-panel-1')),
+            2 => const AdminTasksView(key: ValueKey('admin-panel-2')),
+            _ => Center(
+              child: Text(switch (_index) {
+                0 => l.adminTalk,
+                _ => l.adminDashboard,
+              }, key: ValueKey('admin-panel-$_index')),
+            ),
+          },
         },
       ),
       bottomNavigationBar: gate == AdminGate.ready

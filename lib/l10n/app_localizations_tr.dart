@@ -2914,4 +2914,8 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get adminReasonGeneric => 'Bir hata oluştu. Tekrar deneyin.';
+
+  @override
+  String get adminDashboardStale =>
+      'Bilgisayarınızdan güncel durum gelmiyor. Bilgisayarınız kapalı veya uykuda olabilir.';
 }

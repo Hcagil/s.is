@@ -5113,6 +5113,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Something went wrong. Try again.'**
   String get adminReasonGeneric;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'No fresh status from your computer. It may be off or asleep.'**
+  String get adminDashboardStale;
 }
 
 class _AppLocalizationsDelegate

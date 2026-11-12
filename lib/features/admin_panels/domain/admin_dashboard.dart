@@ -96,7 +96,14 @@ final class AdminSession {
 
 /// Dashboard data: what works now and the sessions.
 final class AdminDashboard {
-  const AdminDashboard({required this.working, required this.sessions});
+  /// True when the computer status is missing or older than 5 minutes.
+  final bool stale;
+
+  const AdminDashboard({
+    required this.working,
+    required this.sessions,
+    this.stale = false,
+  });
 
   /// Builds an [AdminDashboard] from the exported fields; never throws.
   factory AdminDashboard.fromFields(Map<String, Object?> f) {
@@ -122,7 +129,11 @@ final class AdminDashboard {
       sessions = const [];
     }
 
-    return AdminDashboard(working: working, sessions: sessions);
+    return AdminDashboard(
+      working: working,
+      sessions: sessions,
+      stale: f['stale'] == true,
+    );
   }
 
   /// What works now (sessions and workers).

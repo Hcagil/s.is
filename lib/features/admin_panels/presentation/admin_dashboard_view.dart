@@ -24,6 +24,16 @@ class AdminDashboardView extends ConsumerWidget {
     }
 
     final d = s.snapshot.dashboard;
+    if (d != null && d.stale) {
+      return Center(
+        child: Text(
+          l.adminDashboardStale,
+          key: const ValueKey('admin-dash-stale'),
+          textAlign: TextAlign.center,
+          style: TextStyle(color: t.muted),
+        ),
+      );
+    }
     if (d == null || (d.working.isEmpty && d.sessions.isEmpty)) {
       return Center(child: Text(l.adminDashEmpty));
     }

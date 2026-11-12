@@ -2941,4 +2941,8 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminReasonGeneric => 'Something went wrong. Try again.';
+
+  @override
+  String get adminDashboardStale =>
+      'No fresh status from your computer. It may be off or asleep.';
 }

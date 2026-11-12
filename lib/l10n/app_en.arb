@@ -1936,5 +1936,7 @@
   "adminReasonUnknownItem": "This item no longer exists on your computer.",
   "@adminReasonUnknownItem": {"description": "Admin panels screen text"},
   "adminReasonGeneric": "Something went wrong. Try again.",
-  "@adminReasonGeneric": {"description": "Admin panels screen text"}
+  "@adminReasonGeneric": {"description": "Admin panels screen text"},
+  "adminDashboardStale": "No fresh status from your computer. It may be off or asleep.",
+  "@adminDashboardStale": {"description": "Admin panels screen text"}
 }

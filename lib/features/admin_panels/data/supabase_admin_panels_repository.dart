@@ -260,6 +260,11 @@ final class SupabaseAdminPanelsRepository implements AdminPanelsRepository {
           );
           return const Ok(null);
         } on PostgrestException catch (e) {
+          // 22023: the server refused our sequence number; forget the key so the phone links again with a new key and epoch.
+          if (e.code == '22023') {
+            await _keys.delete();
+            return const Err(DeniedFailure());
+          }
           return Err(_asFailure(e));
         } catch (e) {
           return Err(_asFailure(e));

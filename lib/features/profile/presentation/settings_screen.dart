@@ -9,6 +9,8 @@ import '../../../app/notice.dart';
 import '../../../app/settings_row.dart';
 import '../../../core/failure.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../admin_panels/application/admin_entry_provider.dart';
+import '../../admin_panels/presentation/admin_panels_screen.dart';
 import '../../appearance/application/appearance_controller.dart';
 import '../../appearance/presentation/appearance_labels.dart';
 import '../../appearance/presentation/appearance_page.dart';
@@ -206,6 +208,13 @@ class SettingsScreen extends ConsumerWidget {
             l.settingsAutoDownload,
             const AutoDownloadPage(),
           ),
+          if (ref.watch(adminEntryProvider).value ?? false)
+            row(
+              'settings-admin',
+              Icons.admin_panel_settings_outlined,
+              l.adminTitle,
+              const AdminPanelsScreen(),
+            ),
         ],
       ),
     );

@@ -248,7 +248,10 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
 
   /// Sends one up message; null = sent, else why not.
   Future<Failure?> _send(Map<String, Object?> message) async {
-    final r = await ref.read(adminPanelsRepositoryProvider).send(message);
+    final repo = ref.read(adminPanelsRepositoryProvider);
+    final r = await repo.send(message);
+    // A refused sequence number made the repository forget the key: show the Link screen again.
+    if (r case Err(failure: DeniedFailure())) await _apply(await repo.status());
     return switch (r) {
       Err(:final failure) => failure,
       Ok() => null,

@@ -23,6 +23,10 @@ import 'features/appearance/data/shared_prefs_appearance_store.dart';
 import 'features/autodownload/application/auto_download_controller.dart';
 import 'features/autodownload/data/connectivity_network_probe.dart';
 import 'features/autodownload/data/shared_prefs_auto_download_store.dart';
+import 'features/admin_panels/application/admin_panels_controller.dart';
+import 'features/admin_panels/data/admin_key_store.dart';
+import 'features/admin_panels/data/local_auth_unlock.dart';
+import 'features/admin_panels/data/supabase_admin_panels_repository.dart';
 import 'features/auth/application/session_controller.dart';
 import 'features/auth/data/file_last_session_store.dart';
 import 'features/auth/data/secure_session_storage.dart';
@@ -298,6 +302,7 @@ Future<void> main() async {
           builtStore != null &&
           await DriftOlmPickleStore(builtStore!).load() != null,
     );
+    final adminKeyStore = AdminKeyStore();
 
     // One Olm engine for key publishing and for sessions.
     final olm = OlmKeyEngine();
@@ -344,6 +349,10 @@ Future<void> main() async {
               opener: ref.read(reactionOpenerProvider),
             ),
           ),
+          adminPanelsRepositoryProvider.overrideWithValue(
+            SupabaseAdminPanelsRepository(client, adminKeyStore),
+          ),
+          adminUnlockProvider.overrideWithValue(LocalAuthUnlock()),
           adminChatRepositoryProvider.overrideWithValue(
             SupabaseAdminChatRepository(client),
           ),
@@ -443,6 +452,7 @@ Future<void> main() async {
               deleteKey: () async {
                 await key.delete();
                 await pickleKey.delete();
+                await adminKeyStore.delete();
               },
             );
             ref.onDispose(store.close);

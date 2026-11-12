@@ -1914,5 +1914,7 @@
   "adminUnlockCancelled": "Admin Panels stay closed. Unlock your phone to see them.",
   "@adminUnlockCancelled": {"description": "Admin panels screen text"},
   "adminUnlockRetry": "Unlock",
-  "@adminUnlockRetry": {"description": "Admin panels screen text"}
+  "@adminUnlockRetry": {"description": "Admin panels screen text"},
+  "adminTalkTruncated": "Older messages not shown",
+  "@adminTalkTruncated": {"description": "Admin panels screen text"}
 }

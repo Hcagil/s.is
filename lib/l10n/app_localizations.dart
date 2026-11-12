@@ -5047,6 +5047,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Unlock'**
   String get adminUnlockRetry;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Older messages not shown'**
+  String get adminTalkTruncated;
 }
 
 class _AppLocalizationsDelegate

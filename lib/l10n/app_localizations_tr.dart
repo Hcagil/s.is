@@ -2878,4 +2878,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get adminUnlockRetry => 'Kilidi aç';
+
+  @override
+  String get adminTalkTruncated => 'Eski mesajlar gösterilmiyor';
 }

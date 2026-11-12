@@ -2904,4 +2904,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminUnlockRetry => 'Unlock';
+
+  @override
+  String get adminTalkTruncated => 'Older messages not shown';
 }

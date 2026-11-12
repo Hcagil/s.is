@@ -122,7 +122,7 @@ begin
       last_down_seq = 0,
       updated_at = now()
     returning app_private.admin_view_keys.epoch into v_epoch;
-  delete from app_private.admin_view_items;
+  delete from app_private.admin_view_items where true;
   return v_epoch;
 end;
 $$;
@@ -184,7 +184,7 @@ begin
     raise exception 'too many requests' using errcode = 'RLMT1';
   end if;
   insert into app_private.admin_view_items(dir, epoch, seq, body) values ('up', p_epoch, p_seq, p_body) returning id into v_id;
-  update app_private.admin_view_keys set last_up_seq = p_seq;
+  update app_private.admin_view_keys set last_up_seq = p_seq where only_row = true;
   return v_id;
 end;
 $$;
@@ -236,8 +236,8 @@ begin
   perform pg_advisory_xact_lock(hashtextextended('admin_view', 0));
   select k.computer_pub into v_old from app_private.admin_view_keys k;
   if v_old is not null and v_old <> p_pub then
-    update app_private.admin_view_keys set computer_pub = p_pub, epoch = epoch + 1, last_up_seq = 0, last_down_seq = 0, updated_at = now() returning epoch into v_epoch;
-    delete from app_private.admin_view_items;
+    update app_private.admin_view_keys set computer_pub = p_pub, epoch = epoch + 1, last_up_seq = 0, last_down_seq = 0, updated_at = now() where only_row = true returning epoch into v_epoch;
+    delete from app_private.admin_view_items where true;
     return v_epoch;
   end if;
   insert into app_private.admin_view_keys(computer_pub) values (p_pub)
@@ -285,7 +285,7 @@ begin
     raise exception 'invalid request' using errcode = '22023';
   end if;
   insert into app_private.admin_view_items(dir, epoch, seq, body) values ('down', p_epoch, p_seq, p_body) returning id into v_id;
-  update app_private.admin_view_keys set last_down_seq = p_seq;
+  update app_private.admin_view_keys set last_down_seq = p_seq where only_row = true;
   delete from app_private.admin_view_items i where i.dir = 'down' and i.id not in (select j.id from app_private.admin_view_items j where j.dir = 'down' order by j.id desc limit 20);
   return v_id;
 end;

@@ -2880,5 +2880,38 @@ class AppLocalizationsTr extends AppLocalizations {
   String get adminUnlockRetry => 'Kilidi aç';
 
   @override
-  String get adminTalkTruncated => 'Eski mesajlar gösterilmiyor';
+  String get adminTalkTruncated => 'Burada yalnızca son mesajlar gösteriliyor.';
+
+  @override
+  String get adminAnswerSending => 'Gönderiliyor';
+
+  @override
+  String get adminAnswerNotSent => 'Gönderilemedi';
+
+  @override
+  String get adminAnswerRetry => 'Tekrar gönder';
+
+  @override
+  String get adminAnswerNotSentYet =>
+      'Henüz gönderilmedi. Bilgisayarınız kapalı olabilir.';
+
+  @override
+  String get adminAnswerNewConversation => 'Yeni konuşma olarak gönder';
+
+  @override
+  String get adminReasonConvMissing => 'Bu konuşma bilgisayarınızda silindi.';
+
+  @override
+  String get adminReasonNotOpen =>
+      'Bu, bilgisayarınızda zaten yanıtlandı veya kapatıldı.';
+
+  @override
+  String get adminReasonDeskOnly =>
+      'Bunu yalnızca bilgisayarınızın başında yanıtlayabilirsiniz.';
+
+  @override
+  String get adminReasonUnknownItem => 'Bu öğe artık bilgisayarınızda yok.';
+
+  @override
+  String get adminReasonGeneric => 'Bir hata oluştu. Tekrar deneyin.';
 }

@@ -7,6 +7,7 @@ import '../../../l10n/app_localizations.dart';
 import '../application/admin_panels_controller.dart';
 import '../domain/admin_models.dart';
 import 'admin_question_card.dart';
+import 'admin_answer_status.dart';
 
 class AdminQuestionsView extends ConsumerStatefulWidget {
   const AdminQuestionsView({super.key});
@@ -85,7 +86,7 @@ class _AdminQuestionsViewState extends ConsumerState<AdminQuestionsView> {
           child: ListView(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             children: [
-              for (final q in list)
+              for (final q in list) ...[
                 AdminQuestionCard(
                   key: ValueKey('admin-question-${q.id}'),
                   question: q,
@@ -95,6 +96,12 @@ class _AdminQuestionsViewState extends ConsumerState<AdminQuestionsView> {
                   onSelected: (i) => setState(() => _sel[q.id] = i),
                   onTextChanged: () => setState(() {}),
                 ),
+                if (s.latestAnswer('question', id: q.id) case final a?)
+                  AdminAnswerStatusLine(
+                    key: ValueKey('admin-answer-${q.id}'),
+                    answer: a,
+                  ),
+              ],
             ],
           ),
         ),

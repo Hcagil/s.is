@@ -9,6 +9,7 @@ import '../../chat/presentation/conversation_tile.dart' show FadeDivider;
 import '../application/admin_panels_controller.dart';
 import 'admin_conversation_view.dart';
 import 'admin_talk_composer.dart';
+import 'admin_answer_status.dart';
 
 class AdminTalkView extends ConsumerStatefulWidget {
   const AdminTalkView({super.key});
@@ -71,6 +72,8 @@ class _AdminTalkViewState extends ConsumerState<AdminTalkView> {
                   ],
                 ),
         ),
+        if (s.latestAnswer('talk') case final a?)
+          AdminAnswerStatusLine(answer: a),
         const AdminTalkComposer(),
       ],
     );

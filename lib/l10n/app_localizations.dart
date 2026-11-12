@@ -5051,8 +5051,68 @@ abstract class AppLocalizations {
   /// Admin panels screen text
   ///
   /// In en, this message translates to:
-  /// **'Older messages not shown'**
+  /// **'Only the latest messages are shown here.'**
   String get adminTalkTruncated;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Sending'**
+  String get adminAnswerSending;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Not sent'**
+  String get adminAnswerNotSent;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Resend'**
+  String get adminAnswerRetry;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Not sent yet. Your computer may be off.'**
+  String get adminAnswerNotSentYet;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Send as a new conversation'**
+  String get adminAnswerNewConversation;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'This conversation was deleted on your computer.'**
+  String get adminReasonConvMissing;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'This was already answered or closed on your computer.'**
+  String get adminReasonNotOpen;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'You can answer this only at your computer.'**
+  String get adminReasonDeskOnly;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'This item no longer exists on your computer.'**
+  String get adminReasonUnknownItem;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong. Try again.'**
+  String get adminReasonGeneric;
 }
 
 class _AppLocalizationsDelegate

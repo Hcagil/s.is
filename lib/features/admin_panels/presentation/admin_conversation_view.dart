@@ -5,6 +5,7 @@ import '../../../app/theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../application/admin_panels_controller.dart';
 import 'admin_talk_composer.dart';
+import 'admin_answer_status.dart';
 
 class AdminConversationView extends ConsumerWidget {
   const AdminConversationView({
@@ -67,6 +68,8 @@ class AdminConversationView extends ConsumerWidget {
             ],
           ),
         ),
+        if (s.latestAnswer('talk', id: conv) case final a?)
+          AdminAnswerStatusLine(answer: a),
         AdminTalkComposer(conv: conv),
       ],
     );

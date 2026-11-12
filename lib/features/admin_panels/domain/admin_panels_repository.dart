@@ -1,4 +1,5 @@
 import '../../../core/failure.dart';
+import 'admin_answer.dart';
 import 'admin_item.dart';
 
 /// Where this phone stands in linking with the computer.
@@ -67,8 +68,8 @@ abstract interface class AdminPanelsRepository {
   /// Down rows after [afterId], opened and checked.
   Future<Result<List<AdminRow>>> fetch(int afterId);
 
-  /// Seals the JSON map as an up message with the next sequence number and sends it.
-  Future<Result<void>> send(Map<String, Object?> message);
+  /// Seals the JSON map as an up message with the next sequence number and sends it; the Ok value says which row it was.
+  Future<Result<AdminSentRef?>> send(Map<String, Object?> message);
 
   /// The highest down sequence this phone applied for [epoch].
   Future<int> lastDownSeq(int epoch);

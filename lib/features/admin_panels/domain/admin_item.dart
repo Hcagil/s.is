@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'admin_answer.dart';
+
 /// One entry of the computer's export (plaintext, after decryption).
 final class AdminItem {
   const AdminItem({
@@ -63,6 +65,7 @@ final class AdminSnapshotPart extends AdminDown {
     required this.cursor,
     required this.truncated,
     required this.items,
+    this.results = const [],
   });
   final String id;
   final int part;
@@ -70,13 +73,21 @@ final class AdminSnapshotPart extends AdminDown {
   final int cursor;
   final bool truncated;
   final List<AdminItem> items;
+
+  /// Answer results (part 1 only).
+  final List<AdminAnswerResult> results;
 }
 
 /// A change since the last cursor: {"t":"items","cursor":N,"items":[...]}.
 final class AdminDelta extends AdminDown {
-  const AdminDelta({required this.cursor, required this.items});
+  const AdminDelta({
+    required this.cursor,
+    required this.items,
+    this.results = const [],
+  });
   final int cursor;
   final List<AdminItem> items;
+  final List<AdminAnswerResult> results;
 }
 
 /// Reads one decrypted message. Never throws: bad JSON, an unknown "t", or a wrong shape gives null.
@@ -102,6 +113,7 @@ AdminDown? parseDown(String json) {
         cursor: cursor is int ? cursor : 0,
         truncated: root['truncated'] == true,
         items: _parseItems(root['items']),
+        results: parseAnswerResults(root['results']),
       );
     }
 
@@ -110,6 +122,7 @@ AdminDown? parseDown(String json) {
       return AdminDelta(
         cursor: cursor is int ? cursor : 0,
         items: _parseItems(root['items']),
+        results: parseAnswerResults(root['results']),
       );
     }
 

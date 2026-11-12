@@ -8,6 +8,7 @@ import '../../../app/theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../application/admin_panels_controller.dart';
 import '../domain/admin_models.dart';
+import 'admin_answer_status.dart';
 
 class AdminTasksView extends ConsumerStatefulWidget {
   const AdminTasksView({super.key});
@@ -84,6 +85,12 @@ class _AdminTasksViewState extends ConsumerState<AdminTasksView> {
               subtitle: t.change,
               onTap: () => setState(() => _open = _open == t.id ? null : t.id),
             ),
+            if (ref.watch(adminPanelsProvider).latestAnswer('task', id: t.id)
+                case final a?)
+              AdminAnswerStatusLine(
+                key: ValueKey('admin-answer-${t.id}'),
+                answer: a,
+              ),
             if (_open == t.id)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),

@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/failure.dart';
 import '../../../data/failures.dart';
 import '../../../data/crypto/rust/api/admin_view_crypto.dart' as crypto;
+import '../domain/admin_answer.dart';
 import '../domain/admin_item.dart';
 import '../domain/admin_link_phase.dart';
 import '../domain/admin_panels_repository.dart';
@@ -231,7 +232,7 @@ final class SupabaseAdminPanelsRepository implements AdminPanelsRepository {
   }
 
   @override
-  Future<Result<void>> send(Map<String, Object?> message) async {
+  Future<Result<AdminSentRef?>> send(Map<String, Object?> message) async {
     final linked = await _requireLinked();
     switch (linked) {
       case Err(:final failure):
@@ -258,7 +259,7 @@ final class SupabaseAdminPanelsRepository implements AdminPanelsRepository {
               'p_body': byteaParam(wire),
             },
           );
-          return const Ok(null);
+          return Ok(AdminSentRef(epoch, seq));
         } on PostgrestException catch (e) {
           // 22023: the server refused our sequence number; forget the key so the phone links again with a new key and epoch.
           if (e.code == '22023') {

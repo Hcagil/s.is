@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/failure.dart';
+import '../domain/admin_answer.dart';
 import '../domain/admin_assembler.dart';
 import '../domain/admin_item.dart';
 import '../domain/admin_panels_repository.dart';
@@ -30,6 +31,12 @@ const adminPollEvery = Duration(seconds: 20);
 
 /// The same while the link screen waits for the computer's code.
 const adminLinkPollEvery = Duration(seconds: 8);
+
+/// The clock of the panels (tests replace it).
+final adminClockProvider = Provider<DateTime Function()>((_) => DateTime.now);
+
+/// An answer with no result after this long shows as 'not sent yet'.
+const adminAnswerWait = Duration(minutes: 3);
 
 /// The panels' state; it is dropped when the screen is left.
 final adminPanelsProvider =
@@ -188,6 +195,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     var completed = false;
     var gap = false;
 
+    final results = <AdminAnswerResult>[];
     for (final row in rows) {
       if (row.id > _lastId) _lastId = row.id;
       if (row.epoch != epoch) continue;
@@ -206,6 +214,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
 
       switch (row.message) {
         case final AdminSnapshotPart part:
+          results.addAll(part.results);
           final done = _assembler.addPart(part);
           if (done != null) {
             snap = done;
@@ -214,6 +223,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
             gap = false;
           }
         case final AdminDelta d:
+          results.addAll(d.results);
           if (has && d.cursor > snap.cursor) {
             snap = snap.withDelta(d.items, d.cursor);
           }
@@ -233,6 +243,9 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     }
     if (!ref.mounted) return;
 
+    _applyResults(results);
+    _expireAnswers();
+
     state = state.copyWith(
       snapshot: snap,
       hasSnapshot: has,
@@ -241,6 +254,76 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     );
 
     if (!has || gap) await _resync();
+  }
+
+  /// Applies the computer's results to the answers sent from this phone.
+  void _applyResults(List<AdminAnswerResult> results) {
+    if (results.isEmpty) return;
+    final answers = [...state.answers];
+    var questions = state.sentQuestions;
+    var tasks = state.decidedTasks;
+    for (final result in results) {
+      final i = answers.indexWhere(
+        (a) =>
+            a.epoch == result.epoch &&
+            a.upSeq == result.upSeq &&
+            (a.status == AdminAnswerStatus.sending ||
+                a.status == AdminAnswerStatus.notSentYet),
+      );
+      if (i < 0) continue;
+      final answer = answers[i];
+      final target = answer.targetId;
+      if (result.ok) {
+        answers[i] = answer.copyWith(status: AdminAnswerStatus.sent);
+        if (target != null && answer.kind == 'question') {
+          questions = {...questions, target};
+        }
+        if (target != null && answer.kind == 'task') {
+          tasks = {...tasks, target};
+        }
+      } else {
+        answers[i] = answer.copyWith(
+          status: AdminAnswerStatus.notSent,
+          code: result.code,
+        );
+        if (target != null) {
+          questions = {...questions}..remove(target);
+          tasks = {...tasks}..remove(target);
+        }
+      }
+    }
+    state = state.copyWith(
+      answers: answers,
+      sentQuestions: questions,
+      decidedTasks: tasks,
+    );
+  }
+
+  /// Marks the answers with no result after adminAnswerWait as not sent yet.
+  void _expireAnswers() {
+    final now = ref.read(adminClockProvider)();
+    final answers = [...state.answers];
+    var changed = false;
+    var questions = state.sentQuestions;
+    var tasks = state.decidedTasks;
+    for (var i = 0; i < answers.length; i++) {
+      final a = answers[i];
+      if (a.status != AdminAnswerStatus.sending) continue;
+      if (now.difference(a.sentAt) < adminAnswerWait) continue;
+      answers[i] = a.copyWith(status: AdminAnswerStatus.notSentYet);
+      changed = true;
+      final target = a.targetId;
+      if (target != null) {
+        questions = {...questions}..remove(target);
+        tasks = {...tasks}..remove(target);
+      }
+    }
+    if (!changed) return;
+    state = state.copyWith(
+      answers: answers,
+      sentQuestions: questions,
+      decidedTasks: tasks,
+    );
   }
 
   /// Forgets everything fetched so far (the link changed).
@@ -274,7 +357,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
 
   /// Asks the computer for a full snapshot, at most once a minute.
   Future<void> _resync() async {
-    final now = DateTime.now();
+    final now = ref.read(adminClockProvider)();
     final at = _resyncAt;
     state = state.copyWith(syncing: true);
     if (at != null && now.difference(at) < const Duration(seconds: 60)) return;
@@ -283,7 +366,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
       'kind': 'resync',
     });
     if (!ref.mounted) return;
-    if (r is Err<void>) {
+    if (r is Err<AdminSentRef?>) {
       _resyncAt = null;
       state = state.copyWith(failure: r.failure);
     }
@@ -291,7 +374,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
 
   /// A unique id for one answer (the computer applies an answer id once).
   String _newAnswerId() =>
-      'a${DateTime.now().microsecondsSinceEpoch}-${_answerCounter++}';
+      'a${ref.read(adminClockProvider)().microsecondsSinceEpoch}-${_answerCounter++}';
 
   /// Sends one up message; null = sent, else why not.
   Future<Failure?> _send(Map<String, Object?> message) async {
@@ -299,38 +382,60 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     final r = await repo.send(message);
     // A refused sequence number made the repository forget the key: show the Link screen again.
     if (r case Err(failure: DeniedFailure())) await _apply(await repo.status());
-    return switch (r) {
-      Err(:final failure) => failure,
-      Ok() => null,
-    };
+    switch (r) {
+      case Err(:final failure):
+        return failure;
+      case Ok(value: final sent):
+        if (ref.mounted) _track(message, sent);
+        return null;
+    }
+  }
+
+  /// Records what was just sent so the card shows as waiting.
+  void _track(Map<String, Object?> message, AdminSentRef? sent) {
+    final kind = message['kind'];
+    final id = message['id'] as String?;
+    var questions = state.sentQuestions;
+    var tasks = state.decidedTasks;
+    if (kind == 'question' && id != null) questions = {...questions, id};
+    if (kind == 'task' && id != null) tasks = {...tasks, id};
+    var answers = state.answers;
+    if (sent != null) {
+      answers = [
+        ...answers,
+        AdminAnswer(
+          epoch: sent.epoch,
+          upSeq: sent.upSeq,
+          message: message,
+          sentAt: ref.read(adminClockProvider)(),
+        ),
+      ];
+    }
+    state = state.copyWith(
+      sentQuestions: questions,
+      decidedTasks: tasks,
+      answers: answers,
+    );
   }
 
   /// Sends the owner's answer to one question; the card then shows as waiting.
-  Future<Failure?> answerQuestion(String id, String answer) async {
-    final f = await _send({
+  Future<Failure?> answerQuestion(String id, String answer) {
+    return _send({
       'answer_id': _newAnswerId(),
       'kind': 'question',
       'id': id,
       'answer': answer,
     });
-    if (f == null && ref.mounted) {
-      state = state.copyWith(sentQuestions: {...state.sentQuestions, id});
-    }
-    return f;
   }
 
   /// Go (true) or Discard (false) for one task; the task then leaves the list.
-  Future<Failure?> decideTask(String id, {required bool go}) async {
-    final f = await _send({
+  Future<Failure?> decideTask(String id, {required bool go}) {
+    return _send({
       'answer_id': _newAnswerId(),
       'kind': 'task',
       'id': id,
       'decision': go ? 'go' : 'discard',
     });
-    if (f == null && ref.mounted) {
-      state = state.copyWith(decidedTasks: {...state.decidedTasks, id});
-    }
-    return f;
   }
 
   /// One message from the owner to the manager, into [conv] when one is open.
@@ -340,6 +445,25 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     'text': text,
     'conv': ?conv,
   });
+
+  /// Sends an answer again with a NEW sequence number (the same answer id, so the computer applies it once). [asNewConversation] drops the conversation: the text starts a new one.
+  Future<Failure?> retryAnswer(
+    AdminAnswer old, {
+    bool asNewConversation = false,
+  }) async {
+    final message = {...old.message};
+    if (asNewConversation) message.remove('conv');
+    final f = await _send(message);
+    if (f == null && ref.mounted) {
+      state = state.copyWith(
+        answers: [
+          for (final a in state.answers)
+            if (!(a.epoch == old.epoch && a.upSeq == old.upSeq)) a,
+        ],
+      );
+    }
+    return f;
+  }
 
   Future<void> _apply(Result<AdminStatus?> r) async {
     if (!ref.mounted) return;

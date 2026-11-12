@@ -2906,5 +2906,39 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminUnlockRetry => 'Unlock';
 
   @override
-  String get adminTalkTruncated => 'Older messages not shown';
+  String get adminTalkTruncated => 'Only the latest messages are shown here.';
+
+  @override
+  String get adminAnswerSending => 'Sending';
+
+  @override
+  String get adminAnswerNotSent => 'Not sent';
+
+  @override
+  String get adminAnswerRetry => 'Resend';
+
+  @override
+  String get adminAnswerNotSentYet => 'Not sent yet. Your computer may be off.';
+
+  @override
+  String get adminAnswerNewConversation => 'Send as a new conversation';
+
+  @override
+  String get adminReasonConvMissing =>
+      'This conversation was deleted on your computer.';
+
+  @override
+  String get adminReasonNotOpen =>
+      'This was already answered or closed on your computer.';
+
+  @override
+  String get adminReasonDeskOnly =>
+      'You can answer this only at your computer.';
+
+  @override
+  String get adminReasonUnknownItem =>
+      'This item no longer exists on your computer.';
+
+  @override
+  String get adminReasonGeneric => 'Something went wrong. Try again.';
 }

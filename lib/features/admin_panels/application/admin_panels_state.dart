@@ -1,4 +1,5 @@
 import '../../../core/failure.dart';
+import '../domain/admin_answer.dart';
 import '../domain/admin_panels_repository.dart';
 import '../domain/admin_snapshot.dart';
 
@@ -38,6 +39,7 @@ final class AdminPanelsState {
     this.sentQuestions = const {},
     this.decidedTasks = const {},
     this.linkBusy = false,
+    this.answers = const [],
   });
 
   final AdminGate gate;
@@ -62,6 +64,18 @@ final class AdminPanelsState {
   /// A link step is running.
   final bool linkBusy;
 
+  /// Answers sent from this phone and their delivery state (memory only).
+  final List<AdminAnswer> answers;
+
+  /// The newest answer of [kind] for [id] (a question or task id; for talk the conversation id, null = no conversation).
+  AdminAnswer? latestAnswer(String kind, {String? id}) {
+    for (final a in answers.reversed) {
+      if (a.kind != kind) continue;
+      if ((kind == 'talk' ? a.conv : a.targetId) == id) return a;
+    }
+    return null;
+  }
+
   AdminPanelsState copyWith({
     AdminGate? gate,
     AdminStatus? link,
@@ -72,6 +86,7 @@ final class AdminPanelsState {
     Set<String>? sentQuestions,
     Set<String>? decidedTasks,
     bool? linkBusy,
+    List<AdminAnswer>? answers,
     bool clearFailure = false,
   }) {
     return AdminPanelsState(
@@ -84,6 +99,7 @@ final class AdminPanelsState {
       sentQuestions: sentQuestions ?? this.sentQuestions,
       decidedTasks: decidedTasks ?? this.decidedTasks,
       linkBusy: linkBusy ?? this.linkBusy,
+      answers: answers ?? this.answers,
     );
   }
 }

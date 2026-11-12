@@ -857,5 +857,15 @@
   "adminUnlockNoLock": "Admin Panellerini açmak için telefonunuzun Ayarlar bölümünden ekran kilidi (PIN, desen, parmak izi veya yüz tanıma) ayarlayın, sonra buraya dönün.",
   "adminUnlockCancelled": "Admin Panelleri kapalı kaldı. Görmek için telefonunuzun kilidini açın.",
   "adminUnlockRetry": "Kilidi aç",
-  "adminTalkTruncated": "Burada yalnızca son mesajlar gösteriliyor."
+  "adminTalkTruncated": "Burada yalnızca son mesajlar gösteriliyor.",
+  "adminAnswerSending": "Gönderiliyor",
+  "adminAnswerNotSent": "Gönderilemedi",
+  "adminAnswerRetry": "Tekrar gönder",
+  "adminAnswerNotSentYet": "Henüz gönderilmedi. Bilgisayarınız kapalı olabilir.",
+  "adminAnswerNewConversation": "Yeni konuşma olarak gönder",
+  "adminReasonConvMissing": "Bu konuşma bilgisayarınızda silindi.",
+  "adminReasonNotOpen": "Bu, bilgisayarınızda zaten yanıtlandı veya kapatıldı.",
+  "adminReasonDeskOnly": "Bunu yalnızca bilgisayarınızın başında yanıtlayabilirsiniz.",
+  "adminReasonUnknownItem": "Bu öğe artık bilgisayarınızda yok.",
+  "adminReasonGeneric": "Bir hata oluştu. Tekrar deneyin."
 }

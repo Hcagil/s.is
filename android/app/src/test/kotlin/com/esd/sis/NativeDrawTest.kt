@@ -292,7 +292,16 @@ class NativeDrawTest {
         // pause) only widens the bracket, so the bounds below never fail on slow polling.
         val seen = linkedMapOf<String, Long>()
         val notSeen = chats.associateWith { start }.toMutableMap()
+        // 1-based numbers of draws seen pending while the draw thread slept in InstantPush.pace.
+        val sleptBefore = sortedSetOf<Int>()
         waitFor("all $n drawn") {
+            val drawnBefore = chats.count { posted(it) != null }
+            val pacing = Thread.getAllStackTraces().values.any { st ->
+                st.any { it.className == "java.lang.Thread" && it.methodName.startsWith("sleep") } &&
+                    st.any { it.className == InstantPush::class.java.name && it.methodName == "pace" }
+            }
+            // Only counted when no draw was posted during the sample, so the sleep belongs to draw drawnBefore + 1.
+            if (pacing && chats.count { posted(it) != null } == drawnBefore) sleptBefore += drawnBefore + 1
             val before = System.nanoTime()
             val found = chats.filter { it !in seen && posted(it) != null }
             val after = System.nanoTime()
@@ -303,16 +312,17 @@ class NativeDrawTest {
 
         assertEquals("arrival order", chats, seen.keys.toList())
         val ms = { a: Long, b: Long -> (b - a) / 1_000_000 }
-        // Longest and shortest the gap from draw i to draw i+1 can have been.
+        // Longest the gap from draw i to draw i+1 can have been.
         val longest = (1 until n).map { ms(notSeen.getValue(chats[it - 1]), seen.getValue(chats[it])) }
-        val shortest = (1 until n).map { ms(seen.getValue(chats[it - 1]), notSeen.getValue(chats[it])) }
-        // Index i is draw i+2 after draw i+1: draws 2..15 keep the 300 ms gap, 16..18 do not.
+        // Index i is draw i+2 after draw i+1: draws 2..15 keep the 300 ms gap (load only lengthens it).
         for (i in 0 until PushArrivalReceiver.PACE_CAP - 1) {
             assertTrue("draw ${i + 2} came at most ${longest[i]} ms after the one before: $longest", longest[i] >= 280)
         }
-        for (i in PushArrivalReceiver.PACE_CAP - 1 until n - 1) {
-            assertTrue("draw ${i + 2} above the cap waited at least ${shortest[i]} ms: $shortest", shortest[i] < 280)
-        }
+        // The probe must see pacing at all, or a renamed pace() would make the next check pass blind.
+        val cap = PushArrivalReceiver.PACE_CAP
+        assertTrue("no paced draw was seen sleeping in InstantPush.pace: $sleptBefore", sleptBefore.any { it in 2..cap })
+        // Above the cap no draw waits in pace(), however slow the machine is: no wall-clock bound here.
+        assertTrue("a draw above the cap slept in InstantPush.pace: $sleptBefore", sleptBefore.none { it > cap })
     }
 
     @Test

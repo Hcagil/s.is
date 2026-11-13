@@ -49,7 +49,7 @@ class FakeAdminRepository implements AdminPanelsRepository {
   }
 
   @override
-  Future<Result<AdminStatus>> confirmLink() async {
+  Future<Result<AdminStatus>> confirmLink(String shownCode) async {
     return const Ok(AdminStatus(AdminLinkPhase.linked, epoch: 1));
   }
 

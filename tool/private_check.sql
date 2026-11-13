@@ -21,7 +21,7 @@ begin
   for rec in select * from (values
     ('app_private.admin_on_message()','d854e50164cb4022e6fbe43fcdb2a84b'),
     ('app_private.sales_on_message()','8982eee1fff414dc7f57cc746937f579'),
-    ('app_private.admin_reply(uuid,jsonb,boolean)','b314ff78d6af821b1189bc19c0575fdc'),
+    ('app_private.admin_reply(uuid,jsonb,boolean)','fafce0950e11acc2de2f9cbdb0f184cd'),
     ('app_private.has_app_access()','d5a1b79241ef36f2ec7f105a379f1d10'),
     ('app_private.is_admin_chat(uuid)','93913ca8fe79a8e1b595a15d37d40b16'),
     ('app_private.is_bot(uuid)','6ae0b80bf4fec17793ab7bd445cd0d6b'),

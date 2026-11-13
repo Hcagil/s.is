@@ -54,6 +54,7 @@ class AdminDashboardView extends ConsumerWidget {
               key: ValueKey('admin-dash-work-$i'),
               icon: Icons.play_circle_outline_rounded,
               title: d.working[i],
+              showArrow: false,
             ),
         ],
         if (d.sessions.isNotEmpty) ...[
@@ -69,6 +70,7 @@ class AdminDashboardView extends ConsumerWidget {
               key: ValueKey('admin-dash-ctx-${session.name}'),
               icon: Icons.insights_outlined,
               title: session.name,
+              showArrow: false,
               subtitle: session.contextK == null
                   ? null
                   : '${session.contextK!.round()}k',
@@ -88,6 +90,7 @@ class AdminDashboardView extends ConsumerWidget {
               SisSettingsRow(
                 icon: Icons.checklist_rounded,
                 title: session.name,
+                showArrow: false,
                 subtitle: session.counts.entries
                     .map((e) => _stateLabel(l, e.key, e.value))
                     .join('  '),

@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/features/admin_panels/data/drift_admin_seen_store.dart';
-import 'package:sis/features/admin_panels/domain/admin_seen_store.dart';
 import 'package:sis/features/chat/data/store/drift_message_store.dart';
 
 import '../../chat/data/store/store_harness.dart';

@@ -11,8 +11,9 @@
 # Local only: "Wipe leftover Supabase stack" and "Private functions and tests".
 # SIS_PRIVATE_OPS_DIR=<dir with private-sql/ and private-tests/>: read the private pack from there instead of the main checkout's .private/ops (for a branch whose public code needs a newer pack).
 #
-# The database job starts from zero like CI: any leftover stack and its data
-# are wiped first, and the stack is stopped at the end (never `down -v`).
+# The database job starts from zero like CI, on its own Supabase stack (project id
+# ci-<worktree>-<pid>, ports 55100+, copy of supabase/ in .ci-cache), removed at the
+# end or on Ctrl-C: two worktrees can run it at once and the main stack is never touched.
 #
 # Usage: tool/ci_local.sh [--android] [--database]   (default: both)
 # Each job stops at its first failing step; both jobs always run.
@@ -91,7 +92,7 @@ edge_tests() {
   local key; key=$(service_key)
   test -n "$key"
   docker run --rm --add-host host.docker.internal:host-gateway \
-    -v "$PWD":/w -w /w -e SUPABASE_TEST_SERVICE_KEY="$key" \
+    -v "$PWD":/w -w /w -e SUPABASE_TEST_SERVICE_KEY="$key" -e SUPABASE_TEST_URL -e SUPABASE_TEST_DB_URL \
     ghcr.io/denoland/deno:2.9.7@sha256:fa335acdf6b72106eda2cb6a8cb5f4187e7630e357467489db4b2e7352d5e432 \
     test --no-check --no-lock --allow-all test/edge/
 }
@@ -100,13 +101,13 @@ integration() {
   local rc=0 key; key=$(service_key)
   test -n "$key"
   # Rows no client can write (app_private), for staff_registry_repository_test.dart.
-  docker exec -i supabase_db_s.is psql -U postgres -v ON_ERROR_STOP=1 -qAt < test/integration/fixtures/staff_registry.sql >/dev/null
+  docker exec -i "$SIS_DB_CONTAINER" psql -U postgres -v ON_ERROR_STOP=1 -qAt < test/integration/fixtures/staff_registry.sql >/dev/null
   # Owner, bridge and their rows, for admin_view_repository_test.dart.
-  docker exec -i supabase_db_s.is psql -U postgres -v ON_ERROR_STOP=1 -qAt < test/integration/fixtures/admin_view.sql >/dev/null
+  docker exec -i "$SIS_DB_CONTAINER" psql -U postgres -v ON_ERROR_STOP=1 -qAt < test/integration/fixtures/admin_view.sql >/dev/null
   "${CI[@]}" run --rm -e TZ=JST-9 -e SUPABASE_TEST_SERVICE_KEY="$key" \
-    flutter flutter test --run-skipped --tags integration --concurrency=1 test/integration || rc=$?
+    flutter flutter test --run-skipped --tags integration --concurrency=1 --dart-define=SUPABASE_TEST_URL="$SUPABASE_TEST_URL" test/integration || rc=$?
   # The owners table holds one row: leave none for the pgTAP tests that follow, pass or fail.
-  docker exec -i supabase_db_s.is psql -U postgres -v ON_ERROR_STOP=1 -qAt < test/integration/fixtures/admin_view_cleanup.sql >/dev/null || rc=$?
+  docker exec -i "$SIS_DB_CONTAINER" psql -U postgres -v ON_ERROR_STOP=1 -qAt < test/integration/fixtures/admin_view_cleanup.sql >/dev/null || rc=$?
   return "$rc"
 }
 
@@ -138,9 +139,9 @@ private_scripts() {
   if env PRIVATE_EXPECTED=1 PRIVATE_SUPABASE="$sup" PRIVATE_SQL_B64="$(b64_of "$harm")" PRIVATE_PACK_VERSION="$(ver_of "$harm")" tool/private_install.sh local >/dev/null 2>&1; then echo 'private install must fail: stale pack' >&2; return 1; fi
   for f in "$priv"/private-tests/*.sql; do n=$((n + 1)); done
   [ "$n" -gt 0 ] || { echo 'no private tests found' >&2; return 1; }
-  rm -rf supabase/tests/private && mkdir -p supabase/tests/private && cp "$priv"/private-tests/*.sql supabase/tests/private/
-  docker compose run --rm supabase test db supabase/tests/private || { rm -rf supabase/tests/private; return 1; }
-  rm -rf supabase/tests/private
+  rm -rf "$SB_DIR/supabase/tests/private" && mkdir -p "$SB_DIR/supabase/tests/private" && cp "$priv"/private-tests/*.sql "$SB_DIR/supabase/tests/private/"
+  docker compose run --rm supabase test db supabase/tests/private || return 1
+  rm -rf "$SB_DIR/supabase/tests/private"
 }
 
 # The public side of the private function hashes: a changed function body with a forgotten hash fails here, not at release.
@@ -168,13 +169,75 @@ job_android() {
   step "Build release bundle" bundle
 }
 
+# Isolate a Supabase project id, port block and copy of supabase/ for this database run.
+# Globals: SB_ID SB_DIR SB_API SB_DB SB_COMPOSE.
+sb_isolate() {
+  local name slot base found=0
+  name=$(basename "$PWD" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9\n' '-' | cut -c1-30)
+  SB_ID="ci-$name-$$"
+  for slot in 0 1 2 3 4 5 6 7; do
+    exec 9>"${XDG_RUNTIME_DIR:-/tmp}/sis-ci-slot-$slot.lock"
+    flock -n 9 || continue
+    base=$((55100 + 10*slot))
+    if ss -Htln | awk '{print $4}' | grep -qE ":($(seq -s'|' $base $((base+6))))\$"; then
+      continue
+    fi
+    found=1
+    break
+  done
+  if [ "$found" = 0 ]; then
+    echo 'no free port slot for a database run' >&2
+    return 1
+  fi
+  SB_API=$base
+  SB_DB=$((base+1))
+  SB_DIR="$PWD/.ci-cache/sb-$SB_ID"
+  mkdir -p "$SB_DIR"
+  cp -r supabase "$SB_DIR/supabase"
+  rm -rf "$SB_DIR/supabase/.temp"
+  sed -i \
+    -e "s/^project_id = .*/project_id = \"$SB_ID\"/" \
+    -e "s/^port = 54321$/port = $SB_API/" \
+    -e "s/^port = 54322$/port = $SB_DB/" \
+    -e "s/^shadow_port = 54320$/shadow_port = $((base+2))/" \
+    -e "s/^port = 54323$/port = $((base+3))/" \
+    -e "s/^port = 54324$/port = $((base+4))/" \
+    -e "s/^port = 54327$/port = $((base+5))/" \
+    -e "s/^port = 54329$/port = $((base+6))/" \
+    "$SB_DIR/supabase/config.toml"
+  SB_COMPOSE="$SB_DIR/compose.sb.yaml"
+  CI+=(-f "$SB_COMPOSE")
+  cat > "$SB_COMPOSE" <<EOF
+services:
+  supabase:
+    entrypoint: ["supabase", "--workdir", "$SB_DIR"]
+EOF
+  export COMPOSE_FILE="compose.yaml:$SB_COMPOSE"
+  export SUPABASE_TEST_URL="http://host.docker.internal:$SB_API"
+  export SUPABASE_TEST_DB_URL="postgresql://postgres:postgres@host.docker.internal:$SB_DB/postgres"
+  export SIS_DB_CONTAINER="supabase_db_$SB_ID"
+  export SIS_URL="http://127.0.0.1:$SB_API"
+  echo "database run $SB_ID: api port $SB_API, db port $SB_DB"
+}
+
+# Cleanup resources created by sb_isolate; safe to call twice or when sb_isolate never ran.
+sb_cleanup() {
+  [ -n "${SB_ID:-}" ] || return 0
+  docker compose run --rm supabase stop --project-id "$SB_ID" --no-backup >/dev/null 2>&1 || true
+  docker volume ls -q --filter "name=$SB_ID" | xargs -r docker volume rm >/dev/null 2>&1 || true
+  docker network rm "supabase_network_$SB_ID" >/dev/null 2>&1 || true
+  docker run --rm -v "$PWD/.ci-cache:/c" alpine rm -rf "/c/sb-$SB_ID" >/dev/null 2>&1 || true
+  SB_ID=
+}
+
 job_database() {
-  # One database run per machine: the Supabase stack is shared, and a second run's wipe step would kill the first.
-  exec 9>"${XDG_RUNTIME_DIR:-/tmp}/sis-ci-db.lock"
-  flock -n 9 || { echo 'waiting for another database run'; flock 9; }
+  # Own project id, ports and database per run, so two worktrees can run at once; cleaned up on any exit.
+  trap sb_cleanup EXIT
+  trap 'sb_cleanup; exit 130' INT TERM
+  sb_isolate || return 1
   step "Build Supabase tooling image" docker compose build supabase || return 1
-  # Zero state: --no-backup drops the stack's data volumes (not the SDK ones).
-  step "Wipe leftover Supabase stack" docker compose run --rm supabase stop --no-backup || return 1
+  # Zero state: --no-backup drops this run's data volumes only (project id is per run; never --all).
+  step "Wipe leftover Supabase stack" docker compose run --rm supabase stop --project-id "$SB_ID" --no-backup || return 1
   step "Start Supabase and replay migrations" docker compose run --rm supabase start -x "$SKIP" || return 1
   step "Lint database" docker compose run --rm supabase db lint --level error || return 1
   step "Check the private function hashes" private_hashes || return 1
@@ -182,7 +245,7 @@ job_database() {
   step "Edge function tests" edge_tests || return 1
   step "Build development image" "${CI[@]}" build flutter || return 1
   step "Build the Rust library for the Dart tests" "${CI[@]}" run --rm flutter cargo build --release --manifest-path rust/Cargo.toml || return 1
-  step "Wait until Realtime delivers" "${CI[@]}" run --rm flutter flutter test --run-skipped --tags warmup test/integration/realtime_warmup_test.dart || return 1
+  step "Wait until Realtime delivers" "${CI[@]}" run --rm flutter flutter test --run-skipped --tags warmup --dart-define=SUPABASE_TEST_URL="$SUPABASE_TEST_URL" test/integration/realtime_warmup_test.dart || return 1
   step "Repository integration tests" integration || return 1
   # The integration tests run before the private pack: the registry fixture adds a stand-in panel only when none exists.
   step "Private functions and tests" private_scripts || return 1
@@ -205,7 +268,7 @@ run_job() {
 [ "$want_android" = 0 ] || run_job android
 if [ "$want_database" = 1 ]; then
   run_job database
-  docker compose run --rm supabase stop || true
+  sb_cleanup
 fi
 # Drops this worktree's compose network (no -v: volumes are kept).
 docker compose down --remove-orphans >/dev/null 2>&1 || true

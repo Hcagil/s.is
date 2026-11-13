@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/loading.dart';
 import '../../../app/theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../application/admin_panels_controller.dart';
@@ -70,8 +71,9 @@ class _AdminPanelsScreenState extends ConsumerState<AdminPanelsScreen>
       appBar: AppBar(title: Text(l.adminTitle)),
       body: SafeArea(
         child: switch (gate) {
-          AdminGate.checking => const Center(
-            child: CircularProgressIndicator(),
+          AdminGate.checking => const Align(
+            alignment: Alignment.topCenter,
+            child: SisProgressLine(),
           ),
           AdminGate.cancelled => _Message(
             text: l.adminUnlockCancelled,

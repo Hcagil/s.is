@@ -85,7 +85,7 @@ Future<_Phone> _link() async {
     st.code,
     crypto.adminViewCode(phonePublic: phonePub, computerPublic: b.public),
   );
-  final done = ((await repo.confirmLink()) as Ok<AdminStatus>).value;
+  final done = ((await repo.confirmLink(st.code!)) as Ok<AdminStatus>).value;
   expect(done.phase, AdminLinkPhase.linked);
   return _Phone(repo, store, b, phonePub, done.epoch);
 }

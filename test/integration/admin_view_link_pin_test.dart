@@ -1,6 +1,7 @@
 @Tags(['integration'])
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -46,6 +47,85 @@ Future<int> _bridgeSetKey(List<int> pub) async => await bridge.rpc(
   params: {'p_pub': byteaParam(pub)},
 ) as int;
 
+// --- GatedStorage and helper copied verbatim from admin_view_key_races_test.dart ---
+
+class GatedStorage extends FlutterSecureStorage {
+  GatedStorage() : super();
+  final Map<String, String> _m = {};
+  Completer<void>? _gate;
+  bool _gateOnRead = true;
+  Completer<void> caught = Completer<void>();
+
+  /// The next read (or write when !onRead) that arrives waits until release().
+  void arm({required bool onRead}) {
+    _gate = Completer<void>();
+    _gateOnRead = onRead;
+    caught = Completer<void>();
+  }
+
+  void release() {
+    _gate?.complete();
+  }
+
+  Future<void> _maybeWait(bool isRead) async {
+    final g = _gate;
+    if (g != null && !caught.isCompleted && isRead == _gateOnRead) {
+      caught.complete();
+      await g.future;
+    }
+  }
+
+  @override
+  Future<String?> read({
+    required String key,
+    AppleOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WebOptions? webOptions,
+    AppleOptions? mOptions,
+    WindowsOptions? wOptions,
+  }) async {
+    final v = _m[key]; // the value is taken BEFORE waiting, like a real read that returned old data
+    await _maybeWait(true);
+    return v;
+  }
+
+  @override
+  Future<void> write({
+    required String key,
+    required String? value,
+    AppleOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WebOptions? webOptions,
+    AppleOptions? mOptions,
+    WindowsOptions? wOptions,
+  }) async {
+    await _maybeWait(false);
+    if (value == null) {
+      _m.remove(key);
+    } else {
+      _m[key] = value;
+    }
+  }
+
+  @override
+  Future<void> delete({
+    required String key,
+    AppleOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WebOptions? webOptions,
+    AppleOptions? mOptions,
+    WindowsOptions? wOptions,
+  }) async {
+    _m.remove(key);
+  }
+}
+
+Future<void> _waitCaught(GatedStorage s) =>
+    s.caught.future.timeout(const Duration(seconds: 5), onTimeout: () {});
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() async {
@@ -63,7 +143,8 @@ void main() {
     'confirmLink refuses a computer key that changed after the code was shown',
     () async {
       FlutterSecureStorage.setMockInitialValues({});
-      final store = AdminKeyStore();
+      final storage = GatedStorage();
+      final store = AdminKeyStore(storage);
       final repo = _repoOn(owner, store);
       expect(await repo.startLink(), isA<Ok<AdminStatus>>());
       final phonePub = (await store.load())!.public;
@@ -84,7 +165,7 @@ void main() {
       final swapped = crypto.adminViewGenerateKeypair();
       await _bridgeSetKey(swapped.public);
 
-      final r = await repo.confirmLink();
+      final r = await repo.confirmLink(st.code!);
 
       final keys = await store.load();
       expect(
@@ -94,6 +175,79 @@ void main() {
       );
       expect(r, isA<Ok<AdminStatus>>());
       expect((r as Ok<AdminStatus>).value.phase, AdminLinkPhase.changed);
+      expect(
+        r.value.code,
+        crypto.adminViewCode(
+          phonePublic: phonePub,
+          computerPublic: swapped.public,
+        ),
+      );
+    },
+  );
+
+  test('a status poll in flight when confirm starts cannot make confirm pin a key whose code was not shown', () async {
+    FlutterSecureStorage.setMockInitialValues({});
+    final storage = GatedStorage();
+    final store = AdminKeyStore(storage);
+    final repo = _repoOn(owner, store);
+    expect(await repo.startLink(), isA<Ok<AdminStatus>>());
+    final phonePub = (await store.load())!.public;
+
+    final a = crypto.adminViewGenerateKeypair();
+    await _bridgeSetKey(a.public);
+    final st = ((await repo.status()) as Ok<AdminStatus?>).value!;
+    expect(st.phase, AdminLinkPhase.confirm);
+    final codeA = st.code!;
+
+    final b = crypto.adminViewGenerateKeypair();
+    await _bridgeSetKey(b.public);
+
+    storage.arm(onRead: true); // the confirm's first key read waits
+    final confirm = repo.confirmLink(codeA);
+    await _waitCaught(storage);
+    // a status poll that started at the same time finishes now and sees key B
+    await repo.status().timeout(const Duration(seconds: 20));
+    storage.release();
+    final r = await confirm.timeout(const Duration(seconds: 20));
+
+    expect(r, isA<Ok<AdminStatus>>());
+    final status = r as Ok<AdminStatus>;
+    expect(status.value.phase, AdminLinkPhase.changed);
+    expect(
+      status.value.code,
+      crypto.adminViewCode(phonePublic: phonePub, computerPublic: b.public),
+    );
+    final keys = await store.load();
+    expect(
+      keys?.pinned,
+      isNull,
+      reason: 'nothing pinned: code A was shown, key B is on the server',
+    );
+  });
+
+  test(
+    'confirmLink with the code of the key still on the server pins that key',
+    () async {
+      FlutterSecureStorage.setMockInitialValues({});
+      final storage = GatedStorage();
+      final store = AdminKeyStore(storage);
+      final repo = _repoOn(owner, store);
+      expect(await repo.startLink(), isA<Ok<AdminStatus>>());
+      final a = crypto.adminViewGenerateKeypair();
+      await _bridgeSetKey(a.public);
+      final st = ((await repo.status()) as Ok<AdminStatus?>).value!;
+      expect(st.phase, AdminLinkPhase.confirm);
+
+      final r = await repo.confirmLink(st.code!);
+      expect(r, isA<Ok<AdminStatus>>());
+      final status = r as Ok<AdminStatus>;
+      expect(status.value.phase, AdminLinkPhase.linked);
+      final keys = await store.load();
+      expect(
+        keys?.pinned,
+        equals(a.public),
+        reason: 'the key that was shown should be pinned',
+      );
     },
   );
 }

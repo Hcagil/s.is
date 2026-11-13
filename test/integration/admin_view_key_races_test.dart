@@ -15,6 +15,7 @@ import 'package:sis/features/admin_panels/data/supabase_admin_panels_repository.
 import 'package:sis/features/admin_panels/domain/admin_answer.dart';
 import 'package:sis/features/admin_panels/domain/admin_panels_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:http/http.dart' as http;
 
 const _url = String.fromEnvironment(
   'SUPABASE_TEST_URL',
@@ -140,13 +141,24 @@ _linked() async {
   expect(await repo.startLink(), isA<Ok<AdminStatus>>());
   final b = crypto.adminViewGenerateKeypair();
   await _bridgeSetKey(b.public);
-  expect(
-    ((await repo.status()) as Ok<AdminStatus?>).value!.phase,
-    AdminLinkPhase.confirm,
-  );
-  final done = ((await repo.confirmLink()) as Ok<AdminStatus>).value;
+  final st = ((await repo.status()) as Ok<AdminStatus?>).value!;
+  expect(st.phase, AdminLinkPhase.confirm);
+  final done = ((await repo.confirmLink(st.code!)) as Ok<AdminStatus>).value;
   expect(done.phase, AdminLinkPhase.linked);
   return (repo: repo, store: store, storage: storage, epoch: done.epoch);
+}
+
+class FailingStateClient extends http.BaseClient {
+  FailingStateClient(this._inner);
+  final http.Client _inner;
+  bool failState = false;
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) {
+    if (failState && request.url.path.endsWith('/admin_view_state')) {
+      throw const SocketException('network down');
+    }
+    return _inner.send(request);
+  }
 }
 
 void main() {
@@ -230,5 +242,43 @@ void main() {
       reason: 'the phone key is still the one on the server, so it must not be deleted',
     );
     expect(k!.public, before);
+  });
+
+  test('a failed state read after a 22023 keeps the phone key and returns the failure', () async {
+    final http1 = FailingStateClient(http.Client());
+    final c = SupabaseClient(
+      _url,
+      _key,
+      httpClient: http1,
+      authOptions: const AuthClientOptions(authFlowType: AuthFlowType.implicit),
+    );
+    await c.auth.signInWithPassword(email: 'avowner@sis.test', password: _pw);
+    expect(await c.rpc('activate_session'), isTrue);
+    final storage = GatedStorage();
+    final store = AdminKeyStore(storage);
+    final repo = _repoOn(c, store);
+    expect(await repo.startLink(), isA<Ok<AdminStatus>>());
+    await _bridgeSetKey(crypto.adminViewGenerateKeypair().public);
+    final st = ((await repo.status()) as Ok<AdminStatus?>).value!;
+    final done = ((await repo.confirmLink(st.code!)) as Ok<AdminStatus>).value;
+    expect(done.phase, AdminLinkPhase.linked);
+    final before = (await store.load())!.public;
+    storage.arm(
+      onRead: false,
+    ); // the send's save, right before the server call, waits
+    final send = repo.send({'t': 'talk', 'text': 'x'});
+    await _waitCaught(storage);
+    await _bridgeSetKey(
+      crypto.adminViewGenerateKeypair().public,
+    ); // epoch changes: the server answers 22023
+    http1.failState =
+        true; // the follow-up state read after the 22023 now fails
+    storage.release();
+    final r = await send;
+    expect(r, isA<Err<AdminSentRef?>>());
+    final k = await store.load();
+    expect(k, isNotNull, reason: 'a failed state read must not delete the key');
+    expect(k!.public, before);
+    await c.dispose();
   });
 }

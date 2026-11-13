@@ -75,7 +75,7 @@ begin
     outcome := app_private.admin_cmd_list(conv); em := null;
   elsif h in ('sales_on','sales_off') then
     update app_private.sales_state set off = (h = 'sales_off'), fail_count = 0 where only_row;
-    perform app_private.admin_reply(conv, jsonb_build_object('k', case when h = 'sales_on' then 'podSwOn' else 'podSwOff' end, 'c', c));
+    perform app_private.admin_reply(conv, jsonb_build_object('k', case when h = 'sales_on' then 'salesSwitchOn' else 'salesSwitchOff' end, 'c', c));
     outcome := 'ok'; em := null;
   elsif em is null then
     perform app_private.admin_reply(conv, jsonb_build_object('k','noem','help',true));
@@ -124,26 +124,26 @@ create or replace function app_private.sales_handle(conv uuid, uid uuid, body te
     -- No cron: each ask fails jobs that never got an answer.
     for r in select id, conversation_id from app_private.sales_jobs where state in ('pending','running','waiting') and created_at < now() - interval '2 minutes' loop
       update app_private.sales_jobs set state='failed' where id = r.id;
-      perform app_private.admin_reply(r.conversation_id, jsonb_build_object('k','podFail'));
+      perform app_private.admin_reply(r.conversation_id, jsonb_build_object('k','salesFailed'));
     end loop;
 
     -- Rate limit: 30 commands per 10 minutes
     select count(*) into cnt from app_private.sales_commands where user_id = uid and at > now() - interval '10 minutes';
     if cnt >= 30 then
-      perform app_private.admin_reply(conv, jsonb_build_object('k','podRate'));
+      perform app_private.admin_reply(conv, jsonb_build_object('k','salesLimit'));
       insert into app_private.sales_commands(user_id, command, outcome) values (uid,'unknown','rate');
       return;
     end if;
 
     if not exists (select 1 from app_private.staff_commands s where s.chat_key = sk and s.word = lower(t) and s.handler = 'sales_total') then
       select s.word into w from app_private.staff_commands s where s.chat_key = sk and s.handler = 'sales_total' limit 1;
-      perform app_private.admin_reply(conv, jsonb_build_object('k','podUnk','c',w));
+      perform app_private.admin_reply(conv, jsonb_build_object('k','salesUnknown','c',w));
       insert into app_private.sales_commands(user_id, command, outcome) values (uid,'unknown','unk');
       return;
     end if;
 
     if st.off then
-      perform app_private.admin_reply(conv, jsonb_build_object('k','podOff'));
+      perform app_private.admin_reply(conv, jsonb_build_object('k','salesIsOff'));
       insert into app_private.sales_commands(user_id, command, outcome) values (uid,'sales_total','off');
       return;
     end if;
@@ -155,7 +155,7 @@ create or replace function app_private.sales_handle(conv uuid, uid uuid, body te
 
     -- Shared 30 s gap between upstream calls: a fresh answer is reused.
     if st.fetched_at is not null and st.fetched_at > now() - interval '30 seconds' and st.day = d and st.amount is not null then
-      perform app_private.admin_reply(conv, jsonb_build_object('k', case when prev then 'podPrev' else 'pod' end, 'amt', st.amount, 'day', d, 'at', st.fetched_at));
+      perform app_private.admin_reply(conv, jsonb_build_object('k', case when prev then 'salesTotalPrev' else 'salesTotal' end, 'amt', st.amount, 'day', d, 'at', st.fetched_at));
       insert into app_private.sales_commands(user_id, command, outcome) values (uid,'sales_total','cache');
       return;
     end if;

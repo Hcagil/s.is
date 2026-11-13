@@ -290,7 +290,7 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
                       : adminPreviewPrefix +
                             jsonEncode(
                               // a sales reply never puts its amount in the list
-                              '${row['admin_msg']['k']}'.startsWith('pod')
+                              '${row['admin_msg']['k']}'.startsWith('sales')
                                   ? {'k': row['admin_msg']['k']}
                                   : row['admin_msg'],
                             ))

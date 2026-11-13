@@ -49,12 +49,12 @@ String? adminReplyText(
     'keep' => l.adminKeep,
     'err' => l.adminErr,
     'nolink' => l.adminNoLink,
-    'podFail' => l.salesFail,
-    'podOff' => l.salesOff,
-    'podUnk' => cmd == null ? l.adminUnk : l.salesUnknown(cmd),
-    'podRate' => l.salesRate,
-    'podSwOn' => l.salesSwOn(cmd ?? l.salesTitle),
-    'podSwOff' => l.salesSwOff(cmd ?? l.salesTitle),
+    'salesFailed' => l.salesFail,
+    'salesIsOff' => l.salesOff,
+    'salesUnknown' => cmd == null ? l.adminUnk : l.salesUnknown(cmd),
+    'salesLimit' => l.salesRate,
+    'salesSwitchOn' => l.salesSwOn(cmd ?? l.salesTitle),
+    'salesSwitchOff' => l.salesSwOff(cmd ?? l.salesTitle),
     _ => null,
   };
   if (text == null || m['help'] != true) return text;
@@ -76,7 +76,7 @@ String adminPreviewLine(AppLocalizations l, Map<String, dynamic> m) =>
       'fwd' => l.adminFwdTitle,
       'conf' => l.adminConfTitle,
       'card' || 'note' => ('${m['t'] ?? ''}').split('\n').first,
-      'pod' || 'podPrev' => l.salesTitle,
+      'salesTotal' || 'salesTotalPrev' => l.salesTitle,
       _ => (adminReplyText(l, m) ?? '').split('\n').first,
     };
 
@@ -238,7 +238,7 @@ class _AdminReplyBubbleState extends ConsumerState<AdminReplyBubble> {
               }, style: muted),
           ],
         );
-      case 'pod' || 'podPrev':
+      case 'salesTotal' || 'salesTotalPrev':
         final at = DateTime.tryParse('${m['at']}')?.toLocal();
         final day = DateTime.tryParse('${m['day']}');
         final time = at == null ? '' : DateFormat('HH:mm').format(at);
@@ -248,7 +248,7 @@ class _AdminReplyBubbleState extends ConsumerState<AdminReplyBubble> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              m['k'] == 'pod'
+              m['k'] == 'salesTotal'
                   ? l.salesTitle
                   : l.salesPrevTitle(
                       day == null
@@ -280,7 +280,7 @@ class _AdminReplyBubbleState extends ConsumerState<AdminReplyBubble> {
             const SizedBox(height: 4),
           ],
         );
-      case 'podFail' || 'podOff':
+      case 'salesFailed' || 'salesIsOff':
         content = Row(
           mainAxisSize: MainAxisSize.min,
           children: [

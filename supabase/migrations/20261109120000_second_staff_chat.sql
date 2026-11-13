@@ -157,7 +157,7 @@ create or replace function app_private.tally_handle(conv uuid, uid uuid, body te
     -- No cron: each ask fails jobs that never got an answer.
     for r in select id, conversation_id from app_private.tally_jobs where state in ('pending','running','waiting') and created_at < now() - interval '2 minutes' loop
       update app_private.tally_jobs set state='failed' where id = r.id;
-      perform app_private.admin_reply(r.conversation_id, jsonb_build_object('k','podFail'));
+      perform app_private.admin_reply(r.conversation_id, jsonb_build_object('k','salesFailed'));
     end loop;
 
     -- One ask per user at a time, so a parallel burst cannot pass the limit below.
@@ -165,13 +165,13 @@ create or replace function app_private.tally_handle(conv uuid, uid uuid, body te
     -- Rate limit: 30 commands per 10 minutes
     select count(*) into cnt from app_private.tally_commands where user_id = uid and at > now() - interval '10 minutes';
     if cnt >= 30 then
-      perform app_private.admin_reply(conv, jsonb_build_object('k','podRate'));
+      perform app_private.admin_reply(conv, jsonb_build_object('k','salesLimit'));
       insert into app_private.tally_commands(user_id, command, outcome) values (uid,'unknown','rate');
       return;
     end if;
 
     if lower(t) <> '/sales' then
-      perform app_private.admin_reply(conv, jsonb_build_object('k','podUnk'));
+      perform app_private.admin_reply(conv, jsonb_build_object('k','salesUnknown'));
       insert into app_private.tally_commands(user_id, command, outcome) values (uid,'unknown','unk');
       return;
     end if;
@@ -180,7 +180,7 @@ create or replace function app_private.tally_handle(conv uuid, uid uuid, body te
     select * into st from app_private.tally_state for update;
 
     if st.off then
-      perform app_private.admin_reply(conv, jsonb_build_object('k','podOff'));
+      perform app_private.admin_reply(conv, jsonb_build_object('k','salesIsOff'));
       insert into app_private.tally_commands(user_id, command, outcome) values (uid,'/sales','off');
       return;
     end if;
@@ -192,7 +192,7 @@ create or replace function app_private.tally_handle(conv uuid, uid uuid, body te
 
     -- Shared 30 s gap between sales-source calls: a fresh answer is reused.
     if st.fetched_at is not null and st.fetched_at > now() - interval '30 seconds' and st.day = d and st.amount is not null then
-      perform app_private.admin_reply(conv, jsonb_build_object('k', case when prev then 'podPrev' else 'pod' end, 'amt', st.amount, 'day', d, 'at', st.fetched_at));
+      perform app_private.admin_reply(conv, jsonb_build_object('k', case when prev then 'salesTotalPrev' else 'salesTotal' end, 'amt', st.amount, 'day', d, 'at', st.fetched_at));
       insert into app_private.tally_commands(user_id, command, outcome) values (uid,'/sales','cache');
       return;
     end if;
@@ -239,9 +239,9 @@ create or replace function public.tally_job_finish(job uuid, amount text, reason
     -- waiting asks get the same answer
     for r in select id, conversation_id from app_private.tally_jobs where id = job or state = 'waiting' loop
       if ok then
-        perform app_private.admin_reply(r.conversation_id, jsonb_build_object('k', case when j.prev then 'podPrev' else 'pod' end, 'amt', amount, 'day', j.day, 'at', now()));
+        perform app_private.admin_reply(r.conversation_id, jsonb_build_object('k', case when j.prev then 'salesTotalPrev' else 'salesTotal' end, 'amt', amount, 'day', j.day, 'at', now()));
       else
-        perform app_private.admin_reply(r.conversation_id, jsonb_build_object('k','podFail'));
+        perform app_private.admin_reply(r.conversation_id, jsonb_build_object('k','salesFailed'));
       end if;
       update app_private.tally_jobs set state = case when ok then 'done' else 'failed' end where id = r.id;
     end loop;
@@ -320,14 +320,14 @@ create or replace function app_private.tally_body(msg jsonb)
 returns text
 language sql immutable set search_path = '' as $$
 select case msg->>'k'
-when 'pod' then 'Total money'
-when 'podPrev' then 'Previous day''s total'
-when 'podFail' then 'The sales source did not answer.'
-when 'podOff' then 'This command is turned off.'
-when 'podUnk' then 'Unknown command. Try /sales.'
-when 'podRate' then 'Too many commands. Wait a minute and try again.'
-when 'podSwOn' then '/sales is turned on.'
-when 'podSwOff' then '/sales is turned off.'
+when 'salesTotal' then 'Total money'
+when 'salesTotalPrev' then 'Previous day''s total'
+when 'salesFailed' then 'The sales source did not answer.'
+when 'salesIsOff' then 'This command is turned off.'
+when 'salesUnknown' then 'Unknown command. Try /sales.'
+when 'salesLimit' then 'Too many commands. Wait a minute and try again.'
+when 'salesSwitchOn' then '/sales is turned on.'
+when 'salesSwitchOff' then '/sales is turned off.'
 else ''
 end;
 $$;
@@ -382,7 +382,7 @@ begin
     outcome := app_private.admin_cmd_list(conv); em := null;
   elsif c in ('/saleson','/salesoff') then
     update app_private.tally_state set off = (c = '/salesoff'), fail_count = 0 where only_row;
-    perform app_private.admin_reply(conv, jsonb_build_object('k', case when c = '/saleson' then 'podSwOn' else 'podSwOff' end));
+    perform app_private.admin_reply(conv, jsonb_build_object('k', case when c = '/saleson' then 'salesSwitchOn' else 'salesSwitchOff' end));
     outcome := 'ok'; em := null;
   elsif em is null then
     perform app_private.admin_reply(conv, jsonb_build_object('k','noem','help',true));

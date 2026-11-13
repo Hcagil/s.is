@@ -18,25 +18,25 @@ create or replace function app_private.tally_handle(conv uuid, uid uuid, body te
     -- No cron: each ask fails jobs that never got an answer.
     for r in select id, conversation_id from app_private.tally_jobs where state in ('pending','running','waiting') and created_at < now() - interval '2 minutes' loop
       update app_private.tally_jobs set state='failed' where id = r.id;
-      perform app_private.admin_reply(r.conversation_id, jsonb_build_object('k','podFail'));
+      perform app_private.admin_reply(r.conversation_id, jsonb_build_object('k','salesFailed'));
     end loop;
 
     -- Rate limit: 30 commands per 10 minutes
     select count(*) into cnt from app_private.tally_commands where user_id = uid and at > now() - interval '10 minutes';
     if cnt >= 30 then
-      perform app_private.admin_reply(conv, jsonb_build_object('k','podRate'));
+      perform app_private.admin_reply(conv, jsonb_build_object('k','salesLimit'));
       insert into app_private.tally_commands(user_id, command, outcome) values (uid,'unknown','rate');
       return;
     end if;
 
     if lower(t) <> '/sales' then
-      perform app_private.admin_reply(conv, jsonb_build_object('k','podUnk'));
+      perform app_private.admin_reply(conv, jsonb_build_object('k','salesUnknown'));
       insert into app_private.tally_commands(user_id, command, outcome) values (uid,'unknown','unk');
       return;
     end if;
 
     if st.off then
-      perform app_private.admin_reply(conv, jsonb_build_object('k','podOff'));
+      perform app_private.admin_reply(conv, jsonb_build_object('k','salesIsOff'));
       insert into app_private.tally_commands(user_id, command, outcome) values (uid,'/sales','off');
       return;
     end if;
@@ -48,7 +48,7 @@ create or replace function app_private.tally_handle(conv uuid, uid uuid, body te
 
     -- Shared 30 s gap between sales-source calls: a fresh answer is reused.
     if st.fetched_at is not null and st.fetched_at > now() - interval '30 seconds' and st.day = d and st.amount is not null then
-      perform app_private.admin_reply(conv, jsonb_build_object('k', case when prev then 'podPrev' else 'pod' end, 'amt', st.amount, 'day', d, 'at', st.fetched_at));
+      perform app_private.admin_reply(conv, jsonb_build_object('k', case when prev then 'salesTotalPrev' else 'salesTotal' end, 'amt', st.amount, 'day', d, 'at', st.fetched_at));
       insert into app_private.tally_commands(user_id, command, outcome) values (uid,'/sales','cache');
       return;
     end if;
@@ -82,9 +82,9 @@ create or replace function public.tally_job_finish(job uuid, amount text, reason
     -- waiting asks get the same answer
     for r in select id, conversation_id from app_private.tally_jobs where id = job or state = 'waiting' loop
       if ok then
-        perform app_private.admin_reply(r.conversation_id, jsonb_build_object('k', case when j.prev then 'podPrev' else 'pod' end, 'amt', amount, 'day', j.day, 'at', now()));
+        perform app_private.admin_reply(r.conversation_id, jsonb_build_object('k', case when j.prev then 'salesTotalPrev' else 'salesTotal' end, 'amt', amount, 'day', j.day, 'at', now()));
       else
-        perform app_private.admin_reply(r.conversation_id, jsonb_build_object('k','podFail'));
+        perform app_private.admin_reply(r.conversation_id, jsonb_build_object('k','salesFailed'));
       end if;
       update app_private.tally_jobs set state = case when ok then 'done' else 'failed' end where id = r.id;
     end loop;

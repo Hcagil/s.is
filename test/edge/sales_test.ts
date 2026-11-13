@@ -1,15 +1,15 @@
 // sales-total against the real local stack (sales_job_claim / sales_job_finish run
-// for real). Vega is faked by running the function's own index.ts from a temp
-// copy whose ./vega.ts is a scripted fake: it can answer an amount, throw
-// VegaError('login' | 'timeout' | 'shape' | 'config'), throw a plain Error, or
-// answer junk. A second copy runs with the real vega.ts against a fake Vega
-// HTTP server (sales_vega_test.ts covers the reader itself).
+// for real). the sales source is faked by running the function's own index.ts from a temp
+// copy whose ./source.ts is a scripted fake: it can answer an amount, throw
+// SalesError('login' | 'timeout' | 'shape' | 'config'), throw a plain Error, or
+// answer junk. A second copy runs with the real source.ts against a fake sales source
+// HTTP server (sales_source_test.ts covers the reader itself).
 //
 // Contract (slug sales-total): POST {job_id} + header x-job-secret. 405 not POST; 401 secret
 // missing or wrong (checked before the body is read); 400 bad body; 200
 // {ok, ran:false} if the job is unknown or already taken; 200 {ok, ran:true,
 // result:'ok'|'failed'}. Never logs or returns the amount, the password or
-// Vega's reply. Every failure except 'config' counts toward the auto-off (3 in a row).
+// the source's reply. Every failure except 'config' counts toward the auto-off (3 in a row).
 //
 // Run (the local stack must be up):
 //   docker run --rm --add-host host.docker.internal:host-gateway \
@@ -24,7 +24,7 @@ const dbUrl = Deno.env.get('SUPABASE_TEST_DB_URL') ??
 const serviceKey = Deno.env.get('SUPABASE_TEST_SERVICE_KEY') ?? '';
 if (!serviceKey) throw new Error('SUPABASE_TEST_SERVICE_KEY is not set (the stack\'s SECRET_KEY)');
 const secret = 'qa-sales-' + crypto.randomUUID();
-const vegaPassword = 'qa-vega-pw-' + crypto.randomUUID();
+const sourcePassword = 'qa-source-pw-' + crypto.randomUUID();
 Deno.env.set('SUPABASE_URL', apiUrl);
 Deno.env.set('SUPABASE_SERVICE_ROLE_KEY', serviceKey);
 Deno.env.set('JOB_SHARED_SECRET', secret);
@@ -38,33 +38,33 @@ for (const k of ['log', 'info', 'warn', 'error', 'debug'] as const) {
     real(...a);
   };
 }
-// Any request to the Vega host is recorded and refused (the reader must not reach it here).
-const vegaHits: string[] = [];
+// Any request to the sales source host is recorded and refused (the reader must not reach it here).
+const sourceHits: string[] = [];
 const realFetch = globalThis.fetch;
 globalThis.fetch = (input: Request | URL | string, init?: RequestInit) => {
   const req = new Request(input, init);
-  if (req.url.startsWith('http://vega.qa.test')) {
-    vegaHits.push(req.url);
+  if (req.url.startsWith('http://source.qa.test')) {
+    sourceHits.push(req.url);
     return Promise.reject(new TypeError('connection refused'));
   }
   return realFetch(req);
 };
 
-// The fake reader, driven by globalThis.__vega.
+// The fake reader, driven by globalThis.__source.
 type Script = { amount: string } | { code: string } | { plain: string };
-const vega: { script: Script; calls: { day: string; prev: boolean }[] } = { script: { amount: '1' }, calls: [] };
-(globalThis as Record<string, unknown>).__vega = vega;
+const source: { script: Script; calls: { day: string; prev: boolean }[] } = { script: { amount: '1' }, calls: [] };
+(globalThis as Record<string, unknown>).__source = source;
 const dir = await Deno.makeTempDir({ prefix: 'sales-qa-' });
 await Deno.copyFile(new URL('../../supabase/functions/sales-total/index.ts', import.meta.url), `${dir}/index.ts`);
-await Deno.writeTextFile(`${dir}/vega.ts`, `
-export type VegaErrorCode = 'login' | 'timeout' | 'shape' | 'config';
-export class VegaError extends Error { constructor(readonly code: VegaErrorCode) { super(code); } }
-export async function fetchVegaTotal(day: string, prev: boolean): Promise<string> {
-  const v = (globalThis as any).__vega;
+await Deno.writeTextFile(`${dir}/source.ts`, `
+export type SalesErrorCode = 'login' | 'timeout' | 'shape' | 'config';
+export class SalesError extends Error { constructor(readonly code: SalesErrorCode) { super(code); } }
+export async function fetchSalesTotal(day: string, prev: boolean): Promise<string> {
+  const v = (globalThis as any).__source;
   v.calls.push({ day, prev });
   await new Promise((r) => setTimeout(r, 20));
   if ('amount' in v.script) return v.script.amount;
-  if ('code' in v.script) throw new VegaError(v.script.code);
+  if ('code' in v.script) throw new SalesError(v.script.code);
   throw new Error(v.script.plain);
 }
 `);
@@ -117,22 +117,22 @@ async function call(h: typeof fake, opts: { method?: string; body?: string | nul
 }
 const post = (h: typeof fake, jobId: unknown, s?: string | null) => call(h, { body: JSON.stringify({ job_id: jobId }), secret: s });
 function reset(script: Script) {
-  vega.script = script;
-  vega.calls = [];
+  source.script = script;
+  source.calls = [];
 }
 
 const opts = { sanitizeOps: false, sanitizeResources: false };
 
-Deno.test({ ...opts, name: 'not POST -> 405, nothing claimed, Vega untouched', fn: async () => {
+Deno.test({ ...opts, name: 'not POST -> 405, nothing claimed, the sales source untouched', fn: async () => {
   await resetState();
   reset({ amount: '5' });
   const id = await job();
   assertEquals((await call(fake, { method: 'GET' })).status, 405);
   assertEquals(await jobState(id), 'pending');
-  assertEquals(vega.calls.length, 0);
+  assertEquals(source.calls.length, 0);
 } });
 
-Deno.test({ ...opts, name: 'no secret header, or a wrong one -> 401, nothing claimed, Vega untouched', fn: async () => {
+Deno.test({ ...opts, name: 'no secret header, or a wrong one -> 401, nothing claimed, the sales source untouched', fn: async () => {
   reset({ amount: '5' });
   const id = await job();
   assertEquals((await post(fake, id, null)).status, 401);
@@ -142,7 +142,7 @@ Deno.test({ ...opts, name: 'no secret header, or a wrong one -> 401, nothing cla
   assertEquals((await post(fake, id, secret.slice(0, -1) + (secret.endsWith('0') ? '1' : '0'))).status, 401, 'same length, one byte off');
   assertEquals((await post(fake, id, '')).status, 401);
   assertEquals(await jobState(id), 'pending');
-  assertEquals(vega.calls.length, 0);
+  assertEquals(source.calls.length, 0);
 } });
 
 Deno.test({ ...opts, name: 'only the x-job-secret header counts: the right secret under another header name -> 401', fn: async () => {
@@ -157,7 +157,7 @@ Deno.test({ ...opts, name: 'only the x-job-secret header counts: the right secre
     await res.body?.cancel();
   }
   assertEquals(await jobState(id), 'pending');
-  assertEquals(vega.calls.length, 0);
+  assertEquals(source.calls.length, 0);
 } });
 
 Deno.test({ ...opts, name: 'slug: release deploys the sales-total function and points the job URL at the same slug', fn: async () => {
@@ -182,22 +182,22 @@ Deno.test({ ...opts, name: 'no JOB_SHARED_SECRET configured -> every call refuse
     assertEquals((await post(fake, id, '')).status, 401);
     assertEquals((await post(fake, id, 'undefined')).status, 401);
     assertEquals(await jobState(id), 'pending');
-    assertEquals(vega.calls.length, 0);
+    assertEquals(source.calls.length, 0);
   } finally {
     Deno.env.set('JOB_SHARED_SECRET', secret);
   }
 } });
 
-Deno.test({ ...opts, name: 'with the secret, a bad body or job_id -> 400, Vega untouched', fn: async () => {
+Deno.test({ ...opts, name: 'with the secret, a bad body or job_id -> 400, the sales source untouched', fn: async () => {
   reset({ amount: '5' });
   for (const body of ['not json', '{}', JSON.stringify({ job_id: 'not-a-uuid' }), JSON.stringify({ job_id: 7 }), 'null', '[]']) {
     const r = await call(fake, { body });
     assertEquals(r.status, 400, `${body} -> ${r.status} ${r.text}`);
   }
-  assertEquals(vega.calls.length, 0);
+  assertEquals(source.calls.length, 0);
 } });
 
-Deno.test({ ...opts, name: 'success: Vega asked for the job\'s day and prev; job done; answer stored; amount never returned or logged', fn: async () => {
+Deno.test({ ...opts, name: 'success: the sales source asked for the job\'s day and prev; job done; answer stored; amount never returned or logged', fn: async () => {
   await resetState();
   reset({ amount: '9081726354' });
   logged.length = 0;
@@ -205,7 +205,7 @@ Deno.test({ ...opts, name: 'success: Vega asked for the job\'s day and prev; job
   const r = await post(fake, id);
   assertEquals(r.status, 200, r.text);
   assertEquals(JSON.parse(r.text), { ok: true, ran: true, result: 'ok' });
-  assertEquals(vega.calls, [{ day: '2026-03-04', prev: true }]);
+  assertEquals(source.calls, [{ day: '2026-03-04', prev: true }]);
   assertEquals(await jobState(id), 'done');
   const m = await lastReply();
   assertEquals(m.admin_msg.k, 'podPrev');
@@ -216,23 +216,23 @@ Deno.test({ ...opts, name: 'success: Vega asked for the job\'s day and prev; job
   assert(!logged.join('\n').includes('9081726354'), `the amount was logged: ${logged.join(' | ')}`);
 } });
 
-Deno.test({ ...opts, name: 'a job is run once: a second call -> 200 ran:false, Vega not asked again', fn: async () => {
+Deno.test({ ...opts, name: 'a job is run once: a second call -> 200 ran:false, the sales source not asked again', fn: async () => {
   reset({ amount: '42' });
   const id = await job();
   assertEquals(JSON.parse((await post(fake, id)).text).ran, true);
-  vega.calls = [];
+  source.calls = [];
   const r = await post(fake, id);
   assertEquals(r.status, 200);
   assertEquals(JSON.parse(r.text), { ok: true, ran: false });
-  assertEquals(vega.calls.length, 0);
+  assertEquals(source.calls.length, 0);
 } });
 
-Deno.test({ ...opts, name: 'an unknown job -> 200 ran:false, Vega not asked', fn: async () => {
+Deno.test({ ...opts, name: 'an unknown job -> 200 ran:false, the sales source not asked', fn: async () => {
   reset({ amount: '42' });
   const r = await post(fake, crypto.randomUUID());
   assertEquals(r.status, 200);
   assertEquals(JSON.parse(r.text), { ok: true, ran: false });
-  assertEquals(vega.calls.length, 0);
+  assertEquals(source.calls.length, 0);
 } });
 
 Deno.test({ ...opts, name: 'three login failures in a row turn the command off', fn: async () => {
@@ -269,7 +269,7 @@ Deno.test({ ...opts, name: 'every failure but config counts toward the auto-off;
     assertEquals(st.amount, null, 'junk is never stored');
   }
   const all = logged.join('\n');
-  assert(!all.includes('<html>') && !all.includes('12 TL') && !all.includes('5550123'), `Vega's reply or an error text was logged: ${all}`);
+  assert(!all.includes('<html>') && !all.includes('12 TL') && !all.includes('5550123'), `the source's reply or an error text was logged: ${all}`);
 } });
 
 Deno.test({ ...opts, name: 'amount rule (<= 25 chars, strict number shape): accepted ones are stored as is, refused ones are a counted failure', fn: async () => {
@@ -291,57 +291,57 @@ Deno.test({ ...opts, name: 'amount rule (<= 25 chars, strict number shape): acce
   }
 } });
 
-// A fake Vega on 127.0.0.1 for the real reader (index.ts + vega.ts together).
-let vegaDurum: string[] = [];
-let vegaTotal = '8.642.097,31';
-const fakeVega = realServe({ hostname: '127.0.0.1', port: 0, onListen: () => {} }, (req) => {
+// A fake the sales source on 127.0.0.1 for the real reader (index.ts + source.ts together).
+let sourceDurum: string[] = [];
+let sourceTotal = '8.642.097,31';
+const fakeSource = realServe({ hostname: '127.0.0.1', port: 0, onListen: () => {} }, (req) => {
   const u = new URL(req.url);
   if (u.pathname === '/Authentication/LoginAction') {
     return new Response(null, { status: 302, headers: { location: '/', 'set-cookie': 'ASP.NET_SessionId=qa; path=/' } });
   }
-  vegaDurum.push(u.searchParams.get('durum') ?? '');
+  sourceDurum.push(u.searchParams.get('durum') ?? '');
   return new Response(`<div class="dash-stat-label">Toplam Ciro</div>
-    <a class="tarihLink dash-stat-value" href="/CiroRaporlar/List">${vegaTotal}</a>`);
+    <a class="tarihLink dash-stat-value" href="/CiroRaporlar/List">${sourceTotal}</a>`);
 });
-function vegaEnv(base: string) {
-  Deno.env.set('VEGA_BASE_URL', base);
-  Deno.env.set('VEGA_USERNAME', 'qa-user');
-  Deno.env.set('VEGA_PASSWORD', vegaPassword);
+function sourceEnv(base: string) {
+  Deno.env.set('SALES_SOURCE_URL', base);
+  Deno.env.set('SALES_SOURCE_USER', 'qa-user');
+  Deno.env.set('SALES_SOURCE_PASSWORD', sourcePassword);
 }
-function clearVegaEnv() {
-  for (const k of ['VEGA_BASE_URL', 'VEGA_USERNAME', 'VEGA_PASSWORD']) Deno.env.delete(k);
+function clearsourceEnv() {
+  for (const k of ['SALES_SOURCE_URL', 'SALES_SOURCE_USER', 'SALES_SOURCE_PASSWORD']) Deno.env.delete(k);
 }
 
-Deno.test({ ...opts, name: 'the real reader against a fake Vega: prev job reads durum=dun, the total is stored and answered', fn: async () => {
+Deno.test({ ...opts, name: 'the real reader against a fake sales source: prev job reads durum=dun, the total is stored and answered', fn: async () => {
   await resetState();
-  vegaEnv(`http://127.0.0.1:${fakeVega.addr.port}`);
+  sourceEnv(`http://127.0.0.1:${fakeSource.addr.port}`);
   logged.length = 0;
   try {
     for (const [prev, durum] of [[true, 'dun'], [false, 'bugun']] as const) {
-      vegaDurum = [];
+      sourceDurum = [];
       const id = await job(prev);
       const r = await post(real, id);
       assertEquals(JSON.parse(r.text), { ok: true, ran: true, result: 'ok' }, r.text);
-      assertEquals(vegaDurum, [durum]);
+      assertEquals(sourceDurum, [durum]);
       assertEquals(await jobState(id), 'done');
       const m = (await lastReply()).admin_msg;
       assertEquals([m.k, m.amt], [prev ? 'podPrev' : 'pod', '8.642.097,31']);
       assertEquals((await state()).amount, '8.642.097,31');
     }
-    assert(!logged.join('\n').includes('8.642.097') && !logged.join('\n').includes(vegaPassword), `logged: ${logged.join(' | ')}`);
+    assert(!logged.join('\n').includes('8.642.097') && !logged.join('\n').includes(sourcePassword), `logged: ${logged.join(' | ')}`);
   } finally {
-    clearVegaEnv();
+    clearsourceEnv();
   }
 } });
 
 // Was "the placeholder reader ... is not counted": the placeholder failed every
-// configured call without counting. The real reader now calls Vega; a refused
+// configured call without counting. The real reader now calls the sales source; a refused
 // connection is a plain Error => reason 'other', which counts (3 in a row => off).
-Deno.test({ ...opts, name: 'the real reader with Vega unreachable fails the job, counts toward the auto-off, the password never leaves', fn: async () => {
+Deno.test({ ...opts, name: 'the real reader with the sales source unreachable fails the job, counts toward the auto-off, the password never leaves', fn: async () => {
   await resetState();
-  vegaEnv('http://vega.qa.test:9698');
+  sourceEnv('http://source.qa.test:9698');
   logged.length = 0;
-  vegaHits.length = 0;
+  sourceHits.length = 0;
   try {
     for (let i = 1; i <= 3; i++) {
       const id = await job();
@@ -349,19 +349,19 @@ Deno.test({ ...opts, name: 'the real reader with Vega unreachable fails the job,
       assertEquals(r.status, 200, r.text);
       assertEquals(JSON.parse(r.text).result, 'failed');
       assertEquals(await jobState(id), 'failed');
-      assert(!r.text.includes(vegaPassword));
+      assert(!r.text.includes(sourcePassword));
       const st = await state();
       assertEquals([st.fail_count, st.off], [i, i === 3], `after ${i} refused connection(s)`);
     }
-    assert(vegaHits.length >= 3, 'the reader did try Vega');
-    assert(!logged.join('\n').includes(vegaPassword), 'the Vega password was logged');
-    assert(vegaHits.every((u) => !u.includes(vegaPassword) && !u.includes('qa-user')), `credentials in a URL: ${vegaHits}`);
+    assert(sourceHits.length >= 3, 'the reader did try the sales source');
+    assert(!logged.join('\n').includes(sourcePassword), 'the sales source password was logged');
+    assert(sourceHits.every((u) => !u.includes(sourcePassword) && !u.includes('qa-user')), `credentials in a URL: ${sourceHits}`);
   } finally {
-    clearVegaEnv();
+    clearsourceEnv();
   }
 } });
 
-Deno.test({ ...opts, name: 'the real reader with no Vega config fails the job without counting it', fn: async () => {
+Deno.test({ ...opts, name: 'the real reader with no sales source config fails the job without counting it', fn: async () => {
   await resetState();
   const id = await job();
   const r = await post(real, id);
@@ -373,12 +373,12 @@ Deno.test({ ...opts, name: 'the real reader with no Vega config fails the job wi
 // Real page shapes (t_7c0a1a1920): today can be a whole number with no
 // separators ("7"); yesterday looked like "99.999,99". Page -> parse -> reply.
 Deno.test({ ...opts, name: 'the real reader: a whole-number total ("7", "12345") and a dotted one ("99.999,99") are answered exactly as on the page', fn: async () => {
-  vegaEnv(`http://127.0.0.1:${fakeVega.addr.port}`);
+  sourceEnv(`http://127.0.0.1:${fakeSource.addr.port}`);
   try {
     for (const total of ['7', '12345', '99.999,99']) {
       for (const prev of [false, true]) {
         await resetState();
-        vegaTotal = total;
+        sourceTotal = total;
         const id = await job(prev);
         const r = await post(real, id);
         assertEquals(JSON.parse(r.text), { ok: true, ran: true, result: 'ok' }, `${total} prev=${prev}: ${r.text}`);
@@ -388,8 +388,8 @@ Deno.test({ ...opts, name: 'the real reader: a whole-number total ("7", "12345")
       }
     }
   } finally {
-    vegaTotal = '8.642.097,31';
-    clearVegaEnv();
+    sourceTotal = '8.642.097,31';
+    clearsourceEnv();
   }
 } });
 
@@ -402,6 +402,6 @@ Deno.test({ ...opts, name: 'teardown', fn: async () => {
     console.error('teardown:', (e as Error).message);
   }
   await sql.end();
-  await fakeVega.shutdown();
+  await fakeSource.shutdown();
   await Deno.remove(dir, { recursive: true });
 } });

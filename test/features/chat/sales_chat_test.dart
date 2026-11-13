@@ -250,7 +250,7 @@ void main() {
         final s = screenText(t);
         expect(s, contains(l.salesTitle));
         expect(s, contains(amount));
-        expect(s, contains(l.salesFetched(hhmm(at))));
+        expect(s, contains(l.salesFetchedNoSource(hhmm(at))));
         expect(hhmm(at), '11:20', reason: 'fixture: JST-9');
         expect(
           s,
@@ -320,9 +320,48 @@ void main() {
           reason: 'not the current-day title',
         );
         expect(s, contains(amount));
-        expect(s, contains(l.salesFetched(hhmm(at))));
+        expect(s, contains(l.salesFetchedNoSource(hhmm(at))));
         expect(s, isNot(contains('Unchecked')));
         expect(s, isNot(contains('Kontrol edilmedi')));
+      },
+    );
+
+    testWidgets(
+      '[$lang] pod / podPrev: a src key shows the source line; no src shows the no-source line',
+      (t) async {
+        for (final k in ['pod', 'podPrev']) {
+          // with src
+          await pumpBubble(t, {
+            'k': k,
+            'amt': amount,
+            'day': '2026-10-28',
+            'at': at.toIso8601String(),
+            'src': 'QaSource',
+          }, locale);
+          final sWithSrc = screenText(t);
+          expect(sWithSrc, contains(l.salesFetched('QaSource', hhmm(at))));
+          expect(sWithSrc, isNot(contains(l.salesFetchedNoSource(hhmm(at)))));
+          // without src
+          await pumpBubble(t, {
+            'k': k,
+            'amt': amount,
+            'day': '2026-10-28',
+            'at': at.toIso8601String(),
+          }, locale);
+          final sNoSrc = screenText(t);
+          expect(sNoSrc, contains(l.salesFetchedNoSource(hhmm(at))));
+          expect(sNoSrc, isNot(contains('QaSource')));
+          // src empty
+          await pumpBubble(t, {
+            'k': k,
+            'amt': amount,
+            'day': '2026-10-28',
+            'at': at.toIso8601String(),
+            'src': '',
+          }, locale);
+          final sEmptySrc = screenText(t);
+          expect(sEmptySrc, contains(l.salesFetchedNoSource(hhmm(at))));
+        }
       },
     );
 
@@ -331,7 +370,10 @@ void main() {
       (t) async {
         await pumpBubble(t, {'k': 'podFail'}, locale);
         expect(screenText(t), contains(l.salesFail));
-        expect(screenText(t), isNot(contains(l.salesFetched('').trim())));
+        expect(
+          screenText(t),
+          isNot(contains(l.salesFetchedNoSource('').trim())),
+        );
         await pumpBubble(t, {'k': 'podOff'}, locale);
         expect(screenText(t), contains(l.salesOff));
       },

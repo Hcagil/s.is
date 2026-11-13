@@ -403,8 +403,8 @@ select is(app_private.admin_body(jsonb_build_object('k', k)), '', k || ' without
 select is(app_private.admin_body('{"k":"zz_unknown","t":"x"}'::jsonb), '', 'an unknown key stays empty, t is not shown');
 select is((select body from public.messages where id = (select id from k7)), 'Fake card tst11@mail.test',
           'a card made through admin_reply has its t text as body');
--- every other key gives the same text as before this change (md5 of the bodies taken on main b6557ec)
-select is(md5(string_agg(k || '=' || app_private.admin_body(m), '|' order by k)), 'fa119617bc6689644cc0d9a04e133c6a',
+-- every other key gives the same text as before this change (md5 of the bodies; the two tester-step texts say "your tester group")
+select is(md5(string_agg(k || '=' || app_private.admin_body(m), '|' order by k)), 'f898556c2b14b4cbbef41d0cd5ad9b95',
           'existing reply bodies are unchanged')
   from (values
     ('andOk', '{"k":"andOk","e":"a***@m***.test"}'::jsonb), ('bad', '{"k":"bad"}'), ('canOk', '{"k":"canOk"}'),

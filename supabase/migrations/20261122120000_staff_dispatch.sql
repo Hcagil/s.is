@@ -1,18 +1,18 @@
 -- Staff dispatch: the server finds a command's handler in the registry; the sales objects get neutral names.
 -- Renames keep every row, trigger and grant; the function bodies are re-created below.
 
-alter table app_private.podium_state rename to sales_state;
-alter table app_private.podium_jobs rename to sales_jobs;
-alter table app_private.podium_commands rename to sales_commands;
-alter function app_private.podium_business_day(timestamptz) rename to sales_business_day;
-alter function app_private.podium_handle(uuid, uuid, text) rename to sales_handle;
-alter function app_private.podium_jobs_dispatch() rename to sales_jobs_dispatch;
-alter function app_private.podium_on_message() rename to sales_on_message;
-alter function app_private.podium_body(jsonb) rename to sales_body;
-alter function public.podium_job_claim(uuid) rename to sales_job_claim;
-alter function public.podium_job_finish(uuid, text, text) rename to sales_job_finish;
-alter trigger podium_jobs_dispatch on app_private.sales_jobs rename to sales_jobs_dispatch;
-alter trigger podium_on_message on public.messages rename to sales_on_message;
+alter table app_private.tally_state rename to sales_state;
+alter table app_private.tally_jobs rename to sales_jobs;
+alter table app_private.tally_commands rename to sales_commands;
+alter function app_private.tally_business_day(timestamptz) rename to sales_business_day;
+alter function app_private.tally_handle(uuid, uuid, text) rename to sales_handle;
+alter function app_private.tally_jobs_dispatch() rename to sales_jobs_dispatch;
+alter function app_private.tally_on_message() rename to sales_on_message;
+alter function app_private.tally_body(jsonb) rename to sales_body;
+alter function public.tally_job_claim(uuid) rename to sales_job_claim;
+alter function public.tally_job_finish(uuid, text, text) rename to sales_job_finish;
+alter trigger tally_jobs_dispatch on app_private.sales_jobs rename to sales_jobs_dispatch;
+alter trigger tally_on_message on public.messages rename to sales_on_message;
 
 -- One sales ask. The word must be a sales_total command of this chat's registry; the text is never stored or forwarded.
 create or replace function app_private.sales_handle(conv uuid, uid uuid, body text) returns void language plpgsql security definer set search_path = '' as $$
@@ -65,7 +65,7 @@ create or replace function app_private.sales_handle(conv uuid, uid uuid, body te
     d := app_private.sales_business_day(now());
     prev := d < ist::date;
 
-    -- Shared 30 s gap between Vega calls: a fresh answer is reused.
+    -- Shared 30 s gap between sales-source calls: a fresh answer is reused.
     if st.fetched_at is not null and st.fetched_at > now() - interval '30 seconds' and st.day = d and st.amount is not null then
       perform app_private.admin_reply(conv, jsonb_build_object('k', case when prev then 'podPrev' else 'pod' end, 'amt', st.amount, 'day', d, 'at', st.fetched_at));
       insert into app_private.sales_commands(user_id, command, outcome) values (uid,'sales_total','cache');
@@ -181,15 +181,20 @@ end;
 $$;
 revoke all on function app_private.sales_body(jsonb) from public, anon, authenticated;
 
--- Same as before; the fallback text now comes from sales_body.
+-- Same as before; the fallback text now comes from sales_body. A sales amount reply also carries the source name from the server-only private pack (function app_private.private_source(), absent = no name).
 create or replace function app_private.admin_reply(conv uuid, msg jsonb, push boolean default false)
 returns uuid
 language plpgsql security definer set search_path = '' as $$
-declare result uuid;
+declare result uuid; m jsonb := msg; fn regprocedure; src text;
 begin
+  fn := to_regprocedure('app_private.private_source()');
+  if fn is not null and m->>'k' in ('pod','podPrev') then
+    execute 'select app_private.private_source()' into src;
+    if src is not null and src <> '' then m := m || jsonb_build_object('src', src); end if;
+  end if;
   perform set_config('app_private.admin_write', 'on', true);
   insert into public.messages(conversation_id, sender_id, body, admin_msg, admin_push, created_at)
-  values (conv, '00000000-0000-0000-0000-00000000ad41', coalesce(nullif(app_private.admin_body(msg), ''), app_private.sales_body(msg)), msg, push, clock_timestamp())
+  values (conv, '00000000-0000-0000-0000-00000000ad41', coalesce(nullif(app_private.admin_body(m), ''), app_private.sales_body(m)), m, push, clock_timestamp())
   returning id into result;
   -- the permission lasts for the insert only
   perform set_config('app_private.admin_write', '', true);
@@ -227,7 +232,7 @@ create or replace function app_private.conversations_set_staff_key() returns tri
 language plpgsql set search_path = '' as $$
 begin
   if new.admin_chat and new.staff_key is null then
-    new.staff_key := case when new.bacanaks_chat then 'staff_b' else 'staff_a' end;
+    new.staff_key := case when new.staff_b_chat then 'staff_b' else 'staff_a' end;
   end if;
   return new;
 end $$;

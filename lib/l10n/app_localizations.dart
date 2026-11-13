@@ -4436,11 +4436,17 @@ abstract class AppLocalizations {
   /// **'Previous day\'s total ({date})'**
   String salesPrevTitle(String date);
 
-  /// Staff chat command reply
+  /// Staff chat command reply; the source name comes from the server
   ///
   /// In en, this message translates to:
-  /// **'Fetched from Vega at {time}'**
-  String salesFetched(String time);
+  /// **'Fetched from {source} at {time}'**
+  String salesFetched(String source, String time);
+
+  /// Staff chat command reply when the server sent no source name
+  ///
+  /// In en, this message translates to:
+  /// **'Fetched at {time}'**
+  String salesFetchedNoSource(String time);
 
   /// Staff chat command reply
   ///

@@ -1,4 +1,4 @@
-// Fetches the Vega money total for one sales ask.
+// Fetches the sales source's money total for one sales ask.
 // Called by a DB trigger (pg_net) with {"job_id": "<uuid>"} and header x-job-secret.
 //
 // Deployed with --no-verify-jwt: the shared secret in the header is the credential.
@@ -10,9 +10,9 @@
 // or { error: 'bad_request' } (400) if malformed request,
 // or { error: 'finish' } (500) if saving the result failed,
 // or { ok: true, ran: true, result: 'ok'|'failed' } (200) on success.
-// Never logs or returns the amount, the password or Vega's reply.
+// Never logs or returns the amount, the password or the source's reply.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { fetchVegaTotal, VegaError } from './vega.ts';
+import { fetchSalesTotal, SalesError } from './source.ts';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -67,11 +67,11 @@ Deno.serve(async (req) => {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     amount = await Promise.race([
-      fetchVegaTotal(claim.day, claim.prev),
-      new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new VegaError('timeout')), 20000); })
+      fetchSalesTotal(claim.day, claim.prev),
+      new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new SalesError('timeout')), 20000); })
     ]);
   } catch (e) {
-    reason = e instanceof VegaError ? e.code : 'other';
+    reason = e instanceof SalesError ? e.code : 'other';
     console.log('sales: fetch failed');
   } finally {
     clearTimeout(timer);

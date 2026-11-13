@@ -19,7 +19,7 @@ SELECT jsonb_build_object(
   'conversations', coalesce((
     select jsonb_agg(to_jsonb(x))
     from (
-      select id, title, avatar_path, system, admin_chat, bacanaks_chat, debug_chat, members_can_set_avatar, members_can_add, new_members_see_history, members_can_pin, pinned_message_id
+      select id, title, avatar_path, system, admin_chat, staff_b_chat, debug_chat, members_can_set_avatar, members_can_add, new_members_see_history, members_can_pin, pinned_message_id
       from public.conversations
     ) x
   ), '[]'::jsonb),

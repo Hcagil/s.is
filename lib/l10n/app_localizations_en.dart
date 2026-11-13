@@ -2553,8 +2553,13 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String salesFetched(String time) {
-    return 'Fetched from Vega at $time';
+  String salesFetched(String source, String time) {
+    return 'Fetched from $source at $time';
+  }
+
+  @override
+  String salesFetchedNoSource(String time) {
+    return 'Fetched at $time';
   }
 
   @override

@@ -241,6 +241,8 @@ class _AdminReplyBubbleState extends ConsumerState<AdminReplyBubble> {
       case 'pod' || 'podPrev':
         final at = DateTime.tryParse('${m['at']}')?.toLocal();
         final day = DateTime.tryParse('${m['day']}');
+        final time = at == null ? '' : DateFormat('HH:mm').format(at);
+        final src = '${m['src'] ?? ''}';
         final locale = Localizations.localeOf(context).toString();
         content = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -270,7 +272,9 @@ class _AdminReplyBubbleState extends ConsumerState<AdminReplyBubble> {
             ),
             const SizedBox(height: 4),
             Text(
-              l.salesFetched(at == null ? '' : DateFormat('HH:mm').format(at)),
+              src.isEmpty
+                  ? l.salesFetchedNoSource(time)
+                  : l.salesFetched(src, time),
               style: TextStyle(fontSize: 12, color: brand.muted),
             ),
             const SizedBox(height: 4),

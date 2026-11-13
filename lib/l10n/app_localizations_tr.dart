@@ -2525,8 +2525,13 @@ class AppLocalizationsTr extends AppLocalizations {
   }
 
   @override
-  String salesFetched(String time) {
-    return 'Vega\'dan alındı: $time';
+  String salesFetched(String source, String time) {
+    return '$source kaynağından alındı: $time';
+  }
+
+  @override
+  String salesFetchedNoSource(String time) {
+    return 'Alındı: $time';
   }
 
   @override

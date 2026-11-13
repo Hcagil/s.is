@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -184,33 +185,34 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     final repo = ref.read(adminPanelsRepositoryProvider);
     final persisted = await repo.lastDownSeq(epoch);
 
-    // Older rows than this phone already saw: the server replayed; apply nothing.
-    if (rows.isNotEmpty && rows.last.seq < persisted) {
-      state = state.copyWith(failure: const DeniedFailure());
-      return;
-    }
-
     var snap = state.snapshot;
     var has = state.hasSnapshot;
     var completed = false;
     var gap = false;
+    var replayed = false;
+    var applied = 0;
 
     final results = <AdminAnswerResult>[];
     for (final row in rows) {
       if (row.id > _lastId) _lastId = row.id;
       if (row.epoch != epoch) continue;
 
-      final last = _sessionSeq;
-      // A replay or a repeat is refused.
-      if (last != null && row.seq <= last) continue;
-
-      if (last != null && row.seq > last + 1) {
-        gap = true;
-      } else if (last == null && persisted > 0 && row.seq > persisted + 1) {
-        gap = true;
+      // A replay or a repeat is refused, row by row.
+      final floor = max(persisted, _sessionSeq ?? 0);
+      if (row.seq <= floor) {
+        if (row.seq <= persisted) replayed = true;
+        continue;
       }
 
+      if (floor > 0 && row.seq > floor + 1) {
+        gap = true;
+        if (row.message == null) continue;
+      }
+      // After a gap no delta is applied until a fresh snapshot completes.
+      if (gap && row.message is AdminDelta) continue;
+
       _sessionSeq = row.seq;
+      applied++;
 
       switch (row.message) {
         case final AdminSnapshotPart part:
@@ -232,8 +234,15 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
       }
     }
 
+    if (replayed && applied == 0) {
+      state = state.copyWith(failure: const DeniedFailure());
+      return;
+    }
+
     final seq = _sessionSeq;
-    if (seq != null) await repo.saveLastDownSeq(epoch, seq);
+    if (seq != null && seq > persisted) {
+      await repo.saveLastDownSeq(epoch, seq);
+    }
     if (has && rows.isNotEmpty) {
       await ref
           .read(adminSnapshotStoreProvider)

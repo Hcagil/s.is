@@ -13,6 +13,7 @@ class SisSettingsRow extends StatelessWidget {
     this.subtitle,
     this.onTap,
     this.iconColor,
+    this.showArrow = true,
   });
 
   final IconData icon;
@@ -21,6 +22,7 @@ class SisSettingsRow extends StatelessWidget {
   final String? subtitle;
   final VoidCallback? onTap;
   final Color? iconColor;
+  final bool showArrow;
 
   @override
   Widget build(BuildContext context) {
@@ -68,8 +70,10 @@ class SisSettingsRow extends StatelessWidget {
                       style: style?.copyWith(color: t.muted),
                     ),
                   ),
-                const SizedBox(width: 4),
-                Icon(Icons.chevron_right, color: t.muted),
+                if (showArrow) ...[
+                  const SizedBox(width: 4),
+                  Icon(Icons.chevron_right, color: t.muted),
+                ],
               ],
             ),
           ),

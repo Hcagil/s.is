@@ -1,4 +1,4 @@
--- Admin chat: the owner types tester commands into a private chat with SIS Admin.
+-- Admin chat: the owner types tester commands into a private chat with the admin bot.
 --
 -- One conversation per owner, flagged system (so every "no client writes into
 -- a system chat" rule already in the database applies to it) and admin_chat
@@ -178,10 +178,10 @@ language sql immutable set search_path = '' as $$
     when 'p2' then 'Apple is slow. Trying again (2 of 3)...'
     when 'p3' then 'Apple accepted. The invite email is on its way.'
     when 'fail' then 'Apple step failed for ' || coalesce(msg->>'e','') || ': ' || app_private.admin_fail_reason(msg->>'r') || '. The allowlist row is saved; type the command again to retry.'
-    when 'andOk' then 'Added ' || coalesce(msg->>'e','') || ' to the allowlist. One step by hand: add this email to Play Console > Internal testing > Testers > Bacanaks.'
+    when 'andOk' then 'Added ' || coalesce(msg->>'e','') || ' to the allowlist. One step by hand: add this email to Play Console > Internal testing > Testers > your tester group.'
     when 'fwd' then 'Hi! You can test SIS on Android now.' || E'\n' || '1. Open this link and accept the invite: ' || coalesce(msg->>'l','') || E'\n' || '2. Install SIS from Google Play.' || E'\n' || '3. Sign in with this email: ' || coalesce(msg->>'e','')
     when 'conf' then 'Remove this tester? ' || coalesce(msg->>'e','') || ' loses access to SIS.'
-    when 'rmOk' then 'Removed ' || coalesce(msg->>'e','') || ' from the allowlist. Now remove it by hand in Play: Play Console > Internal testing > Testers > Bacanaks > delete this email.'
+    when 'rmOk' then 'Removed ' || coalesce(msg->>'e','') || ' from the allowlist. Now remove it by hand in Play: Play Console > Internal testing > Testers > your tester group > delete this email.'
     when 'canOk' then 'Cancelled. Nothing was removed.'
     when 'nolist' then coalesce(msg->>'e','') || ' is not on the tester list.'
     when 'r1' then 'Removing ' || coalesce(msg->>'e','') || ' from the TestFlight group...'

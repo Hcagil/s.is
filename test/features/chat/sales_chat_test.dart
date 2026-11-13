@@ -6,9 +6,9 @@
 // - composer: hint "Type / for commands"; typing "/" opens the command list
 //   with the registry word and its server help; a tap fills "/word " and
 //   sends nothing. A normal chat has no list.
-// - reply bubble: pod / podPrev show the title, the amount as given, and
+// - reply bubble: salesTotal / salesTotalPrev show the title, the amount as given, and
 //   the fetched line at HH:MM in the phone's local time; no "Unchecked"
-//   tag. podFail / podOff show their fixed text. EN and TR.
+//   tag. salesFailed / salesIsOff show their fixed text. EN and TR.
 // - chat-list preview: an answer shows the title only, never the amount.
 // Time is shown in local time: run under TZ=JST-9 (as CI does).
 // Fixture words are neutral ("/report", "staff_b"), never real ones.
@@ -239,10 +239,10 @@ void main() {
     });
 
     testWidgets(
-      '[$lang] pod: title, amount as given, fetched line in local time, no Unchecked tag',
+      '[$lang] salesTotal: title, amount as given, fetched line in local time, no Unchecked tag',
       (t) async {
         await pumpBubble(t, {
-          'k': 'pod',
+          'k': 'salesTotal',
           'amt': amount,
           'day': '2026-10-29',
           'at': at.toIso8601String(),
@@ -250,7 +250,7 @@ void main() {
         final s = screenText(t);
         expect(s, contains(l.salesTitle));
         expect(s, contains(amount));
-        expect(s, contains(l.salesFetched(hhmm(at))));
+        expect(s, contains(l.salesFetchedNoSource(hhmm(at))));
         expect(hhmm(at), '11:20', reason: 'fixture: JST-9');
         expect(
           s,
@@ -269,9 +269,9 @@ void main() {
     );
 
     testWidgets(
-      '[$lang] pod / podPrev: a whole number ("7", "12345") and "99.999,99" are shown exactly as given',
+      '[$lang] salesTotal / salesTotalPrev: a whole number ("7", "12345") and "99.999,99" are shown exactly as given',
       (t) async {
-        for (final k in ['pod', 'podPrev']) {
+        for (final k in ['salesTotal', 'salesTotalPrev']) {
           Future<String> shown(String amt) async {
             await pumpBubble(t, {
               'k': k,
@@ -298,10 +298,10 @@ void main() {
     );
 
     testWidgets(
-      '[$lang] podPrev: previous-day title with the day, amount, fetched line',
+      '[$lang] salesTotalPrev: previous-day title with the day, amount, fetched line',
       (t) async {
         await pumpBubble(t, {
-          'k': 'podPrev',
+          'k': 'salesTotalPrev',
           'amt': amount,
           'day': '2026-10-28',
           'at': at.toIso8601String(),
@@ -320,19 +320,61 @@ void main() {
           reason: 'not the current-day title',
         );
         expect(s, contains(amount));
-        expect(s, contains(l.salesFetched(hhmm(at))));
+        expect(s, contains(l.salesFetchedNoSource(hhmm(at))));
         expect(s, isNot(contains('Unchecked')));
         expect(s, isNot(contains('Kontrol edilmedi')));
       },
     );
 
     testWidgets(
-      '[$lang] podFail and podOff show their fixed text and no amount line',
+      '[$lang] salesTotal / salesTotalPrev: a src key shows the source line; no src shows the no-source line',
       (t) async {
-        await pumpBubble(t, {'k': 'podFail'}, locale);
+        for (final k in ['salesTotal', 'salesTotalPrev']) {
+          // with src
+          await pumpBubble(t, {
+            'k': k,
+            'amt': amount,
+            'day': '2026-10-28',
+            'at': at.toIso8601String(),
+            'src': 'QaSource',
+          }, locale);
+          final sWithSrc = screenText(t);
+          expect(sWithSrc, contains(l.salesFetched('QaSource', hhmm(at))));
+          expect(sWithSrc, isNot(contains(l.salesFetchedNoSource(hhmm(at)))));
+          // without src
+          await pumpBubble(t, {
+            'k': k,
+            'amt': amount,
+            'day': '2026-10-28',
+            'at': at.toIso8601String(),
+          }, locale);
+          final sNoSrc = screenText(t);
+          expect(sNoSrc, contains(l.salesFetchedNoSource(hhmm(at))));
+          expect(sNoSrc, isNot(contains('QaSource')));
+          // src empty
+          await pumpBubble(t, {
+            'k': k,
+            'amt': amount,
+            'day': '2026-10-28',
+            'at': at.toIso8601String(),
+            'src': '',
+          }, locale);
+          final sEmptySrc = screenText(t);
+          expect(sEmptySrc, contains(l.salesFetchedNoSource(hhmm(at))));
+        }
+      },
+    );
+
+    testWidgets(
+      '[$lang] salesFailed and salesIsOff show their fixed text and no amount line',
+      (t) async {
+        await pumpBubble(t, {'k': 'salesFailed'}, locale);
         expect(screenText(t), contains(l.salesFail));
-        expect(screenText(t), isNot(contains(l.salesFetched('').trim())));
-        await pumpBubble(t, {'k': 'podOff'}, locale);
+        expect(
+          screenText(t),
+          isNot(contains(l.salesFetchedNoSource('').trim())),
+        );
+        await pumpBubble(t, {'k': 'salesIsOff'}, locale);
         expect(screenText(t), contains(l.salesOff));
       },
     );
@@ -340,23 +382,23 @@ void main() {
     test(
       '[$lang] the chat-list preview of an answer is the title only, never the amount',
       () {
-        final pod = adminPreviewLine(l, {
-          'k': 'pod',
+        final salesTotal = adminPreviewLine(l, {
+          'k': 'salesTotal',
           'amt': amount,
           'day': '2026-10-29',
           'at': at.toIso8601String(),
         });
         final prev = adminPreviewLine(l, {
-          'k': 'podPrev',
+          'k': 'salesTotalPrev',
           'amt': amount,
           'day': '2026-10-28',
           'at': at.toIso8601String(),
         });
-        expect(pod, l.salesTitle);
+        expect(salesTotal, l.salesTitle);
         expect(prev, isNot(contains(amount)));
         expect(prev, isNotEmpty);
-        expect(adminPreviewLine(l, {'k': 'podFail'}), l.salesFail);
-        expect(adminPreviewLine(l, {'k': 'podOff'}), l.salesOff);
+        expect(adminPreviewLine(l, {'k': 'salesFailed'}), l.salesFail);
+        expect(adminPreviewLine(l, {'k': 'salesIsOff'}), l.salesOff);
       },
     );
   }

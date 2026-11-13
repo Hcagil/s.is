@@ -319,7 +319,10 @@ class _ComposerState extends ConsumerState<_Composer>
       context,
       caption: _controller.text,
     );
-    if (picked.images.isEmpty || !mounted) return;
+    if (picked.images.isEmpty || !mounted) {
+      log('attach: no photos to send or composer gone', name: 'sis.chat');
+      return;
+    }
     setState(() => _sending = true);
     final result = await ref
         .read(messagesProvider.notifier)

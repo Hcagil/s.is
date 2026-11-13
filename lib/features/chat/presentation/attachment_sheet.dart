@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -382,13 +384,23 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
   Future<void> _takePhoto() async {
     if (_opening) return;
     setState(() => _opening = true);
-    final result = await ref.read(externalPickerProvider).takePhoto();
-    if (!mounted) return;
+    ExternalPickResult result;
+    try {
+      result = await ref.read(externalPickerProvider).takePhoto();
+    } on Object catch (e) {
+      log('takePhoto threw', name: 'sis.chat', error: e);
+      result = const ExternalPickFailed();
+    }
+    if (!mounted) {
+      log('takePhoto: sheet gone before the result', name: 'sis.chat');
+      return;
+    }
     setState(() => _opening = false);
     switch (result) {
       case ExternalPickedImages(:final images) when images.isNotEmpty:
         await _finish(images, 0);
       case ExternalPickCancelled():
+        log('takePhoto: cancelled', name: 'sis.chat');
         return;
       case ExternalPickedImages() || ExternalPickFailed():
         showSisNotice(
@@ -413,9 +425,15 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
     if (_opening) return;
     setState(() => _opening = true);
     final picker = ref.read(externalPickerProvider);
-    final result = widget.square
-        ? await picker.pickProfilePicture()
-        : await picker.pickAttachments();
+    ExternalPickResult result;
+    try {
+      result = widget.square
+          ? await picker.pickProfilePicture()
+          : await picker.pickAttachments();
+    } on Object catch (e) {
+      log('fromApp threw', name: 'sis.chat', error: e);
+      result = const ExternalPickFailed();
+    }
     if (!mounted) return;
     setState(() => _opening = false);
     switch (result) {

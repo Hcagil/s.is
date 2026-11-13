@@ -65,6 +65,12 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
   final _assembler = AdminAssembler();
   int _answerCounter = 0;
 
+  /// True only while the phone unlock prompt is open.
+  bool _unlocking = false;
+
+  /// Counts lock() calls; open() gives up when it changed while it waited.
+  int _lockCount = 0;
+
   @override
   AdminPanelsState build() {
     ref.onDispose(_stop);
@@ -74,7 +80,14 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
   /// Asks the phone unlock, then the server; the panels open only after both.
   Future<void> open(String unlockReason) async {
     state = const AdminPanelsState();
-    final u = await ref.read(adminUnlockProvider).authenticate(unlockReason);
+    _unlocking = true;
+    final AdminUnlockResult u;
+    try {
+      u = await ref.read(adminUnlockProvider).authenticate(unlockReason);
+    } finally {
+      _unlocking = false;
+    }
+    final lockedAt = _lockCount;
     if (!ref.mounted) return;
 
     if (u == AdminUnlockResult.cancelled) {
@@ -86,7 +99,9 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
       return;
     }
 
-    await _apply(await ref.read(adminPanelsRepositoryProvider).status());
+    final st = await ref.read(adminPanelsRepositoryProvider).status();
+    if (!ref.mounted || _lockCount != lockedAt) return;
+    await _apply(st);
   }
 
   /// Makes this phone's key and publishes it.
@@ -132,9 +147,10 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     }
   }
 
-  /// The app went to the background: drops everything held in memory so the next open asks the unlock again. False (nothing done) while the unlock itself is running.
+  /// The app went to the background: drops everything held in memory so the next open asks the unlock again. False (nothing done) only while the unlock prompt itself is open.
   bool lock() {
-    if (state.gate == AdminGate.checking) return false;
+    if (_unlocking) return false;
+    _lockCount++;
     _stop();
     _lastId = 0;
     _sessionSeq = null;

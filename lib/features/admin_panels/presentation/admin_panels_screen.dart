@@ -62,9 +62,22 @@ class _AdminPanelsScreenState extends ConsumerState<AdminPanelsScreen>
 
   @override
   Widget build(BuildContext context) {
-    final gate = ref.watch(adminPanelsProvider).gate;
+    final panels = ref.watch(adminPanelsProvider);
+    final gate = panels.gate;
     final t = SisBrand.of(context);
     final l = AppLocalizations.of(context);
+
+    const tabs = [null, 'talk', 'questions', 'tasks'];
+    final openTab = tabs[_index];
+    final counts = panels.newCounts;
+    if (gate == AdminGate.ready &&
+        openTab != null &&
+        (counts[openTab] ?? 0) > 0) {
+      // The tab that is open shows no number: what it holds is seen.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) ref.read(adminPanelsProvider.notifier).markSeen(openTab);
+      });
+    }
 
     return Scaffold(
       backgroundColor: t.background,
@@ -89,10 +102,10 @@ class _AdminPanelsScreenState extends ConsumerState<AdminPanelsScreen>
             onPressed: _reopen,
           ),
           AdminGate.ready => switch (_index) {
-            1 => const AdminQuestionsView(key: ValueKey('admin-panel-1')),
-            2 => const AdminTasksView(key: ValueKey('admin-panel-2')),
-            3 => const AdminDashboardView(key: ValueKey('admin-panel-3')),
-            _ => const AdminTalkView(key: ValueKey('admin-panel-0')),
+            1 => const AdminTalkView(key: ValueKey('admin-panel-0')),
+            2 => const AdminQuestionsView(key: ValueKey('admin-panel-1')),
+            3 => const AdminTasksView(key: ValueKey('admin-panel-2')),
+            _ => const AdminDashboardView(key: ValueKey('admin-panel-3')),
           },
         },
       ),
@@ -105,24 +118,33 @@ class _AdminPanelsScreenState extends ConsumerState<AdminPanelsScreen>
               indicatorColor: t.surfaceHigh,
               destinations: [
                 NavigationDestination(
-                  icon: const Icon(Icons.chat_bubble_outline_rounded),
+                  icon: const Icon(Icons.dashboard_outlined),
+                  selectedIcon: const Icon(Icons.dashboard_rounded),
+                  label: l.adminDashboard,
+                ),
+                NavigationDestination(
+                  icon: _badged(
+                    const Icon(Icons.chat_bubble_outline_rounded),
+                    openTab == 'talk' ? 0 : counts['talk'] ?? 0,
+                  ),
                   selectedIcon: const Icon(Icons.chat_bubble_rounded),
                   label: l.adminTalk,
                 ),
                 NavigationDestination(
-                  icon: const Icon(Icons.help_outline_rounded),
+                  icon: _badged(
+                    const Icon(Icons.help_outline_rounded),
+                    openTab == 'questions' ? 0 : counts['questions'] ?? 0,
+                  ),
                   selectedIcon: const Icon(Icons.help_rounded),
                   label: l.adminQuestions,
                 ),
                 NavigationDestination(
-                  icon: const Icon(Icons.checklist_rounded),
+                  icon: _badged(
+                    const Icon(Icons.checklist_rounded),
+                    openTab == 'tasks' ? 0 : counts['tasks'] ?? 0,
+                  ),
                   selectedIcon: const Icon(Icons.checklist_rounded),
                   label: l.adminTasks,
-                ),
-                NavigationDestination(
-                  icon: const Icon(Icons.dashboard_outlined),
-                  selectedIcon: const Icon(Icons.dashboard_rounded),
-                  label: l.adminDashboard,
                 ),
               ],
             )
@@ -134,6 +156,10 @@ class _AdminPanelsScreenState extends ConsumerState<AdminPanelsScreen>
       .read(adminPanelsProvider.notifier)
       .open(AppLocalizations.of(context).adminUnlockReason);
 }
+
+/// The icon with the number of new items on it; no badge at 0.
+Widget _badged(Widget icon, int n) =>
+    n == 0 ? icon : Badge(label: Text('$n'), child: icon);
 
 class _Message extends StatelessWidget {
   const _Message({required this.text, this.buttonLabel, this.onPressed});

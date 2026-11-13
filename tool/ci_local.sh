@@ -100,6 +100,8 @@ integration() {
   test -n "$key"
   # Rows no client can write (app_private), for staff_registry_repository_test.dart.
   docker exec -i supabase_db_s.is psql -U postgres -v ON_ERROR_STOP=1 -qAt < test/integration/fixtures/staff_registry.sql >/dev/null
+  # Owner, bridge and their rows, for admin_view_repository_test.dart.
+  docker exec -i supabase_db_s.is psql -U postgres -v ON_ERROR_STOP=1 -qAt < test/integration/fixtures/admin_view.sql >/dev/null
   "${CI[@]}" run --rm -e TZ=JST-9 -e SUPABASE_TEST_SERVICE_KEY="$key" \
     flutter flutter test --run-skipped --tags integration --concurrency=1 test/integration
 }

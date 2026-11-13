@@ -295,7 +295,9 @@ jobs:
       # The CLI names the stack's database container supabase_db_<project_id> (s.is, supabase/config.toml),
       # the same one tool/sis_bot_admin.sh reaches in the SIS Bot tool test below.
       - name: Load the integration test fixtures
-        run: docker exec -i supabase_db_s.is psql -U postgres -v ON_ERROR_STOP=1 -qAt < test/integration/fixtures/staff_registry.sql >/dev/null
+        run: |
+          docker exec -i supabase_db_s.is psql -U postgres -v ON_ERROR_STOP=1 -qAt < test/integration/fixtures/staff_registry.sql >/dev/null
+          docker exec -i supabase_db_s.is psql -U postgres -v ON_ERROR_STOP=1 -qAt < test/integration/fixtures/admin_view.sql >/dev/null
       - name: Repository integration tests
         # TZ as for the unit tests: a timestamp parsed without its offset only
         # fails outside UTC, and the runner is UTC. The local stack's

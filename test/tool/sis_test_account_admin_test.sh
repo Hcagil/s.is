@@ -18,7 +18,7 @@ read -r -a COMPOSE <<<"${SIS_BOT_TEST_COMPOSE:-docker compose}"
 
 env_out=$("${COMPOSE[@]}" run --rm supabase status -o env 2>/dev/null)
 val() { sed -n "s/^$1=\"\(.*\)\"/\1/p" <<<"$env_out"; }
-export SIS_URL=http://127.0.0.1:54321
+export SIS_URL="${SIS_URL:-http://127.0.0.1:54321}"
 SKEY=$(val SERVICE_ROLE_KEY)
 export SIS_ANON_KEY; SIS_ANON_KEY=$(val ANON_KEY)
 [ -n "$SKEY" ] && [ -n "$SIS_ANON_KEY" ] || { echo "local stack not running"; exit 1; }

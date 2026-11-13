@@ -38,7 +38,7 @@ read -r -a COMPOSE <<<"${SIS_BOT_TEST_COMPOSE:-docker compose}"
 
 env_out=$("${COMPOSE[@]}" run --rm supabase status -o env 2>/dev/null)
 val() { sed -n "s/^$1=\"\(.*\)\"/\1/p" <<<"$env_out"; }
-export SIS_URL=http://127.0.0.1:54321
+export SIS_URL="${SIS_URL:-http://127.0.0.1:54321}"
 SKEY=$(val SERVICE_ROLE_KEY)   # the test's own; the admin tool gets it only from a file
 export SIS_ANON_KEY; SIS_ANON_KEY=$(val ANON_KEY)
 PUBLISHABLE=$(val PUBLISHABLE_KEY)
@@ -575,6 +575,7 @@ check "probe: the bot is in no chat but Debug and its listed 1:1s" \
 if "${COMPOSE[@]}" run --rm flutter flutter test --run-skipped --tags sis_bot_probe \
      --dart-define=SIS_BOT_PROBE_JWT="$BOT_JWT" --dart-define=SIS_BOT_PROBE_HUMAN_JWT="$ANN_JWT" \
      --dart-define=SIS_BOT_PROBE_DEBUG="$DEBUG" --dart-define=SUPABASE_TEST_KEY="$PUBLISHABLE" \
+     --dart-define=SUPABASE_TEST_URL="${SUPABASE_TEST_URL:-http://host.docker.internal:54321}" \
      test/tool/sis_bot_realtime_probe_test.dart >"$BOX/rt" 2>&1; then
   ok "probe: Realtime refuses the bot, admits the human"
 else

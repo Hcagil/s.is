@@ -26,6 +26,7 @@ import 'features/autodownload/data/connectivity_network_probe.dart';
 import 'features/autodownload/data/shared_prefs_auto_download_store.dart';
 import 'features/admin_panels/application/admin_panels_controller.dart';
 import 'features/admin_panels/data/admin_key_store.dart';
+import 'features/admin_panels/data/drift_admin_seen_store.dart';
 import 'features/admin_panels/data/drift_admin_snapshot_store.dart';
 import 'features/admin_panels/data/local_auth_unlock.dart';
 import 'features/admin_panels/data/supabase_admin_panels_repository.dart';
@@ -474,6 +475,10 @@ Future<void> main() async {
           adminSnapshotStoreProvider.overrideWith((ref) {
             ref.watch(messageStoreProvider);
             return DriftAdminSnapshotStore(builtStore!);
+          }),
+          adminSeenStoreProvider.overrideWith((ref) {
+            ref.watch(messageStoreProvider);
+            return DriftAdminSeenStore(builtStore!);
           }),
           readMarkStoreProvider.overrideWith((ref) {
             ref.watch(messageStoreProvider);

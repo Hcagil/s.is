@@ -208,7 +208,7 @@ Deno.test({ ...opts, name: 'success: the sales source asked for the job\'s day a
   assertEquals(source.calls, [{ day: '2026-03-04', prev: true }]);
   assertEquals(await jobState(id), 'done');
   const m = await lastReply();
-  assertEquals(m.admin_msg.k, 'podPrev');
+  assertEquals(m.admin_msg.k, 'salesTotalPrev');
   assertEquals(m.admin_msg.amt, '9081726354');
   assert(!m.body.includes('9081726354'), 'the body never holds the amount');
   assertEquals((await state()).amount, '9081726354');
@@ -243,7 +243,7 @@ Deno.test({ ...opts, name: 'three login failures in a row turn the command off',
     const r = await post(fake, id);
     assertEquals(JSON.parse(r.text), { ok: true, ran: true, result: 'failed' });
     assertEquals(await jobState(id), 'failed');
-    assertEquals((await lastReply()).admin_msg, { k: 'podFail' });
+    assertEquals((await lastReply()).admin_msg, { k: 'salesFailed' });
     assertEquals((await state()).off, i === 3, `off after ${i} login failure(s)`);
   }
 } });
@@ -263,7 +263,7 @@ Deno.test({ ...opts, name: 'every failure but config counts toward the auto-off;
     const r = await post(fake, id);
     assertEquals(r.status, 200, r.text);
     assertEquals(JSON.parse(r.text).result, 'failed', JSON.stringify(s));
-    assertEquals((await lastReply()).admin_msg, { k: 'podFail' });
+    assertEquals((await lastReply()).admin_msg, { k: 'salesFailed' });
     const st = await state();
     assertEquals([st.fail_count, st.off], [counted, false], `${JSON.stringify(s)}: fail_count`);
     assertEquals(st.amount, null, 'junk is never stored');
@@ -287,7 +287,7 @@ Deno.test({ ...opts, name: 'amount rule (<= 25 chars, strict number shape): acce
     const st = await state();
     assertEquals([st.amount, st.fail_count], ok ? [amount, 0] : [null, 1], `amount ${JSON.stringify(amount)}: stored, fail_count`);
     if (ok) assertEquals((await lastReply()).admin_msg.amt, amount);
-    else assertEquals((await lastReply()).admin_msg, { k: 'podFail' });
+    else assertEquals((await lastReply()).admin_msg, { k: 'salesFailed' });
   }
 } });
 
@@ -325,7 +325,7 @@ Deno.test({ ...opts, name: 'the real reader against a fake sales source: prev jo
       assertEquals(sourceDurum, [durum]);
       assertEquals(await jobState(id), 'done');
       const m = (await lastReply()).admin_msg;
-      assertEquals([m.k, m.amt], [prev ? 'podPrev' : 'pod', '8.642.097,31']);
+      assertEquals([m.k, m.amt], [prev ? 'salesTotalPrev' : 'salesTotal', '8.642.097,31']);
       assertEquals((await state()).amount, '8.642.097,31');
     }
     assert(!logged.join('\n').includes('8.642.097') && !logged.join('\n').includes(sourcePassword), `logged: ${logged.join(' | ')}`);
@@ -383,7 +383,7 @@ Deno.test({ ...opts, name: 'the real reader: a whole-number total ("7", "12345")
         const r = await post(real, id);
         assertEquals(JSON.parse(r.text), { ok: true, ran: true, result: 'ok' }, `${total} prev=${prev}: ${r.text}`);
         const m = (await lastReply()).admin_msg;
-        assertEquals([m.k, m.amt], [prev ? 'podPrev' : 'pod', total], `${total} prev=${prev}`);
+        assertEquals([m.k, m.amt], [prev ? 'salesTotalPrev' : 'salesTotal', total], `${total} prev=${prev}`);
         assertEquals(await state(), { amount: total, fail_count: 0, off: false }, `${total} prev=${prev}`);
       }
     }

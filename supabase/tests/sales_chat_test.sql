@@ -19,7 +19,7 @@ select plan(139);
 -- 9. a finished job answers every waiting ask with the same answer and fills
 --    the shared cache (amount, day, fetch time).
 -- 11. three failures in a row (any reason but 'config') turn the command off.
--- 12. claim once; finish answers with pod/podPrev or podFail.
+-- 12. claim once; finish answers with salesTotal/salesTotalPrev or salesFailed.
 -- 13. no push for any reply; the body and the chat-list preview never hold
 --     the amount; a malformed amount is never stored or shown.
 -- An ask is made here as the private pack makes it: a sales_jobs row, pending,
@@ -119,7 +119,7 @@ create function want_prev() returns boolean language sql as $$
   select (now() at time zone 'Europe/Istanbul')::time < time '07:30' $$;
 create function want_day() returns date language sql as $$
   select (now() at time zone 'Europe/Istanbul')::date - case when want_prev() then 1 else 0 end $$;
-create function want_k() returns text language sql as $$ select case when want_prev() then 'podPrev' else 'pod' end $$;
+create function want_k() returns text language sql as $$ select case when want_prev() then 'salesTotalPrev' else 'salesTotal' end $$;
 
 -- An ask as the private pack queues it: pending, or waiting while a job is in flight.
 create function ask(conv uuid) returns void language sql as $$
@@ -287,7 +287,7 @@ select public.sales_job_finish((select id from app_private.sales_jobs where stat
 create table r1 as select fresh(bc('own')) as v;
 select is(jsonb_array_length((select v from r1)), 3, 'every waiting ask gets an answer');
 select is((select count(distinct e) from jsonb_array_elements((select v from r1)) e), 1::bigint, 'all three get the same answer');
-select is((select v->0->>'k' from r1), want_k(), 'k = pod, or podPrev before 07:30');
+select is((select v->0->>'k' from r1), want_k(), 'k = salesTotal, or salesTotalPrev before 07:30');
 select is((select v->0->>'amt' from r1), '4815162342', 'the answer carries the amount');
 select is((select (v->0->>'day')::date from r1), want_day(), 'the answer names the business day');
 select is((select (v->0->>'at')::timestamptz from r1), now(), 'the answer carries the fetch time');
@@ -324,11 +324,11 @@ begin
 end $$;
 select fresh(bc('own'));
 select is((select answer_for(false, '7770008')), jsonb_build_object('b', 'Total money',
-            'm', jsonb_build_object('k', 'pod', 'at', now(), 'amt', '7770008', 'day', '2026-01-05')),
-          'a current-day answer: k pod, body "Total money" only');
+            'm', jsonb_build_object('k', 'salesTotal', 'at', now(), 'amt', '7770008', 'day', '2026-01-05')),
+          'a current-day answer: k salesTotal, body "Total money" only');
 select is((select answer_for(true, '7770009')), jsonb_build_object('b', 'Previous day''s total',
-            'm', jsonb_build_object('k', 'podPrev', 'at', now(), 'amt', '7770009', 'day', '2026-01-05')),
-          'a previous-day answer: k podPrev, body "Previous day''s total" only');
+            'm', jsonb_build_object('k', 'salesTotalPrev', 'at', now(), 'amt', '7770009', 'day', '2026-01-05')),
+          'a previous-day answer: k salesTotalPrev, body "Previous day''s total" only');
 select fresh(bc('own'));
 update app_private.sales_state set amount = '7770001', day = want_day(), fetched_at = now() - interval '31 seconds';
 
@@ -356,12 +356,12 @@ do $$ declare r record; begin
     insert into badr values (r.a, fresh(bc('own')), (select amount from app_private.sales_state));
   end loop;
 end $$;
-select is((select count(*) from badr where v = '[{"k":"podFail"}]'::jsonb), 11::bigint, 'each malformed or missing amount -> exactly one podFail');
+select is((select count(*) from badr where v = '[{"k":"salesFailed"}]'::jsonb), 11::bigint, 'each malformed or missing amount -> exactly one salesFailed');
 select is((select count(*) from badr where stored is distinct from '7770002'), 0::bigint, 'a malformed amount never replaces the stored one');
 select is((select count(*) from public.messages m, bad b where b.a <> '' and m.body like '%' || b.a || '%'), 0::bigint,
           'a malformed amount is never shown');
 select is((select count(*) from badr where v::text like '%"amt"%'), 0::bigint, 'a failure reply carries no amount');
-select is((select body from public.messages where admin_msg->>'k' = 'podFail' limit 1), 'The sales source did not answer.', 'the failure text is fixed');
+select is((select body from public.messages where admin_msg->>'k' = 'salesFailed' limit 1), 'The sales source did not answer.', 'the failure text is fixed');
 
 -- 11 three login failures in a row turn the command off -------------------------------------------
 -- (each section below starts with an empty audit for its askers: the rate limit is tested on its own)
@@ -428,13 +428,13 @@ do $$ declare r record; begin
     insert into amt_res select r.a, r.good, fresh(bc('own')), amount, fail_count from app_private.sales_state;
   end loop;
 end $$;
-select is(jsonb_build_object('amt', v->0->>'amt', 'k_ok', v->0->>'k' in ('pod', 'podPrev'), 'n', jsonb_array_length(v), 'stored', stored, 'fc', fc),
+select is(jsonb_build_object('amt', v->0->>'amt', 'k_ok', v->0->>'k' in ('salesTotal', 'salesTotalPrev'), 'n', jsonb_array_length(v), 'stored', stored, 'fc', fc),
           jsonb_build_object('amt', a, 'k_ok', true, 'n', 1, 'stored', a, 'fc', 0),
           'amount ' || quote_literal(a) || ' is accepted: answered, stored as is, fail count reset')
   from amt_res where good order by a;
 select is(jsonb_build_object('v', v, 'stored', stored, 'fc', fc),
-          jsonb_build_object('v', '[{"k":"podFail"}]'::jsonb, 'stored', 'before', 'fc', 1),
-          'amount ' || quote_literal(a) || ' is refused: podFail, not stored, counted as a failure')
+          jsonb_build_object('v', '[{"k":"salesFailed"}]'::jsonb, 'stored', 'before', 'fc', 1),
+          'amount ' || quote_literal(a) || ' is refused: salesFailed, not stored, counted as a failure')
   from amt_res where not good order by a;
 delete from app_private.sales_commands;
 

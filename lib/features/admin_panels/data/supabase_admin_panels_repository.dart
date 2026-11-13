@@ -19,6 +19,18 @@ final class SupabaseAdminPanelsRepository implements AdminPanelsRepository {
   final SupabaseClient _client;
   final AdminKeyStore _keys;
 
+  /// The computer public key whose code status() last returned; confirmLink() pins only this one.
+  List<int>? _shownComputer;
+
+  Future<void> _lockTail = Future<void>.value();
+
+  /// Runs [body] after every earlier locked call finished; a failure of one call never blocks the next.
+  Future<T> _locked<T>(Future<T> Function() body) {
+    final result = _lockTail.then((_) => body());
+    _lockTail = result.then((_) {}, onError: (_) {});
+    return result;
+  }
+
   Failure _asFailure(Object e) => switch (e) {
     PostgrestException(:final code) when code == 'RLMT1' =>
       const SearchLimitFailure(),
@@ -75,6 +87,7 @@ final class SupabaseAdminPanelsRepository implements AdminPanelsRepository {
                   computerPublic: computer,
                 )
               : null;
+          if (showCode) _shownComputer = computer;
           return Ok(AdminStatus(phase, code: code, epoch: value.epoch));
         } catch (e) {
           return Err(readableFailure(e));
@@ -83,7 +96,9 @@ final class SupabaseAdminPanelsRepository implements AdminPanelsRepository {
   }
 
   @override
-  Future<Result<AdminStatus>> startLink() async {
+  Future<Result<AdminStatus>> startLink() => _locked(_startLinkBody);
+
+  Future<Result<AdminStatus>> _startLinkBody() async {
     try {
       var k = await _keys.load();
       if (k == null) {
@@ -132,7 +147,9 @@ final class SupabaseAdminPanelsRepository implements AdminPanelsRepository {
   }
 
   @override
-  Future<Result<AdminStatus>> confirmLink() async {
+  Future<Result<AdminStatus>> confirmLink() => _locked(_confirmLinkBody);
+
+  Future<Result<AdminStatus>> _confirmLinkBody() async {
     try {
       final k = await _keys.load();
       if (k == null) return const Err(DeniedFailure());
@@ -145,18 +162,30 @@ final class SupabaseAdminPanelsRepository implements AdminPanelsRepository {
           if (serverState == null || serverState.computerPub == null) {
             return const Err(DeniedFailure());
           }
-          await _keys.save(
-            k.copyWith(
-              pinned: serverState.computerPub,
-              pinnedEpoch: serverState.epoch,
-            ),
-          );
+          final pin = sameBytes(serverState.computerPub, _shownComputer);
+          if (pin) {
+            await _keys.save(
+              k.copyWith(
+                pinned: serverState.computerPub,
+                pinnedEpoch: serverState.epoch,
+              ),
+            );
+          }
           final r = await status();
           switch (r) {
             case Err(:final failure):
               return Err(failure);
             case Ok(value: final st):
               if (st == null) return const Err(DeniedFailure());
+              if (!pin) {
+                return Ok(
+                  AdminStatus(
+                    AdminLinkPhase.changed,
+                    code: st.code,
+                    epoch: st.epoch,
+                  ),
+                );
+              }
               return Ok(st);
           }
       }
@@ -232,7 +261,10 @@ final class SupabaseAdminPanelsRepository implements AdminPanelsRepository {
   }
 
   @override
-  Future<Result<AdminSentRef?>> send(Map<String, Object?> message) async {
+  Future<Result<AdminSentRef?>> send(Map<String, Object?> message) =>
+      _locked(() => _sendBody(message));
+
+  Future<Result<AdminSentRef?>> _sendBody(Map<String, Object?> message) async {
     final linked = await _requireLinked();
     switch (linked) {
       case Err(:final failure):
@@ -261,8 +293,14 @@ final class SupabaseAdminPanelsRepository implements AdminPanelsRepository {
           );
           return Ok(AdminSentRef(epoch, seq));
         } on PostgrestException catch (e) {
-          // 22023: the server refused our sequence number; forget the key so the phone links again with a new key and epoch.
+          // 22023 = the server refused our sequence or epoch; delete our key unless only the computer side changed.
           if (e.code == '22023') {
+            final s = await _state();
+            if (s case Ok(value: final v?)
+                when sameBytes(v.phonePub, k.public) &&
+                    (v.epoch != epoch || !sameBytes(v.computerPub, k.pinned))) {
+              return const Err(DeniedFailure());
+            }
             await _keys.delete();
             return const Err(DeniedFailure());
           }
@@ -280,7 +318,10 @@ final class SupabaseAdminPanelsRepository implements AdminPanelsRepository {
   }
 
   @override
-  Future<void> saveLastDownSeq(int epoch, int seq) async {
+  Future<void> saveLastDownSeq(int epoch, int seq) =>
+      _locked(() => _saveLastDownSeqBody(epoch, seq));
+
+  Future<void> _saveLastDownSeqBody(int epoch, int seq) async {
     final k = await _keys.load();
     if (k == null) return;
     if (k.downEpoch != epoch || seq > k.downSeq) {

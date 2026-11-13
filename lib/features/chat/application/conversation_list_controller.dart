@@ -72,6 +72,7 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     // also guards the cache-restore state assignment right below.
     var alive = true;
     ref.onDispose(() => alive = false);
+    StartupMarks.mark('list-build');
     // The store provider is unoverridden in most tests (it throws
     // UnimplementedError the moment it's read, not just on a failed disk
     // op), so this must be guarded the same as any other best-effort read.

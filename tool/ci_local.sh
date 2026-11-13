@@ -140,7 +140,7 @@ private_scripts() {
   for f in "$priv"/private-tests/*.sql; do n=$((n + 1)); done
   [ "$n" -gt 0 ] || { echo 'no private tests found' >&2; return 1; }
   rm -rf "$SB_DIR/supabase/tests/private" && mkdir -p "$SB_DIR/supabase/tests/private" && cp "$priv"/private-tests/*.sql "$SB_DIR/supabase/tests/private/"
-  docker compose run --rm supabase test db supabase/tests/private || return 1
+  docker compose run --rm supabase test db "$SB_DIR/supabase/tests/private" || return 1
   rm -rf "$SB_DIR/supabase/tests/private"
 }
 

@@ -93,7 +93,11 @@ final class ExternalPickerPlugin: NSObject, FlutterPlugin, PHPickerViewControlle
     didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
   ) {
     picker.dismiss(animated: true)
-    guard let reply = pending else { return }
+    NSLog("ExternalPicker: camera finished")
+    guard let reply = pending else {
+      NSLog("ExternalPicker: camera result with no pending call, photo dropped")
+      return
+    }
     pending = nil
     guard let image = info[.originalImage] as? UIImage else {
       reply(FlutterError(code: "unreadable", message: "Could not read the photo.", details: nil))

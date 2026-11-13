@@ -17,6 +17,7 @@ import 'app/sis_app.dart';
 import 'core/runtime_config.dart';
 import 'core/startup_failure.dart';
 import 'core/startup_marks.dart';
+import 'data/sign_out_wipe.dart';
 import 'features/appearance/application/appearance_controller.dart';
 import 'features/appearance/data/picker_wallpaper_photos.dart';
 import 'features/appearance/data/shared_prefs_appearance_store.dart';
@@ -450,11 +451,11 @@ Future<void> main() async {
                 setAsideStore: () async => setAsideStore(await storeFile()),
               ),
               // Sign-out erases both keys: the store key and the Olm pickle key.
-              deleteKey: () async {
-                await key.delete();
-                await pickleKey.delete();
-                await adminKeyStore.delete();
-              },
+              deleteKey: () => wipeSignOutKeys([
+                key.delete,
+                pickleKey.delete,
+                adminKeyStore.delete,
+              ]),
             );
             ref.onDispose(store.close);
             builtStore = store;

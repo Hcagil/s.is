@@ -94,7 +94,7 @@ class _AdminLinkViewState extends ConsumerState<AdminLinkView> {
                       ? null
                       : () => ref
                             .read(adminPanelsProvider.notifier)
-                            .confirmLink(),
+                            .confirmLink(code),
                   child: Text(l.adminLinkButton),
                 ),
               ),

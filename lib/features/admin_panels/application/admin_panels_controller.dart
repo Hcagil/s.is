@@ -117,10 +117,12 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     }
   }
 
-  /// The owner tapped Matches.
-  Future<void> confirmLink() async {
+  /// The owner tapped Matches on the code [shownCode] he saw.
+  Future<void> confirmLink(String shownCode) async {
     state = state.copyWith(linkBusy: true, clearFailure: true);
-    final r = await ref.read(adminPanelsRepositoryProvider).confirmLink();
+    final r = await ref
+        .read(adminPanelsRepositoryProvider)
+        .confirmLink(shownCode);
     if (!ref.mounted) return;
     switch (r) {
       case Err(:final failure):
@@ -165,10 +167,11 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
   Future<void> refresh() async {
     if (_busy) return;
     _busy = true;
+    final lockedAt = _lockCount;
     try {
       final repo = ref.read(adminPanelsRepositoryProvider);
       final st = await repo.status();
-      if (!ref.mounted) return;
+      if (!ref.mounted || _lockCount != lockedAt) return;
       switch (st) {
         case Err(:final failure):
           // Keep showing what is there.
@@ -183,7 +186,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
           if (_epoch != null && _epoch != s.epoch) _resetSync();
           _epoch = s.epoch;
           final fetched = await repo.fetch(_lastId);
-          if (!ref.mounted) return;
+          if (!ref.mounted || _lockCount != lockedAt) return;
           switch (fetched) {
             case Err(:final failure):
               state = state.copyWith(failure: failure);
@@ -368,9 +371,10 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
   /// Shows the snapshot saved on the phone at once (only when it belongs to [epoch]); later rows are fetched after its last id.
   Future<void> _loadSaved(int epoch) async {
     if (state.hasSnapshot) return;
+    final lockedAt = _lockCount;
     final store = ref.read(adminSnapshotStoreProvider);
     final saved = await store.load();
-    if (!ref.mounted || saved == null) return;
+    if (!ref.mounted || _lockCount != lockedAt || saved == null) return;
     if (saved.epoch != epoch) {
       await store.clear();
       return;
@@ -492,6 +496,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
 
   Future<void> _apply(Result<AdminStatus?> r) async {
     if (!ref.mounted) return;
+    final lockedAt = _lockCount;
     switch (r) {
       case Err(:final failure):
         state = state.copyWith(
@@ -511,6 +516,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
           );
           _schedule();
           await _loadSaved(s.epoch);
+          if (!ref.mounted || _lockCount != lockedAt) return;
           await refresh();
         } else {
           _resetSync();

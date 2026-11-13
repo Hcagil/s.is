@@ -62,8 +62,8 @@ abstract interface class AdminPanelsRepository {
   /// Makes this phone's key pair if none and publishes its public key.
   Future<Result<AdminStatus>> startLink();
 
-  /// The owner tapped Matches: pins the computer key shown in the code.
-  Future<Result<AdminStatus>> confirmLink();
+  /// The owner tapped Matches on [shownCode]: pins the computer key only if its code (with this phone's key) is exactly [shownCode]; otherwise pins nothing and answers phase `changed` with the new code.
+  Future<Result<AdminStatus>> confirmLink(String shownCode);
 
   /// Down rows after [afterId], opened and checked.
   Future<Result<List<AdminRow>>> fetch(int afterId);

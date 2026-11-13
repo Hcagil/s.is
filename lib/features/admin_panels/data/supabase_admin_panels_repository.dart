@@ -19,9 +19,6 @@ final class SupabaseAdminPanelsRepository implements AdminPanelsRepository {
   final SupabaseClient _client;
   final AdminKeyStore _keys;
 
-  /// The computer public key whose code status() last returned; confirmLink() pins only this one.
-  List<int>? _shownComputer;
-
   Future<void> _lockTail = Future<void>.value();
 
   /// Runs [body] after every earlier locked call finished; a failure of one call never blocks the next.
@@ -87,7 +84,6 @@ final class SupabaseAdminPanelsRepository implements AdminPanelsRepository {
                   computerPublic: computer,
                 )
               : null;
-          if (showCode) _shownComputer = computer;
           return Ok(AdminStatus(phase, code: code, epoch: value.epoch));
         } catch (e) {
           return Err(readableFailure(e));
@@ -147,9 +143,10 @@ final class SupabaseAdminPanelsRepository implements AdminPanelsRepository {
   }
 
   @override
-  Future<Result<AdminStatus>> confirmLink() => _locked(_confirmLinkBody);
+  Future<Result<AdminStatus>> confirmLink(String shownCode) =>
+      _locked(() => _confirmLinkBody(shownCode));
 
-  Future<Result<AdminStatus>> _confirmLinkBody() async {
+  Future<Result<AdminStatus>> _confirmLinkBody(String shownCode) async {
     try {
       final k = await _keys.load();
       if (k == null) return const Err(DeniedFailure());
@@ -162,7 +159,12 @@ final class SupabaseAdminPanelsRepository implements AdminPanelsRepository {
           if (serverState == null || serverState.computerPub == null) {
             return const Err(DeniedFailure());
           }
-          final pin = sameBytes(serverState.computerPub, _shownComputer);
+          final pin =
+              crypto.adminViewCode(
+                phonePublic: k.public,
+                computerPublic: serverState.computerPub!,
+              ) ==
+              shownCode;
           if (pin) {
             await _keys.save(
               k.copyWith(
@@ -296,6 +298,8 @@ final class SupabaseAdminPanelsRepository implements AdminPanelsRepository {
           // 22023 = the server refused our sequence or epoch; delete our key unless only the computer side changed.
           if (e.code == '22023') {
             final s = await _state();
+            // State unknown: keep the key.
+            if (s case Err(:final failure)) return Err(failure);
             if (s case Ok(value: final v?)
                 when sameBytes(v.phonePub, k.public) &&
                     (v.epoch != epoch || !sameBytes(v.computerPub, k.pinned))) {
@@ -330,7 +334,7 @@ final class SupabaseAdminPanelsRepository implements AdminPanelsRepository {
   }
 
   @override
-  Future<void> forget() => _keys.delete();
+  Future<void> forget() => _locked(_keys.delete);
 }
 
 final class _ServerState {

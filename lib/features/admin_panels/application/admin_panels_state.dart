@@ -1,5 +1,6 @@
 import '../../../core/failure.dart';
 import '../domain/admin_answer.dart';
+import '../domain/admin_marks.dart';
 import '../domain/admin_panels_repository.dart';
 import '../domain/admin_snapshot.dart';
 
@@ -40,6 +41,7 @@ final class AdminPanelsState {
     this.decidedTasks = const {},
     this.linkBusy = false,
     this.answers = const [],
+    this.seen,
   });
 
   final AdminGate gate;
@@ -67,6 +69,9 @@ final class AdminPanelsState {
   /// Answers sent from this phone and their delivery state (memory only).
   final List<AdminAnswer> answers;
 
+  /// Item ids already seen per tab (talk, questions, tasks); null until loaded.
+  final Map<String, Set<String>>? seen;
+
   /// The newest answer of [kind] for [id] (a question or task id; for talk the conversation id, null = no conversation).
   AdminAnswer? latestAnswer(String kind, {String? id}) {
     for (final a in answers.reversed) {
@@ -75,6 +80,9 @@ final class AdminPanelsState {
     }
     return null;
   }
+
+  /// How many items are new on each tab (keys talk, questions, tasks).
+  Map<String, int> get newCounts => adminNewCounts(snapshot, seen);
 
   AdminPanelsState copyWith({
     AdminGate? gate,
@@ -87,6 +95,7 @@ final class AdminPanelsState {
     Set<String>? decidedTasks,
     bool? linkBusy,
     List<AdminAnswer>? answers,
+    Map<String, Set<String>>? seen,
     bool clearFailure = false,
   }) {
     return AdminPanelsState(
@@ -100,6 +109,7 @@ final class AdminPanelsState {
       decidedTasks: decidedTasks ?? this.decidedTasks,
       linkBusy: linkBusy ?? this.linkBusy,
       answers: answers ?? this.answers,
+      seen: seen ?? this.seen,
     );
   }
 }

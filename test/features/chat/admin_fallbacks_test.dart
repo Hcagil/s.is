@@ -1,5 +1,5 @@
 // R2: an admin chat with no staffKey (old stored row) shows the neutral title.
-// R3: an old podSwOn/podSwOff reply without `c` shows the localized text with
+// R3: an old salesSwitchOn/salesSwitchOff reply without `c` shows the localized text with
 // the neutral "Total money" title; with `c` the command name is used.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
@@ -20,7 +20,10 @@ void main() {
     },
   );
 
-  for (final (key, on) in [('podSwOn', true), ('podSwOff', false)]) {
+  for (final (key, on) in [
+    ('salesSwitchOn', true),
+    ('salesSwitchOff', false),
+  ]) {
     test('$key without c uses the neutral title in EN and TR', () {
       for (final l in [l10nEn, l10nTr]) {
         final want = on

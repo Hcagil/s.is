@@ -1,8 +1,8 @@
-// The Vega reader (supabase/functions/sales-total/vega.ts) against a fake Vega HTTP
-// server on 127.0.0.1. Never calls the real Vega address. No database needed.
+// The the sales source reader (supabase/functions/sales-total/source.ts) against a fake sales source HTTP
+// server on 127.0.0.1. Never calls the real the sales source address. No database needed.
 //
-// Contract: fetchVegaTotal(day, prev). Env VEGA_BASE_URL (trailing slashes
-// stripped), VEGA_USERNAME, VEGA_PASSWORD; any missing => VegaError('config')
+// Contract: fetchSalesTotal(day, prev). Env SALES_SOURCE_URL (trailing slashes
+// stripped), SALES_SOURCE_USER, SALES_SOURCE_PASSWORD; any missing => SalesError('config')
 // before any request. 1) POST {base}/Authentication/LoginAction, form
 // UygulamaTipi=3, UserName, Password, redirect manual; cookie = every Set-Cookie
 // name=value joined "; "; status >= 400 or no Set-Cookie => 'login' (302 with a
@@ -10,15 +10,15 @@
 // header Cookie, redirect manual; status >= 300 => 'login'. The text of the
 // .dash-stat-value after "Toplam Ciro" is returned unchanged; missing, empty or
 // not [0-9.,] => 'shape'; a reply over ~1 MiB => 'shape'. 15 s over both calls
-// => 'timeout'. Refused connection => plain Error (not VegaError). Nothing is
+// => 'timeout'. Refused connection => plain Error (not SalesError). Nothing is
 // logged; no error holds the password, cookie, page or amount.
 //
 // Run: docker run --rm -v "$PWD":/w -w /w denoland/deno:2.9.7 \
-//   test --no-check --no-lock --allow-all test/edge/sales_vega_test.ts
+//   test --no-check --no-lock --allow-all test/edge/sales_source_test.ts
 import { assert, assertEquals } from 'jsr:@std/assert@1';
-import { fetchVegaTotal, VegaError } from '../../supabase/functions/sales-total/vega.ts';
+import { fetchSalesTotal, SalesError } from '../../supabase/functions/sales-total/source.ts';
 
-const password = 'qa-vega-pw-' + crypto.randomUUID();
+const password = 'qa-source-pw-' + crypto.randomUUID();
 const cookieVal = 'qa-cookie-' + crypto.randomUUID();
 
 const logged: string[] = [];
@@ -66,8 +66,8 @@ const server = Deno.serve({ hostname: '127.0.0.1', port: 0, onListen: () => {} }
 });
 const base = `http://127.0.0.1:${server.addr.port}`;
 
-function setup(over: Partial<Record<'VEGA_BASE_URL' | 'VEGA_USERNAME' | 'VEGA_PASSWORD', string | null>> = {}) {
-  const env = { VEGA_BASE_URL: base + '/', VEGA_USERNAME: 'qa-user', VEGA_PASSWORD: password, ...over };
+function setup(over: Partial<Record<'SALES_SOURCE_URL' | 'SALES_SOURCE_USER' | 'SALES_SOURCE_PASSWORD', string | null>> = {}) {
+  const env = { SALES_SOURCE_URL: base + '/', SALES_SOURCE_USER: 'qa-user', SALES_SOURCE_PASSWORD: password, ...over };
   for (const [k, v] of Object.entries(env)) v === null ? Deno.env.delete(k) : Deno.env.set(k, v);
   hits.length = 0;
   logged.length = 0;
@@ -76,17 +76,17 @@ function setup(over: Partial<Record<'VEGA_BASE_URL' | 'VEGA_USERNAME' | 'VEGA_PA
 }
 
 // Every failure: the right kind, and nothing secret in the error or the log.
-async function fails(code: VegaErrorCode | 'plain', prev = false): Promise<unknown> {
+async function fails(code: SalesErrorCode | 'plain', prev = false): Promise<unknown> {
   let err: unknown;
   try {
-    const v = await fetchVegaTotal('2026-03-04', prev);
+    const v = await fetchSalesTotal('2026-03-04', prev);
     throw new Error(`expected ${code}, got the value ${JSON.stringify(v)}`);
   } catch (e) {
     err = e;
   }
-  if (code === 'plain') assert(!(err instanceof VegaError), `expected a plain Error, got VegaError(${(err as VegaError).code})`);
+  if (code === 'plain') assert(!(err instanceof SalesError), `expected a plain Error, got SalesError(${(err as SalesError).code})`);
   else {
-    assert(err instanceof VegaError, `expected VegaError(${code}), got ${err}`);
+    assert(err instanceof SalesError, `expected SalesError(${code}), got ${err}`);
     assertEquals(err.code, code);
   }
   const text = `${String(err)} ${(err as Error).message} ${(err as Error).stack} ${JSON.stringify(err)} ${logged.join(' ')}`;
@@ -95,13 +95,13 @@ async function fails(code: VegaErrorCode | 'plain', prev = false): Promise<unkno
   }
   return err;
 }
-type VegaErrorCode = 'login' | 'timeout' | 'shape' | 'config';
+type SalesErrorCode = 'login' | 'timeout' | 'shape' | 'config';
 
 const opts = { sanitizeOps: false, sanitizeResources: false };
 
 Deno.test({ ...opts, name: 'today (prev=false): logs in with the form, sends the cookies, reads durum=bugun, returns the total as is', fn: async () => {
   setup();
-  assertEquals(await fetchVegaTotal('2026-03-04', false), '37.652,00');
+  assertEquals(await fetchSalesTotal('2026-03-04', false), '37.652,00');
   assertEquals(hits.length, 2);
   const [login, list] = hits;
   assertEquals([login.method, login.path, login.search], ['POST', '/Authentication/LoginAction', '']);
@@ -117,22 +117,22 @@ Deno.test({ ...opts, name: 'today (prev=false): logs in with the form, sends the
 Deno.test({ ...opts, name: 'yesterday (prev=true): reads durum=dun; the day argument does not change the request', fn: async () => {
   setup();
   onList = (_r, h) => new Response(page(new URLSearchParams(h.search).get('durum') === 'dun' ? '1.234.567,89' : '1,00'));
-  assertEquals(await fetchVegaTotal('2026-03-04', true), '1.234.567,89');
+  assertEquals(await fetchSalesTotal('2026-03-04', true), '1.234.567,89');
   assertEquals(new URLSearchParams(hits[1].search).get('durum'), 'dun');
   const first = hits.map((h) => h.path + h.search);
   hits.length = 0;
-  assertEquals(await fetchVegaTotal('1999-01-01', true), '1.234.567,89');
+  assertEquals(await fetchSalesTotal('1999-01-01', true), '1.234.567,89');
   assertEquals(hits.map((h) => h.path + h.search), first);
 } });
 
-Deno.test({ ...opts, name: 'trailing slashes on VEGA_BASE_URL are stripped (no // in the paths)', fn: async () => {
-  setup({ VEGA_BASE_URL: base + '///' });
-  assertEquals(await fetchVegaTotal('d', false), '37.652,00');
+Deno.test({ ...opts, name: 'trailing slashes on SALES_SOURCE_URL are stripped (no // in the paths)', fn: async () => {
+  setup({ SALES_SOURCE_URL: base + '///' });
+  assertEquals(await fetchSalesTotal('d', false), '37.652,00');
   assertEquals(hits.map((h) => h.path), ['/Authentication/LoginAction', '/OzetRaporlar/List']);
 } });
 
 Deno.test({ ...opts, name: 'missing config => config, before any request', fn: async () => {
-  for (const k of ['VEGA_BASE_URL', 'VEGA_USERNAME', 'VEGA_PASSWORD'] as const) {
+  for (const k of ['SALES_SOURCE_URL', 'SALES_SOURCE_USER', 'SALES_SOURCE_PASSWORD'] as const) {
     for (const v of [null, '']) {
       setup({ [k]: v });
       await fails('config');
@@ -188,7 +188,7 @@ Deno.test({ ...opts, name: 'missing or garbled total => shape (another card\'s v
 Deno.test({ ...opts, name: 'a reply under ~1 MiB is read in full; over 1 MiB => shape even if the total comes first', fn: async () => {
   setup();
   onList = () => new Response(page('5,00', 'x'.repeat(900 * 1024)));
-  assertEquals(await fetchVegaTotal('d', false), '5,00', '900 KiB page with the total at the end');
+  assertEquals(await fetchSalesTotal('d', false), '5,00', '900 KiB page with the total at the end');
   setup();
   onList = () => new Response(page('5,00') + 'x'.repeat(2 * 1024 * 1024));
   await fails('shape');
@@ -220,7 +220,7 @@ Deno.test({ ...opts, name: 'an endless reply is cut at the cap => shape, quickly
   assert(cancelled, 'the body stream is cancelled');
 } });
 
-Deno.test({ ...opts, name: 'a slow Vega => timeout; the 15 s budget covers both calls together', fn: async () => {
+Deno.test({ ...opts, name: 'a slow source => timeout; the 15 s budget covers both calls together', fn: async () => {
   setup();
   // Each call alone is under 15 s; together they are over.
   onLogin = async () => {
@@ -241,7 +241,7 @@ Deno.test({ ...opts, name: 'connection refused => a plain Error (index reports o
   const l = Deno.listen({ hostname: '127.0.0.1', port: 0 });
   const port = (l.addr as Deno.NetAddr).port;
   l.close();
-  setup({ VEGA_BASE_URL: `http://127.0.0.1:${port}` });
+  setup({ SALES_SOURCE_URL: `http://127.0.0.1:${port}` });
   await fails('plain');
 } });
 
@@ -264,7 +264,7 @@ Deno.test({ ...opts, name: 'the total is read only within 512 bytes of the label
   const body = head + label + ' '.repeat(n) + '<a class="tarihLink dash-stat-value" href="/CiroRaporlar/List">37.652,00</a></body></html>';
   setup();
   onList = () => new Response(body);
-  assertEquals(await fetchVegaTotal('d', false), '37.652,00');
+  assertEquals(await fetchSalesTotal('d', false), '37.652,00');
 
   const body2 = head + label + ' '.repeat(n + 1) + '<a class="tarihLink dash-stat-value" href="/CiroRaporlar/List">37.652,00</a></body></html>';
   setup();
@@ -273,6 +273,6 @@ Deno.test({ ...opts, name: 'the total is read only within 512 bytes of the label
 } });
 
 Deno.test({ ...opts, name: 'teardown', fn: async () => {
-  for (const k of ['VEGA_BASE_URL', 'VEGA_USERNAME', 'VEGA_PASSWORD']) Deno.env.delete(k);
+  for (const k of ['SALES_SOURCE_URL', 'SALES_SOURCE_USER', 'SALES_SOURCE_PASSWORD']) Deno.env.delete(k);
   await server.shutdown();
 } });

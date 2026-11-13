@@ -32,8 +32,8 @@ alter table public.conversations add constraint conversations_staff_key_chk chec
 insert into app_private.staff_chats(key, sort) values ('staff_a',1),('staff_b',2) on conflict do nothing;
 
 -- Backfill existing conversations from the old flags.
-update public.conversations set staff_key = 'staff_b' where bacanaks_chat and staff_key is null;
-update public.conversations set staff_key = 'staff_a' where admin_chat and not bacanaks_chat and staff_key is null;
+update public.conversations set staff_key = 'staff_b' where staff_b_chat and staff_key is null;
+update public.conversations set staff_key = 'staff_a' where admin_chat and not staff_b_chat and staff_key is null;
 
 create index if not exists conversations_staff_key_idx on public.conversations(staff_key) where staff_key is not null;
 

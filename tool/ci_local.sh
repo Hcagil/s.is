@@ -9,6 +9,7 @@
 # checkout's .private/firebase/ when missing), and the runner-only "Install Pillow"
 # step (a venv for the SIS Bot tool test; this machine has its own Python).
 # Local only: "Wipe leftover Supabase stack" and "Private functions and tests".
+# SIS_PRIVATE_OPS_DIR=<dir with private-sql/ and private-tests/>: read the private pack from there instead of the main checkout's .private/ops (for a branch whose public code needs a newer pack).
 #
 # The database job starts from zero like CI: any leftover stack and its data
 # are wiped first, and the stack is stopped at the end (never `down -v`).
@@ -114,7 +115,7 @@ integration() {
 private_scripts() {
   local main priv f n=0 sup='docker compose run --rm supabase' sqlb64 ver harm big
   main=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
-  priv="$main/.private/ops"
+  priv="${SIS_PRIVATE_OPS_DIR:-$main/.private/ops}"
   shopt -s nullglob
   if [ ! -d "$priv/private-sql" ] || [ -z "$(echo "$priv"/private-sql/*.sql)" ]; then
     if [ -e "$priv/EXPECT_PRIVATE" ]; then echo 'private scripts are expected here but .private/ops/private-sql has no .sql file' >&2; return 1; fi

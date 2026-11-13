@@ -7,7 +7,9 @@ import '../../../core/failure.dart';
 import '../domain/admin_answer.dart';
 import '../domain/admin_assembler.dart';
 import '../domain/admin_item.dart';
+import '../domain/admin_marks.dart';
 import '../domain/admin_panels_repository.dart';
+import '../domain/admin_seen_store.dart';
 import '../domain/admin_snapshot.dart';
 import '../domain/admin_snapshot_store.dart';
 import 'admin_panels_state.dart';
@@ -25,6 +27,11 @@ final adminUnlockProvider = Provider<AdminUnlock>(
 /// Where the last complete snapshot is kept on the phone (set in main).
 final adminSnapshotStoreProvider = Provider<AdminSnapshotStore>(
   (_) => throw UnimplementedError('override in main'),
+);
+
+/// Which items the owner has seen, kept on the phone (set in main; memory only until then).
+final adminSeenStoreProvider = Provider<AdminSeenStore>(
+  (_) => MemoryAdminSeenStore(),
 );
 
 /// How often the open panels ask the server for news (light: one small call; stops when the screen is left or the app goes to the background).
@@ -281,6 +288,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
       clearFailure: true,
     );
 
+    await _ensureSeen();
     if (!has || gap) await _resync();
   }
 
@@ -382,6 +390,29 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     _epoch = epoch;
     _lastId = saved.lastId;
     state = state.copyWith(snapshot: saved.snapshot, hasSnapshot: true);
+    await _ensureSeen();
+  }
+
+  /// Loads what was seen (first run: everything now in the snapshot counts as seen) once a snapshot is shown.
+  Future<void> _ensureSeen() async {
+    if (state.seen != null || !state.hasSnapshot) return;
+    final store = ref.read(adminSeenStoreProvider);
+    final saved = await store.load();
+    if (!ref.mounted || state.seen != null) return;
+    final seen = saved ?? adminTabIds(state.snapshot);
+    if (saved == null) unawaited(store.save(seen));
+    state = state.copyWith(seen: seen);
+  }
+
+  /// Marks every item now on [tab] ('talk', 'questions' or 'tasks') as seen.
+  void markSeen(String tab) {
+    final seen = state.seen;
+    if (seen == null) return;
+    final ids = adminTabIds(state.snapshot)[tab] ?? const <String>{};
+    if (ids.difference(seen[tab] ?? const <String>{}).isEmpty) return;
+    final next = {...seen, tab: ids};
+    state = state.copyWith(seen: next);
+    unawaited(ref.read(adminSeenStoreProvider).save(next));
   }
 
   /// Asks the computer for a full snapshot, at most once a minute.

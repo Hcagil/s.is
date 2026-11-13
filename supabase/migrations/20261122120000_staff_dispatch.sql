@@ -1,18 +1,18 @@
 -- Staff dispatch: the server finds a command's handler in the registry; the sales objects get neutral names.
 -- Renames keep every row, trigger and grant; the function bodies are re-created below.
 
-alter table app_private.podium_state rename to sales_state;
-alter table app_private.podium_jobs rename to sales_jobs;
-alter table app_private.podium_commands rename to sales_commands;
-alter function app_private.podium_business_day(timestamptz) rename to sales_business_day;
-alter function app_private.podium_handle(uuid, uuid, text) rename to sales_handle;
-alter function app_private.podium_jobs_dispatch() rename to sales_jobs_dispatch;
-alter function app_private.podium_on_message() rename to sales_on_message;
-alter function app_private.podium_body(jsonb) rename to sales_body;
-alter function public.podium_job_claim(uuid) rename to sales_job_claim;
-alter function public.podium_job_finish(uuid, text, text) rename to sales_job_finish;
-alter trigger podium_jobs_dispatch on app_private.sales_jobs rename to sales_jobs_dispatch;
-alter trigger podium_on_message on public.messages rename to sales_on_message;
+alter table app_private.tally_state rename to sales_state;
+alter table app_private.tally_jobs rename to sales_jobs;
+alter table app_private.tally_commands rename to sales_commands;
+alter function app_private.tally_business_day(timestamptz) rename to sales_business_day;
+alter function app_private.tally_handle(uuid, uuid, text) rename to sales_handle;
+alter function app_private.tally_jobs_dispatch() rename to sales_jobs_dispatch;
+alter function app_private.tally_on_message() rename to sales_on_message;
+alter function app_private.tally_body(jsonb) rename to sales_body;
+alter function public.tally_job_claim(uuid) rename to sales_job_claim;
+alter function public.tally_job_finish(uuid, text, text) rename to sales_job_finish;
+alter trigger tally_jobs_dispatch on app_private.sales_jobs rename to sales_jobs_dispatch;
+alter trigger tally_on_message on public.messages rename to sales_on_message;
 
 -- One sales ask. The word must be a sales_total command of this chat's registry; the text is never stored or forwarded.
 create or replace function app_private.sales_handle(conv uuid, uid uuid, body text) returns void language plpgsql security definer set search_path = '' as $$
@@ -35,13 +35,13 @@ create or replace function app_private.sales_handle(conv uuid, uid uuid, body te
     -- No cron: each ask fails jobs that never got an answer.
     for r in select id, conversation_id from app_private.sales_jobs where state in ('pending','running','waiting') and created_at < now() - interval '2 minutes' loop
       update app_private.sales_jobs set state='failed' where id = r.id;
-      perform app_private.admin_reply(r.conversation_id, jsonb_build_object('k','podFail'));
+      perform app_private.admin_reply(r.conversation_id, jsonb_build_object('k','salesFailed'));
     end loop;
 
     -- Rate limit: 30 commands per 10 minutes
     select count(*) into cnt from app_private.sales_commands where user_id = uid and at > now() - interval '10 minutes';
     if cnt >= 30 then
-      perform app_private.admin_reply(conv, jsonb_build_object('k','podRate'));
+      perform app_private.admin_reply(conv, jsonb_build_object('k','salesLimit'));
       insert into app_private.sales_commands(user_id, command, outcome) values (uid,'unknown','rate');
       return;
     end if;
@@ -49,13 +49,13 @@ create or replace function app_private.sales_handle(conv uuid, uid uuid, body te
     select c.staff_key into sk from public.conversations c where c.id = conv;
     if not exists (select 1 from app_private.staff_commands s where s.chat_key = sk and s.word = lower(t) and s.handler = 'sales_total') then
       select s.word into w from app_private.staff_commands s where s.chat_key = sk and s.handler = 'sales_total' limit 1;
-      perform app_private.admin_reply(conv, jsonb_build_object('k','podUnk','c',w));
+      perform app_private.admin_reply(conv, jsonb_build_object('k','salesUnknown','c',w));
       insert into app_private.sales_commands(user_id, command, outcome) values (uid,'unknown','unk');
       return;
     end if;
 
     if st.off then
-      perform app_private.admin_reply(conv, jsonb_build_object('k','podOff'));
+      perform app_private.admin_reply(conv, jsonb_build_object('k','salesIsOff'));
       insert into app_private.sales_commands(user_id, command, outcome) values (uid,'sales_total','off');
       return;
     end if;
@@ -65,9 +65,9 @@ create or replace function app_private.sales_handle(conv uuid, uid uuid, body te
     d := app_private.sales_business_day(now());
     prev := d < ist::date;
 
-    -- Shared 30 s gap between Vega calls: a fresh answer is reused.
+    -- Shared 30 s gap between sales-source calls: a fresh answer is reused.
     if st.fetched_at is not null and st.fetched_at > now() - interval '30 seconds' and st.day = d and st.amount is not null then
-      perform app_private.admin_reply(conv, jsonb_build_object('k', case when prev then 'podPrev' else 'pod' end, 'amt', st.amount, 'day', d, 'at', st.fetched_at));
+      perform app_private.admin_reply(conv, jsonb_build_object('k', case when prev then 'salesTotalPrev' else 'salesTotal' end, 'amt', st.amount, 'day', d, 'at', st.fetched_at));
       insert into app_private.sales_commands(user_id, command, outcome) values (uid,'sales_total','cache');
       return;
     end if;
@@ -113,9 +113,9 @@ create or replace function public.sales_job_finish(job uuid, amount text, reason
     -- waiting asks get the same answer
     for r in select id, conversation_id from app_private.sales_jobs where id = job or state = 'waiting' loop
       if ok then
-        perform app_private.admin_reply(r.conversation_id, jsonb_build_object('k', case when j.prev then 'podPrev' else 'pod' end, 'amt', amount, 'day', j.day, 'at', now()));
+        perform app_private.admin_reply(r.conversation_id, jsonb_build_object('k', case when j.prev then 'salesTotalPrev' else 'salesTotal' end, 'amt', amount, 'day', j.day, 'at', now()));
       else
-        perform app_private.admin_reply(r.conversation_id, jsonb_build_object('k','podFail'));
+        perform app_private.admin_reply(r.conversation_id, jsonb_build_object('k','salesFailed'));
       end if;
       update app_private.sales_jobs set state = case when ok then 'done' else 'failed' end where id = r.id;
     end loop;
@@ -168,28 +168,33 @@ create or replace function app_private.sales_body(msg jsonb)
 returns text
 language sql immutable set search_path = '' as $$
 select case msg->>'k'
-when 'pod' then 'Total money'
-when 'podPrev' then 'Previous day''s total'
-when 'podFail' then 'The sales source did not answer.'
-when 'podOff' then 'This command is turned off.'
-when 'podUnk' then 'Unknown command. Try ' || coalesce(msg->>'c', 'the sales command') || '.'
-when 'podRate' then 'Too many commands. Wait a minute and try again.'
-when 'podSwOn' then coalesce(msg->>'c', 'The sales command') || ' is turned on.'
-when 'podSwOff' then coalesce(msg->>'c', 'The sales command') || ' is turned off.'
+when 'salesTotal' then 'Total money'
+when 'salesTotalPrev' then 'Previous day''s total'
+when 'salesFailed' then 'The sales source did not answer.'
+when 'salesIsOff' then 'This command is turned off.'
+when 'salesUnknown' then 'Unknown command. Try ' || coalesce(msg->>'c', 'the sales command') || '.'
+when 'salesLimit' then 'Too many commands. Wait a minute and try again.'
+when 'salesSwitchOn' then coalesce(msg->>'c', 'The sales command') || ' is turned on.'
+when 'salesSwitchOff' then coalesce(msg->>'c', 'The sales command') || ' is turned off.'
 else ''
 end;
 $$;
 revoke all on function app_private.sales_body(jsonb) from public, anon, authenticated;
 
--- Same as before; the fallback text now comes from sales_body.
+-- Same as before; the fallback text now comes from sales_body. A sales amount reply also carries the source name from the server-only private pack (function app_private.private_source(), absent = no name).
 create or replace function app_private.admin_reply(conv uuid, msg jsonb, push boolean default false)
 returns uuid
 language plpgsql security definer set search_path = '' as $$
-declare result uuid;
+declare result uuid; m jsonb := msg; fn regprocedure; src text;
 begin
+  fn := to_regprocedure('app_private.private_source()');
+  if fn is not null and m->>'k' in ('salesTotal','salesTotalPrev') then
+    execute 'select app_private.private_source()' into src;
+    if src is not null and src <> '' then m := m || jsonb_build_object('src', src); end if;
+  end if;
   perform set_config('app_private.admin_write', 'on', true);
   insert into public.messages(conversation_id, sender_id, body, admin_msg, admin_push, created_at)
-  values (conv, '00000000-0000-0000-0000-00000000ad41', coalesce(nullif(app_private.admin_body(msg), ''), app_private.sales_body(msg)), msg, push, clock_timestamp())
+  values (conv, '00000000-0000-0000-0000-00000000ad41', coalesce(nullif(app_private.admin_body(m), ''), app_private.sales_body(m)), m, push, clock_timestamp())
   returning id into result;
   -- the permission lasts for the insert only
   perform set_config('app_private.admin_write', '', true);
@@ -227,7 +232,7 @@ create or replace function app_private.conversations_set_staff_key() returns tri
 language plpgsql set search_path = '' as $$
 begin
   if new.admin_chat and new.staff_key is null then
-    new.staff_key := case when new.bacanaks_chat then 'staff_b' else 'staff_a' end;
+    new.staff_key := case when new.staff_b_chat then 'staff_b' else 'staff_a' end;
   end if;
   return new;
 end $$;
@@ -277,7 +282,7 @@ begin
     outcome := app_private.admin_cmd_list(conv); em := null;
   elsif h in ('sales_on','sales_off') then
     update app_private.sales_state set off = (h = 'sales_off'), fail_count = 0 where only_row;
-    perform app_private.admin_reply(conv, jsonb_build_object('k', case when h = 'sales_on' then 'podSwOn' else 'podSwOff' end, 'c', c));
+    perform app_private.admin_reply(conv, jsonb_build_object('k', case when h = 'sales_on' then 'salesSwitchOn' else 'salesSwitchOff' end, 'c', c));
     outcome := 'ok'; em := null;
   elsif em is null then
     perform app_private.admin_reply(conv, jsonb_build_object('k','noem','help',true));

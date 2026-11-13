@@ -145,8 +145,8 @@ final class AdminDashboard {
   static String _parseWorkingElement(Object? element) {
     if (element is Map) {
       final parts = <String>[];
-      final name = element['name']?.toString() ?? '';
-      final goal = element['goal']?.toString() ?? '';
+      final name = (element['who'] ?? element['name'])?.toString() ?? '';
+      final goal = (element['doing'] ?? element['goal'])?.toString() ?? '';
       if (name.isNotEmpty) parts.add(name);
       if (goal.isNotEmpty) parts.add(goal);
       return parts.join(': ');

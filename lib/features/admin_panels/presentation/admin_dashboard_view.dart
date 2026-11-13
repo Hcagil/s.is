@@ -69,7 +69,7 @@ class AdminDashboardView extends ConsumerWidget {
               key: ValueKey('admin-dash-ctx-${session.name}'),
               icon: Icons.insights_outlined,
               title: session.name,
-              value: session.contextK == null
+              subtitle: session.contextK == null
                   ? null
                   : '${session.contextK!.round()}k',
               iconColor: (session.contextK != null && session.contextK! >= 230)
@@ -88,8 +88,8 @@ class AdminDashboardView extends ConsumerWidget {
               SisSettingsRow(
                 icon: Icons.checklist_rounded,
                 title: session.name,
-                value: session.counts.entries
-                    .map((e) => '${e.key} ${e.value}')
+                subtitle: session.counts.entries
+                    .map((e) => _stateLabel(l, e.key, e.value))
                     .join('  '),
               ),
         ],
@@ -97,3 +97,12 @@ class AdminDashboardView extends ConsumerWidget {
     );
   }
 }
+
+String _stateLabel(AppLocalizations l, String code, int count) =>
+    switch (code) {
+      'running' => l.adminDashStateRunning(count),
+      'review' => l.adminDashStateReview(count),
+      'blocked' => l.adminDashStateBlocked(count),
+      'pending' => l.adminDashStatePending(count),
+      _ => '$code $count',
+    };

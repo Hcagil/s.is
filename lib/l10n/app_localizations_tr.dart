@@ -2838,6 +2838,26 @@ class AppLocalizationsTr extends AppLocalizations {
   String get adminDashEmpty => 'Açık bir şey yok';
 
   @override
+  String adminDashStateRunning(int count) {
+    return 'Çalışıyor $count';
+  }
+
+  @override
+  String adminDashStateReview(int count) {
+    return 'İncelemede $count';
+  }
+
+  @override
+  String adminDashStateBlocked(int count) {
+    return 'Takılı $count';
+  }
+
+  @override
+  String adminDashStatePending(int count) {
+    return 'Başlamadı $count';
+  }
+
+  @override
   String get adminLinkTitle => 'Bu telefonu bağla';
 
   @override

@@ -4976,6 +4976,30 @@ abstract class AppLocalizations {
   /// **'Nothing open'**
   String get adminDashEmpty;
 
+  /// Dashboard, Tasks left row: number of tasks being worked on now
+  ///
+  /// In en, this message translates to:
+  /// **'Running {count}'**
+  String adminDashStateRunning(int count);
+
+  /// Dashboard, Tasks left row: number of tasks done and waiting for a check
+  ///
+  /// In en, this message translates to:
+  /// **'In review {count}'**
+  String adminDashStateReview(int count);
+
+  /// Dashboard, Tasks left row: number of tasks stuck, waiting on something
+  ///
+  /// In en, this message translates to:
+  /// **'Stuck {count}'**
+  String adminDashStateBlocked(int count);
+
+  /// Dashboard, Tasks left row: number of tasks not started yet
+  ///
+  /// In en, this message translates to:
+  /// **'Not started {count}'**
+  String adminDashStatePending(int count);
+
   /// Admin panels screen text
   ///
   /// In en, this message translates to:

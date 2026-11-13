@@ -2865,6 +2865,26 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminDashEmpty => 'Nothing open';
 
   @override
+  String adminDashStateRunning(int count) {
+    return 'Running $count';
+  }
+
+  @override
+  String adminDashStateReview(int count) {
+    return 'In review $count';
+  }
+
+  @override
+  String adminDashStateBlocked(int count) {
+    return 'Stuck $count';
+  }
+
+  @override
+  String adminDashStatePending(int count) {
+    return 'Not started $count';
+  }
+
+  @override
   String get adminLinkTitle => 'Link this phone';
 
   @override

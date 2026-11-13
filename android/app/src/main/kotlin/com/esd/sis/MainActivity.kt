@@ -12,7 +12,7 @@ import android.os.Build
 import android.provider.MediaStore
 import android.speech.SpeechRecognizer
 import androidx.core.content.FileProvider
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -45,7 +45,7 @@ private const val PICTURE_EDGE = 2048
 // not ACTION_PICK -- see developer.android.com/training/data-storage/shared/photopicker).
 // Intent.createChooser is exempt from Android 11+ package-visibility
 // filtering, so no <queries> manifest entry is needed.
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
     private var pendingResult: MethodChannel.Result? = null
     private var pendingTone: MethodChannel.Result? = null
     private var cameraFile: File? = null

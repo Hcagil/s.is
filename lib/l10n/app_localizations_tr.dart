@@ -2726,4 +2726,196 @@ class AppLocalizationsTr extends AppLocalizations {
   String failNameTooLong(int max) {
     return 'En fazla $max karakter olabilir';
   }
+
+  @override
+  String get adminTitle => 'Admin Panelleri';
+
+  @override
+  String get adminTalk => 'Talk';
+
+  @override
+  String get adminQuestions => 'Questions';
+
+  @override
+  String get adminTasks => 'Tasks';
+
+  @override
+  String get adminDashboard => 'Dashboard';
+
+  @override
+  String get adminLoadFailed => 'Yüklenemedi. Tekrar deneyin.';
+
+  @override
+  String get adminRetry => 'Tekrar dene';
+
+  @override
+  String get adminRename => 'Yeniden adlandır';
+
+  @override
+  String get adminDelete => 'Sil';
+
+  @override
+  String get adminDeleteConfirm =>
+      'Bu konuşmayı kalıcı olarak silmek istiyor musunuz?';
+
+  @override
+  String get adminTalkHint => 'Manager\'a mesaj yazın';
+
+  @override
+  String get adminTalkEmpty =>
+      'Henüz konuşma yok. Başlatmak için aşağıya yazın.';
+
+  @override
+  String get adminSendFailed =>
+      'Mesaj gönderilemedi. Yazdığınız metin duruyor. Tekrar deneyin.';
+
+  @override
+  String get adminRecommended => 'Önerilen';
+
+  @override
+  String get adminOther => 'Diğer (kendi yanıtınızı yazın)';
+
+  @override
+  String get adminDone => 'Bitti';
+
+  @override
+  String adminSend(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count yanıtı gönder',
+      one: '1 yanıtı gönder',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get adminWaiting => 'Gönderildi, henüz okunmadı';
+
+  @override
+  String get adminTalkAbout => 'Bunun hakkında konuş';
+
+  @override
+  String get adminQuestionsEmpty => 'Açık soru yok';
+
+  @override
+  String get adminBoxM => 'Manager';
+
+  @override
+  String get adminBoxC => 'AI Control';
+
+  @override
+  String get adminBoxS => 'Support';
+
+  @override
+  String get adminBasis => 'Dayandığı kararlar';
+
+  @override
+  String get adminGo => 'Başlat';
+
+  @override
+  String get adminDiscard => 'Vazgeç';
+
+  @override
+  String get adminDecided => 'Karar kaydedildi';
+
+  @override
+  String get adminTasksEmpty => 'Sizi bekleyen görev yok';
+
+  @override
+  String get adminDashContext => 'Bağlam boyutu';
+
+  @override
+  String get adminDashWorking => 'Şu an çalışan';
+
+  @override
+  String get adminDashComputer => 'Bilgisayar yükü';
+
+  @override
+  String get adminDashTasksLeft => 'Kalan görevler';
+
+  @override
+  String get adminDashEmpty => 'Açık bir şey yok';
+
+  @override
+  String get adminLinkTitle => 'Bu telefonu bağla';
+
+  @override
+  String get adminLinkBody =>
+      'Bu kodu bilgisayarınızdaki Questions panelinde görünen kodla karşılaştırın. Aynıysa Eşleşiyor\'a dokunun.';
+
+  @override
+  String get adminLinkButton => 'Eşleşiyor';
+
+  @override
+  String get adminLinkStatusIdle =>
+      'Bu telefonu yalnızca bilgisayarınızın başında bağlayabilirsiniz.';
+
+  @override
+  String get adminLinkStatusWorking => 'Bilgisayarınızın onayı bekleniyor…';
+
+  @override
+  String get adminLinkStatusDone => 'Bu telefon bağlandı';
+
+  @override
+  String get adminLinkStatusFailed => 'Bu telefon bağlanamadı. Tekrar deneyin.';
+
+  @override
+  String get adminLinkCodeChanged =>
+      'Kod değişti. Eşleşiyor\'a dokunmadan önce bilgisayarınızdaki yeni kodu kontrol edin.';
+
+  @override
+  String get adminUnlockReason =>
+      'Admin Panelleri için telefonunuzun kilidini açın';
+
+  @override
+  String get adminUnlockNoLock =>
+      'Admin Panellerini açmak için telefonunuzun Ayarlar bölümünden ekran kilidi (PIN, desen, parmak izi veya yüz tanıma) ayarlayın, sonra buraya dönün.';
+
+  @override
+  String get adminUnlockCancelled =>
+      'Admin Panelleri kapalı kaldı. Görmek için telefonunuzun kilidini açın.';
+
+  @override
+  String get adminUnlockRetry => 'Kilidi aç';
+
+  @override
+  String get adminTalkTruncated => 'Burada yalnızca son mesajlar gösteriliyor.';
+
+  @override
+  String get adminAnswerSending => 'Gönderiliyor';
+
+  @override
+  String get adminAnswerNotSent => 'Gönderilemedi';
+
+  @override
+  String get adminAnswerRetry => 'Tekrar gönder';
+
+  @override
+  String get adminAnswerNotSentYet =>
+      'Henüz gönderilmedi. Bilgisayarınız kapalı olabilir.';
+
+  @override
+  String get adminAnswerNewConversation => 'Yeni konuşma olarak gönder';
+
+  @override
+  String get adminReasonConvMissing => 'Bu konuşma bilgisayarınızda silindi.';
+
+  @override
+  String get adminReasonNotOpen =>
+      'Bu, bilgisayarınızda zaten yanıtlandı veya kapatıldı.';
+
+  @override
+  String get adminReasonDeskOnly =>
+      'Bunu yalnızca bilgisayarınızın başında yanıtlayabilirsiniz.';
+
+  @override
+  String get adminReasonUnknownItem => 'Bu öğe artık bilgisayarınızda yok.';
+
+  @override
+  String get adminReasonGeneric => 'Bir hata oluştu. Tekrar deneyin.';
+
+  @override
+  String get adminDashboardStale =>
+      'Bilgisayarınızdan güncel durum gelmiyor. Bilgisayarınız kapalı veya uykuda olabilir.';
 }

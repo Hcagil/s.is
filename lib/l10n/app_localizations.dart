@@ -4777,6 +4777,348 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Use at most {max} characters'**
   String failNameTooLong(int max);
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Admin Panels'**
+  String get adminTitle;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Talk'**
+  String get adminTalk;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Questions'**
+  String get adminQuestions;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Tasks'**
+  String get adminTasks;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Dashboard'**
+  String get adminDashboard;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load. Try again.'**
+  String get adminLoadFailed;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get adminRetry;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Rename'**
+  String get adminRename;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get adminDelete;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Do you want to permanently delete this conversation?'**
+  String get adminDeleteConfirm;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Message the manager'**
+  String get adminTalkHint;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'No conversations yet. Write below to start one.'**
+  String get adminTalkEmpty;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Message not sent. Your text is still here. Try again.'**
+  String get adminSendFailed;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Recommended'**
+  String get adminRecommended;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Other (write your own answer)'**
+  String get adminOther;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get adminDone;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Send 1 answer} other{Send {count} answers}}'**
+  String adminSend(int count);
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Sent, not read yet'**
+  String get adminWaiting;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Talk about this'**
+  String get adminTalkAbout;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'No open questions'**
+  String get adminQuestionsEmpty;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Manager'**
+  String get adminBoxM;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'AI Control'**
+  String get adminBoxC;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Support'**
+  String get adminBoxS;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Based on'**
+  String get adminBasis;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Start'**
+  String get adminGo;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Discard'**
+  String get adminDiscard;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Decision saved'**
+  String get adminDecided;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'No tasks waiting for you'**
+  String get adminTasksEmpty;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Context size'**
+  String get adminDashContext;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Running now'**
+  String get adminDashWorking;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Computer load'**
+  String get adminDashComputer;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Tasks left'**
+  String get adminDashTasksLeft;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing open'**
+  String get adminDashEmpty;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Link this phone'**
+  String get adminLinkTitle;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Compare this code with the one in the Questions panel on your computer. If they match, tap Matches.'**
+  String get adminLinkBody;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Matches'**
+  String get adminLinkButton;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'You can link this phone only at your computer.'**
+  String get adminLinkStatusIdle;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for your computer to confirm…'**
+  String get adminLinkStatusWorking;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'This phone is linked'**
+  String get adminLinkStatusDone;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Could not link this phone. Try again.'**
+  String get adminLinkStatusFailed;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'The code changed. Check the new code at your computer before you tap Matches.'**
+  String get adminLinkCodeChanged;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock your phone to open Admin Panels'**
+  String get adminUnlockReason;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'To open Admin Panels, set a screen lock (PIN, pattern, fingerprint or face) in your phone\'s Settings, then come back.'**
+  String get adminUnlockNoLock;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Admin Panels stay closed. Unlock your phone to see them.'**
+  String get adminUnlockCancelled;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock'**
+  String get adminUnlockRetry;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Only the latest messages are shown here.'**
+  String get adminTalkTruncated;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Sending'**
+  String get adminAnswerSending;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Not sent'**
+  String get adminAnswerNotSent;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Resend'**
+  String get adminAnswerRetry;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Not sent yet. Your computer may be off.'**
+  String get adminAnswerNotSentYet;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Send as a new conversation'**
+  String get adminAnswerNewConversation;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'This conversation was deleted on your computer.'**
+  String get adminReasonConvMissing;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'This was already answered or closed on your computer.'**
+  String get adminReasonNotOpen;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'You can answer this only at your computer.'**
+  String get adminReasonDeskOnly;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'This item no longer exists on your computer.'**
+  String get adminReasonUnknownItem;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong. Try again.'**
+  String get adminReasonGeneric;
+
+  /// Admin panels screen text
+  ///
+  /// In en, this message translates to:
+  /// **'No fresh status from your computer. It may be off or asleep.'**
+  String get adminDashboardStale;
 }
 
 class _AppLocalizationsDelegate

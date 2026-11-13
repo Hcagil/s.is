@@ -2753,4 +2753,196 @@ class AppLocalizationsEn extends AppLocalizations {
   String failNameTooLong(int max) {
     return 'Use at most $max characters';
   }
+
+  @override
+  String get adminTitle => 'Admin Panels';
+
+  @override
+  String get adminTalk => 'Talk';
+
+  @override
+  String get adminQuestions => 'Questions';
+
+  @override
+  String get adminTasks => 'Tasks';
+
+  @override
+  String get adminDashboard => 'Dashboard';
+
+  @override
+  String get adminLoadFailed => 'Could not load. Try again.';
+
+  @override
+  String get adminRetry => 'Try again';
+
+  @override
+  String get adminRename => 'Rename';
+
+  @override
+  String get adminDelete => 'Delete';
+
+  @override
+  String get adminDeleteConfirm =>
+      'Do you want to permanently delete this conversation?';
+
+  @override
+  String get adminTalkHint => 'Message the manager';
+
+  @override
+  String get adminTalkEmpty =>
+      'No conversations yet. Write below to start one.';
+
+  @override
+  String get adminSendFailed =>
+      'Message not sent. Your text is still here. Try again.';
+
+  @override
+  String get adminRecommended => 'Recommended';
+
+  @override
+  String get adminOther => 'Other (write your own answer)';
+
+  @override
+  String get adminDone => 'Done';
+
+  @override
+  String adminSend(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Send $count answers',
+      one: 'Send 1 answer',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get adminWaiting => 'Sent, not read yet';
+
+  @override
+  String get adminTalkAbout => 'Talk about this';
+
+  @override
+  String get adminQuestionsEmpty => 'No open questions';
+
+  @override
+  String get adminBoxM => 'Manager';
+
+  @override
+  String get adminBoxC => 'AI Control';
+
+  @override
+  String get adminBoxS => 'Support';
+
+  @override
+  String get adminBasis => 'Based on';
+
+  @override
+  String get adminGo => 'Start';
+
+  @override
+  String get adminDiscard => 'Discard';
+
+  @override
+  String get adminDecided => 'Decision saved';
+
+  @override
+  String get adminTasksEmpty => 'No tasks waiting for you';
+
+  @override
+  String get adminDashContext => 'Context size';
+
+  @override
+  String get adminDashWorking => 'Running now';
+
+  @override
+  String get adminDashComputer => 'Computer load';
+
+  @override
+  String get adminDashTasksLeft => 'Tasks left';
+
+  @override
+  String get adminDashEmpty => 'Nothing open';
+
+  @override
+  String get adminLinkTitle => 'Link this phone';
+
+  @override
+  String get adminLinkBody =>
+      'Compare this code with the one in the Questions panel on your computer. If they match, tap Matches.';
+
+  @override
+  String get adminLinkButton => 'Matches';
+
+  @override
+  String get adminLinkStatusIdle =>
+      'You can link this phone only at your computer.';
+
+  @override
+  String get adminLinkStatusWorking => 'Waiting for your computer to confirm…';
+
+  @override
+  String get adminLinkStatusDone => 'This phone is linked';
+
+  @override
+  String get adminLinkStatusFailed => 'Could not link this phone. Try again.';
+
+  @override
+  String get adminLinkCodeChanged =>
+      'The code changed. Check the new code at your computer before you tap Matches.';
+
+  @override
+  String get adminUnlockReason => 'Unlock your phone to open Admin Panels';
+
+  @override
+  String get adminUnlockNoLock =>
+      'To open Admin Panels, set a screen lock (PIN, pattern, fingerprint or face) in your phone\'s Settings, then come back.';
+
+  @override
+  String get adminUnlockCancelled =>
+      'Admin Panels stay closed. Unlock your phone to see them.';
+
+  @override
+  String get adminUnlockRetry => 'Unlock';
+
+  @override
+  String get adminTalkTruncated => 'Only the latest messages are shown here.';
+
+  @override
+  String get adminAnswerSending => 'Sending';
+
+  @override
+  String get adminAnswerNotSent => 'Not sent';
+
+  @override
+  String get adminAnswerRetry => 'Resend';
+
+  @override
+  String get adminAnswerNotSentYet => 'Not sent yet. Your computer may be off.';
+
+  @override
+  String get adminAnswerNewConversation => 'Send as a new conversation';
+
+  @override
+  String get adminReasonConvMissing =>
+      'This conversation was deleted on your computer.';
+
+  @override
+  String get adminReasonNotOpen =>
+      'This was already answered or closed on your computer.';
+
+  @override
+  String get adminReasonDeskOnly =>
+      'You can answer this only at your computer.';
+
+  @override
+  String get adminReasonUnknownItem =>
+      'This item no longer exists on your computer.';
+
+  @override
+  String get adminReasonGeneric => 'Something went wrong. Try again.';
+
+  @override
+  String get adminDashboardStale =>
+      'No fresh status from your computer. It may be off or asleep.';
 }

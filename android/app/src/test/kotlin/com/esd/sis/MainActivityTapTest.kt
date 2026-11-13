@@ -5,7 +5,7 @@ import android.app.Application
 import android.content.Intent
 import android.os.Bundle
 import androidx.test.core.app.ApplicationProvider
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -23,15 +23,21 @@ import org.robolectric.util.ReflectionHelpers
 
 /**
  * The Flutter engine needs libflutter.so, which a JVM test cannot load. This shadow stands in for
- * FlutterActivity.onCreate only (it marks Activity.onCreate as called); MainActivity's own code runs.
+ * FlutterFragmentActivity.onCreate only (it marks Activity.onCreate as called); MainActivity's own code runs.
  */
-@Implements(FlutterActivity::class)
+@Implements(FlutterFragmentActivity::class)
 class NoEngineFlutterActivity : ShadowActivity() {
     @RealObject
-    private lateinit var real: FlutterActivity
+    private lateinit var real: FlutterFragmentActivity
 
     @Implementation
     protected fun onCreate(savedInstanceState: Bundle?) {
+        ReflectionHelpers.setField(Activity::class.java, real, "mCalled", true)
+    }
+
+    // The fragment that FlutterFragmentActivity.onNewIntent forwards to is only made with the engine.
+    @Implementation
+    protected fun onNewIntent(intent: Intent) {
         ReflectionHelpers.setField(Activity::class.java, real, "mCalled", true)
     }
 }

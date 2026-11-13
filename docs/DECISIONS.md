@@ -680,3 +680,15 @@ Nothing contacts the site before that tap.
 - A key that is truly corrupt or restored onto a new phone never heals by itself: the app keeps retrying until the user chooses a new identity.
 - Known upstream limit, open plugin issue 1298: the Android RSA key pair is re-created when its lookup returns null, which destroys the wrapped key. This flag does not prevent it; only an upstream fix or a plugin patch would.
 - No migration: the option is read per call and the stored data is unchanged.
+
+## 2026-11-13 — The owner's admin view is end-to-end encrypted between the phone and one desktop bridge
+
+**Decision.** The owner-only admin view in the app shows a read-and-answer copy of the owner's desktop work panels. Phone and a desktop bridge exchange sealed messages through `app_private` relay tables: per-message X25519 plus a static key (HKDF-SHA256, ChaCha20-Poly1305, 1 KiB padding, epoch and sequence in the associated data), done in the Rust crate. The phone pins the bridge's public key when the owner links it from the desktop and refuses any other key; a key change shows a "changed" state and needs a new link. Opening the view asks for the phone unlock every time; the last snapshot is kept encrypted on the phone and wiped on sign-out. The phone fetches only while the view is open (20 s poll); answers get a sent / not sent result from the bridge.
+
+**Why.** The owner wants to follow and answer his panels when away from the desktop, and asked that the panel data be encrypted so the server never reads it (owner 2026-11-12). Reusing the chat encryption would have weakened its guards; a small dedicated scheme with a fixed test vector is easier to prove.
+
+**Consequences.**
+- The server stores only ciphertext, public keys, sizes and sequence numbers; retention is the newest 20 down rows and 7 days.
+- The bridge account has no app access, is treated as a bot everywhere, and runs on the desktop in a sandbox that cannot see the rest of the owner's home folder.
+- Only the owner account sees the entry point; other accounts never see the screen.
+- RPCs that update or delete always carry a WHERE clause, because the API runs with safe updates on (a pgTAP test loads it).

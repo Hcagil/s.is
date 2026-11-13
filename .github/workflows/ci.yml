@@ -295,7 +295,9 @@ jobs:
       # The CLI names the stack's database container supabase_db_<project_id> (s.is, supabase/config.toml),
       # the same one tool/sis_bot_admin.sh reaches in the SIS Bot tool test below.
       - name: Load the integration test fixtures
-        run: docker exec -i supabase_db_s.is psql -U postgres -v ON_ERROR_STOP=1 -qAt < test/integration/fixtures/staff_registry.sql >/dev/null
+        run: |
+          docker exec -i supabase_db_s.is psql -U postgres -v ON_ERROR_STOP=1 -qAt < test/integration/fixtures/staff_registry.sql >/dev/null
+          docker exec -i supabase_db_s.is psql -U postgres -v ON_ERROR_STOP=1 -qAt < test/integration/fixtures/admin_view.sql >/dev/null
       - name: Repository integration tests
         # TZ as for the unit tests: a timestamp parsed without its offset only
         # fails outside UTC, and the runner is UTC. The local stack's
@@ -303,10 +305,14 @@ jobs:
         # (test/support/service_key.dart).
         run: |
           export LOCAL_UID=$(id -u) LOCAL_GID=$(id -g)
+          rc=0
           SUPABASE_TEST_SERVICE_KEY=$(docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm supabase status -o env | sed -n 's/^SECRET_KEY="\(.*\)"/\1/p')
           echo "::add-mask::$SUPABASE_TEST_SERVICE_KEY"
           test -n "$SUPABASE_TEST_SERVICE_KEY"
-          docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm -e TZ=JST-9 -e SUPABASE_TEST_SERVICE_KEY="$SUPABASE_TEST_SERVICE_KEY" flutter flutter test --run-skipped --tags integration --concurrency=1 test/integration
+          docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm -e TZ=JST-9 -e SUPABASE_TEST_SERVICE_KEY="$SUPABASE_TEST_SERVICE_KEY" flutter flutter test --run-skipped --tags integration --concurrency=1 test/integration || rc=$?
+          # One owners row exists at most: leave none for anything after this step.
+          docker exec -i supabase_db_s.is psql -U postgres -v ON_ERROR_STOP=1 -qAt < test/integration/fixtures/admin_view_cleanup.sql >/dev/null || rc=$?
+          exit "$rc"
       # Last: it bootstraps the SIS Bot on this stack through both tools
       # (tool/sis_bot_admin.sh with the stack's own local keys, never a
       # repository secret), drives tool/sis_bot.sh's read/send/start and every

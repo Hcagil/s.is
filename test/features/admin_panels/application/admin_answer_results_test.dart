@@ -15,7 +15,10 @@ void main() {
 
   AdminPanelsState st() => c.read(adminPanelsProvider);
 
+  int nextId = 2;
+
   setUp(() {
+    nextId = 2;
     repo = FakeAdminRepository();
     unlock = FakeAdminUnlock();
     store = FakeAdminSnapshotStore();
@@ -40,7 +43,6 @@ void main() {
     expect(st().hasSnapshot, isTrue);
   }
 
-  int nextId = 2;
   Future<void> deliver(
     List<AdminAnswerResult> r, {
     int? seq,

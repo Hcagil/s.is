@@ -212,6 +212,7 @@ final class DriftMessageStore
     _inflight.add(done.future);
     try {
       final db = await opened;
+      StartupMarks.mark('run-open');
       if (_seen != _erasures) {
         // Another clear() erased the store since this instance opened: never serve or write on it.
         _closed = true;
@@ -450,6 +451,7 @@ final class DriftMessageStore
       await db.close();
       await _lostToErase(file);
     }
+    StartupMarks.mark('store-created');
     return db;
   }
 

@@ -755,7 +755,7 @@
   "cropRotateLabel": "Döndür",
   "salesTitle": "Toplam para",
   "salesPrevTitle": "Önceki günün toplamı ({date})",
-  "salesFetched": "{source} kaynağından alındı: {time}",
+  "salesFetched": "{source} aracılığıyla alındı: {time}",
   "salesFetchedNoSource": "Alındı: {time}",
   "salesFail": "Hizmet yanıt vermedi. Daha sonra tekrar deneyin.",
   "salesOff": "Bu komut kapalı.",

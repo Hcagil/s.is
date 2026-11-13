@@ -2526,7 +2526,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String salesFetched(String source, String time) {
-    return '$source kaynağından alındı: $time';
+    return '$source aracılığıyla alındı: $time';
   }
 
   @override

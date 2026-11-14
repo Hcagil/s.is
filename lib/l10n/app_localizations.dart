@@ -4967,7 +4967,7 @@ abstract class AppLocalizations {
   /// Admin panels, Cards tab text
   ///
   /// In en, this message translates to:
-  /// **'No card matches'**
+  /// **'No cards found'**
   String get adminCardsNoMatch;
 
   /// Admin panels, Cards tab text
@@ -5027,7 +5027,7 @@ abstract class AppLocalizations {
   /// Admin panels, Cards tab text
   ///
   /// In en, this message translates to:
-  /// **'Owner\'s words'**
+  /// **'Your words'**
   String get adminCardWords;
 
   /// Admin panels, Cards tab text

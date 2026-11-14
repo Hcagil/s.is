@@ -2834,7 +2834,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get adminCardsEmpty => 'Henüz kart yok';
 
   @override
-  String get adminCardsNoMatch => 'Eşleşen kart yok';
+  String get adminCardsNoMatch => 'Kart bulunamadı';
 
   @override
   String get adminCardsSearch => 'Kartlarda ara';
@@ -2855,7 +2855,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get adminCardsApp => 'Uygulama';
 
   @override
-  String get adminCardApplies => 'Geçerli olduğu';
+  String get adminCardApplies => 'Kimler için';
 
   @override
   String get adminCardArea => 'Alan';
@@ -2864,13 +2864,13 @@ class AppLocalizationsTr extends AppLocalizations {
   String get adminCardWhen => 'Ne zaman';
 
   @override
-  String get adminCardWords => 'Sahibin sözleri';
+  String get adminCardWords => 'Sözleriniz';
 
   @override
-  String get adminCardAllows => 'İzin verir';
+  String get adminCardAllows => 'İzin verilenler';
 
   @override
-  String get adminCardForbids => 'Yasaklar';
+  String get adminCardForbids => 'Yasaklananlar';
 
   @override
   String get adminDashContext => 'Bağlam boyutu';

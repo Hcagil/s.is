@@ -2861,7 +2861,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminCardsEmpty => 'No cards yet';
 
   @override
-  String get adminCardsNoMatch => 'No card matches';
+  String get adminCardsNoMatch => 'No cards found';
 
   @override
   String get adminCardsSearch => 'Search cards';
@@ -2891,7 +2891,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminCardWhen => 'When';
 
   @override
-  String get adminCardWords => 'Owner\'s words';
+  String get adminCardWords => 'Your words';
 
   @override
   String get adminCardAllows => 'Allows';

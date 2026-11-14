@@ -38,11 +38,17 @@ class _AdminTalkViewState extends ConsumerState<AdminTalkView> {
 
     if (_open != null) {
       final c = convs.where((c) => c.id == _open).firstOrNull;
-      return AdminConversationView(
-        key: ValueKey('admin-conv-$_open'),
-        conv: _open!,
-        topic: c?.topic ?? '',
-        onBack: () => setState(() => _open = null),
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) setState(() => _open = null);
+        },
+        child: AdminConversationView(
+          key: ValueKey('admin-conv-$_open'),
+          conv: _open!,
+          topic: c?.topic ?? '',
+          onBack: () => setState(() => _open = null),
+        ),
       );
     }
 

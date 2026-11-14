@@ -2840,6 +2840,15 @@ class AppLocalizationsTr extends AppLocalizations {
   String get adminDashTasksLeft => 'Kalan görevler';
 
   @override
+  String get adminConnConnected => 'Bağlandı';
+
+  @override
+  String get adminConnConnecting => 'Bağlanıyor';
+
+  @override
+  String get adminConnOffline => 'Bağlantı yok';
+
+  @override
   String get adminDashEmpty => 'Açık bir şey yok';
 
   @override

@@ -182,7 +182,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
       switch (st) {
         case Err(:final failure):
           // Keep showing what is there.
-          state = state.copyWith(failure: failure);
+          state = state.copyWith(failure: failure, conn: AdminConn.offline);
           return;
         case Ok(value: final s):
           if (s == null || s.phase != AdminLinkPhase.linked) {
@@ -196,9 +196,10 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
           if (!ref.mounted || _lockCount != lockedAt) return;
           switch (fetched) {
             case Err(:final failure):
-              state = state.copyWith(failure: failure);
+              state = state.copyWith(failure: failure, conn: AdminConn.offline);
               return;
             case Ok(value: final rows):
+              state = state.copyWith(conn: AdminConn.connected);
               await _applyRows(rows, s.epoch);
           }
       }
@@ -372,8 +373,10 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
       snapshot: AdminSnapshot.empty,
       hasSnapshot: false,
       syncing: false,
+      clearSeen: true,
     );
     unawaited(ref.read(adminSnapshotStoreProvider).clear());
+    unawaited(ref.read(adminSeenStoreProvider).clear());
   }
 
   /// Shows the snapshot saved on the phone at once (only when it belongs to [epoch]); later rows are fetched after its last id.
@@ -385,6 +388,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     if (!ref.mounted || _lockCount != lockedAt || saved == null) return;
     if (saved.epoch != epoch) {
       await store.clear();
+      await ref.read(adminSeenStoreProvider).clear();
       return;
     }
     _epoch = epoch;

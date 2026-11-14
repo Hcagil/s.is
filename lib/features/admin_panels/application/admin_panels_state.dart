@@ -28,6 +28,18 @@ enum AdminGate {
   failed,
 }
 
+/// The link to the computer as the polls show it.
+enum AdminConn {
+  /// A poll round is running and none has worked since the screen opened.
+  connecting,
+
+  /// The last round worked.
+  connected,
+
+  /// The last round failed (stays so until a round works).
+  offline,
+}
+
 /// The whole state of the admin panels while the screen is open.
 final class AdminPanelsState {
   const AdminPanelsState({
@@ -42,6 +54,7 @@ final class AdminPanelsState {
     this.linkBusy = false,
     this.answers = const [],
     this.seen,
+    this.conn = AdminConn.connecting,
   });
 
   final AdminGate gate;
@@ -49,6 +62,9 @@ final class AdminPanelsState {
   /// The link status while [gate] is link.
   final AdminStatus? link;
   final AdminSnapshot snapshot;
+
+  /// What the icon in the top bar shows.
+  final AdminConn conn;
 
   /// True once one complete snapshot has arrived (the panels show data only then).
   final bool hasSnapshot;
@@ -96,6 +112,8 @@ final class AdminPanelsState {
     bool? linkBusy,
     List<AdminAnswer>? answers,
     Map<String, Set<String>>? seen,
+    AdminConn? conn,
+    bool clearSeen = false,
     bool clearFailure = false,
   }) {
     return AdminPanelsState(
@@ -109,7 +127,8 @@ final class AdminPanelsState {
       decidedTasks: decidedTasks ?? this.decidedTasks,
       linkBusy: linkBusy ?? this.linkBusy,
       answers: answers ?? this.answers,
-      seen: seen ?? this.seen,
+      seen: clearSeen ? null : (seen ?? this.seen),
+      conn: conn ?? this.conn,
     );
   }
 }

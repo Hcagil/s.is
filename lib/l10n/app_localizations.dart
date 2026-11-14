@@ -4976,6 +4976,24 @@ abstract class AppLocalizations {
   /// **'Tasks left'**
   String get adminDashTasksLeft;
 
+  /// Admin panels: screen-reader label of the connection icon when the last check worked
+  ///
+  /// In en, this message translates to:
+  /// **'Connected'**
+  String get adminConnConnected;
+
+  /// Admin panels: screen-reader label of the connection icon while the first check runs
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting'**
+  String get adminConnConnecting;
+
+  /// Admin panels: screen-reader label of the connection icon when the last check failed
+  ///
+  /// In en, this message translates to:
+  /// **'No connection'**
+  String get adminConnOffline;
+
   /// Admin panels screen text
   ///
   /// In en, this message translates to:

@@ -81,7 +81,10 @@ class _AdminPanelsScreenState extends ConsumerState<AdminPanelsScreen>
 
     return Scaffold(
       backgroundColor: t.background,
-      appBar: AppBar(title: Text(l.adminTitle)),
+      appBar: AppBar(
+        title: Text(l.adminTitle),
+        actions: [if (gate == AdminGate.ready) _ConnIcon(panels.conn, t.muted)],
+      ),
       body: SafeArea(
         child: switch (gate) {
           AdminGate.checking => const Align(
@@ -193,6 +196,47 @@ class _Message extends StatelessWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The connection icon in the top bar: exactly one state at a time.
+class _ConnIcon extends StatelessWidget {
+  const _ConnIcon(this.conn, this.mutedColor);
+
+  final AdminConn conn;
+  final Color mutedColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final (key, icon, color, label) = switch (conn) {
+      AdminConn.connected => (
+        'connected',
+        Icons.cloud_done_rounded,
+        Colors.green,
+        l.adminConnConnected,
+      ),
+      AdminConn.connecting => (
+        'connecting',
+        Icons.cloud_sync_rounded,
+        Colors.orange,
+        l.adminConnConnecting,
+      ),
+      AdminConn.offline => (
+        'offline',
+        Icons.cloud_off_rounded,
+        mutedColor,
+        l.adminConnOffline,
+      ),
+    };
+    return Padding(
+      padding: const EdgeInsets.only(right: 16),
+      child: Semantics(
+        label: label,
+        excludeSemantics: true,
+        child: Icon(icon, key: ValueKey('admin-conn-$key'), color: color),
       ),
     );
   }

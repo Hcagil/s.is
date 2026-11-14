@@ -238,9 +238,9 @@ for j in $(sed -n 's/^  \([A-Za-z0-9_-]*\):$/\1/p' "$release"); do
   if grep -qE '\bdistribute\b' <<<"$needs"; then fail "job $j needs distribute: nothing may wait on TestFlight groups ($needs)"; fi
 done
 
-# 3 ios: needs scope only; ships; IOS_RELEASE=off skips, unset runs.
+# 3 ios: needs scope only; ships and is not quiet; IOS_RELEASE=off skips, unset runs.
 [ "$(key "$tmp/ios" needs)" = scope ] || fail "ios must need exactly scope, got [$(key "$tmp/ios" needs)]"
-[ "$(norm "$(key "$tmp/ios" if)")" = "needs.scope.outputs.ship == 'true' && vars.IOS_RELEASE != 'off'" ] \
+[ "$(norm "$(key "$tmp/ios" if)")" = "needs.scope.outputs.ship == 'true' && vars.IOS_RELEASE != 'off' && needs.scope.outputs.quiet != 'true'" ] \
   || fail "ios if is [$(key "$tmp/ios" if)]"
 [ "$(key "$tmp/ios" uses)" = ./.github/workflows/ios-ipa.yml ] || fail "ios does not call ios-ipa.yml"
 [ "$(with "$tmp/ios" upload)" = true ] || fail "the release ios job must upload"

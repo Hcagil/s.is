@@ -76,6 +76,11 @@ if [ "$*" = "release list --limit 1 --json tagName --jq .[0].tagName // empty" ]
   [ "$PREV" = "!" ] && exit 1; [ -n "$PREV" ] && echo "$PREV"; exit 0; fi
 if [ "$*" = "release list --limit 1 --json publishedAt --jq .[0].publishedAt // empty" ]; then
   [ "$LAST" = "!" ] && exit 1; [ -n "$LAST" ] && echo "$LAST"; exit 0; fi
+case "$*" in "release list --limit 20 --json name,publishedAt --jq "*)
+  [ "$LIST" = "!" ] && exit 1
+  if [ -z "$LIST" ]; then if [ -n "$LAST" ]; then LIST="[{\"name\":\"SIS 1\",\"publishedAt\":\"$LAST\"}]"; else LIST="[]"; fi; fi
+  a="$*"
+  printf "%s" "$LIST" | jq -r "${a#release list --limit 20 --json name,publishedAt --jq }"; exit 0 ;; esac
 echo "gh stub: unexpected: $*" >&2; exit 2'
 pick() { # <shell> <green> -> sets rc; $tmp/gh_out holds the outputs
   : > "$tmp/gh_out"; set +e
@@ -101,20 +106,23 @@ grep -A6 -- '- name: Decide whether the commits since the last release ship' .gi
 step_run .github/workflows/release.yml "Decide whether the commits since the last release ship" "$tmp/ship.sh"
 repo=$tmp/repo; mkdir -p "$repo/tool" "$repo/lib" "$repo/docs"
 cp tool/release_scope.sh "$repo/tool/"
+cp tool/release_kind.sh "$repo/tool/"
 (
   cd "$repo"; git init -q -b main .; git config user.email qa@sis.test; git config user.name QA
   git config commit.gpgsign false; git config tag.gpgsign false
   echo 1 > lib/a.dart; git add lib; git commit -q -m app; git tag -a v1 -m v1
   echo 2 > docs/a.md; git add docs; git commit -q -m docs; git tag docs-commit
   echo 3 > lib/a.dart; git add lib; git commit -q -m app2; git tag app-commit
+  git checkout -q -b adm v1; mkdir -p lib/features/admin_panels; echo 4 > lib/features/admin_panels/p.dart
+  git add lib; git commit -q -m admin; git tag admin-commit; git checkout -q main
 )
-D=$(git -C "$repo" rev-parse docs-commit); L=$(git -C "$repo" rev-parse app-commit)
+D=$(git -C "$repo" rev-parse docs-commit); L=$(git -C "$repo" rev-parse app-commit); A=$(git -C "$repo" rev-parse admin-commit)
 # gh answers the last release tag with $PREV and its publishedAt with $LAST
 # ("" = no release, "!" = gh fails). The test runs under TZ=UTC so a guard that
 # forgets Europe/Istanbul is caught by the late-UTC-evening case below.
-decide() { # <shell> <prev> <sha> [reason] [event=schedule] [last] -> sets rc; $tmp/gh_out, $tmp/summary
+decide() { # <shell> <prev> <sha> [reason] [event=schedule] [last] [list] -> sets rc; $tmp/gh_out, $tmp/summary
   : > "$tmp/gh_out"; : > "$tmp/summary"; set +e
-  (cd "$repo" && PATH="$tmp/bin:$PATH" TZ=UTC PREV=$2 SHA=$3 REASON=${4:-} EVENT=${5:-schedule} LAST=${6:-} \
+  (cd "$repo" && PATH="$tmp/bin:$PATH" TZ=UTC PREV=$2 SHA=$3 REASON=${4:-} EVENT=${5:-schedule} LAST=${6:-} LIST=${7:-} \
     GITHUB_OUTPUT="$tmp/gh_out" GITHUB_STEP_SUMMARY="$tmp/summary" $1 "$tmp/ship.sh") > "$tmp/out" 2>&1; rc=$?; set -e
 }
 now=$(date -u +%FT%TZ); empty=
@@ -152,6 +160,20 @@ urgent workflow_dispatch now true
 - schedule yesterday_ist true
 - schedule empty true
 TABLE
+  q_now="{\"name\":\"SIS 2 (quiet)\",\"publishedAt\":\"$now\"}"
+  n_now="{\"name\":\"SIS 1\",\"publishedAt\":\"$now\"}"
+  n_old="{\"name\":\"SIS 1\",\"publishedAt\":\"$yesterday_ist\"}"
+  want_ship() { [ $rc = 0 ] && [ "$(cat "$tmp/gh_out")" = "ship=$1" ] \
+    || fail "$2 under '$sh': rc $rc, outputs [$(cat "$tmp/gh_out")], want exactly ship=$1"; }
+  decide "$sh" v1 "$A" "" schedule "$now"; want_ship true "quiet change, a release already today (schedule)"
+  decide "$sh" v1 "$A" "" workflow_run "$now"; want_ship true "quiet change, a release already today (workflow_run)"
+  decide "$sh" v1 "$A" daily workflow_dispatch "$now"; want_ship true "quiet change, a release already today (daily)"
+  decide "$sh" v1 "$A" urgent workflow_dispatch "$now"; want_ship true "quiet change, urgent manual run"
+  decide "$sh" v1 "$L" "" schedule "$now"; want_ship false "normal change, a release already today"
+  decide "$sh" v1 "$L" "" schedule "$now" "[$q_now,$n_old]"; want_ship true "normal change, today only a (quiet) release"
+  decide "$sh" v1 "$L" "" schedule "$now" "[$q_now,$n_now]"; want_ship false "normal change, a normal release and a quiet one today"
+  decide "$sh" v1 "$L" "" schedule "$now" "[$q_now]"; want_ship true "normal change, the only release is quiet"
+  decide "$sh" v1 "$L" "" schedule "$now" '!'; want_ship false "normal change, release list unreadable keeps the old guard"
   decide "$sh" v1 "$L" "" schedule '!'
   [ $rc != 0 ] && [ ! -s "$tmp/gh_out" ] || fail "an unreadable publishedAt under '$sh': rc $rc, outputs [$(cat "$tmp/gh_out")] (must fail, decide nothing)"
   decide "$sh" v1 "$D"

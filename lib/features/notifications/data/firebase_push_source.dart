@@ -27,7 +27,9 @@ Future<void> _reportDelivered(RemoteMessage message) async {
     if (id is! String || id.isEmpty || user is! String) return;
     if (d['kind'] == 'reaction') return;
     if (await backgroundDelivery.savedUserId() != user) return;
-    await backgroundDelivery.markDelivered(id);
+    await backgroundDelivery
+        .markDelivered(id)
+        .timeout(const Duration(seconds: 5));
   } catch (_) {}
 }
 
@@ -63,7 +65,6 @@ Future<void> onBackgroundPush(RemoteMessage message) async {
         'dart=${DateTime.now().millisecondsSinceEpoch} '
         '${arrival ?? 'native=?'}',
   );
-  await _reportDelivered(message);
   try {
     // InstantPush.kt drew this push, if it did, before this handler ran.
     await PushReceiptLog.add(
@@ -77,6 +78,8 @@ Future<void> onBackgroundPush(RemoteMessage message) async {
     // Never rethrown into the plugin, never swallowed unreported.
     await PushReceiptLog.add('error', messageId: messageId, error: e);
   }
+  // After the terminal receipt: the network call never delays it.
+  await _reportDelivered(message);
 }
 
 /// Judges the push (nothing is drawn here); returns its terminal stage, `shown` or `dropped:reason`.

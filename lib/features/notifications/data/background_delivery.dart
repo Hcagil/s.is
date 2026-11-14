@@ -32,23 +32,38 @@ final class SupabaseBackgroundDelivery implements BackgroundDelivery {
 
   @override
   Future<void> markDelivered(String conversationId) async {
-    // The saved session is restored from secure storage by Supabase.initialize; no sign-in.
-    try {
-      Supabase.instance;
-    } catch (_) {
-      final cfg = RuntimeConfig.fromEnvironment();
-      await Supabase.initialize(
-        url: cfg.supabaseUrl,
-        publishableKey: cfg.supabasePublishableKey,
-        authOptions: const FlutterAuthClientOptions(
-          authFlowType: AuthFlowType.pkce,
-          localStorage: SecureSessionStorage(),
-        ),
-      );
+    // A plain client with the stored access token: no auth client, no refresh, no storage writes.
+    final session = await _stored();
+    if (session == null) return;
+    final token = session['access_token'];
+    if (token is! String || token.isEmpty) return;
+    final expiresAt = session['expires_at'];
+    if (expiresAt is! num) return;
+    // Expired or about to: skip; the foreground marks delivery when the app opens.
+    if (expiresAt * 1000 <= DateTime.now().millisecondsSinceEpoch + 30000) {
+      return;
     }
-    await Supabase.instance.client.rpc(
-      'mark_delivered',
-      params: {'conversation': conversationId, 'up_to': null},
+    final cfg = RuntimeConfig.fromEnvironment();
+    final client = SupabaseClient(
+      cfg.supabaseUrl,
+      cfg.supabasePublishableKey,
+      accessToken: () async => token,
     );
+    try {
+      await client.rpc(
+        'mark_delivered',
+        params: {'conversation': conversationId, 'up_to': null},
+      );
+    } finally {
+      await client.dispose();
+    }
+  }
+
+  /// Reads the stored session JSON (read only; never written from here).
+  Future<Map<String, dynamic>?> _stored() async {
+    final raw = await const SecureSessionStorage().accessToken();
+    if (raw == null || raw.isEmpty) return null;
+    final decoded = jsonDecode(raw);
+    return decoded is Map<String, dynamic> ? decoded : null;
   }
 }

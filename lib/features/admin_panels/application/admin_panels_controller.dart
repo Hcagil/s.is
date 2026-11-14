@@ -200,7 +200,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
               return;
             case Ok(value: final rows):
               state = state.copyWith(conn: AdminConn.connected);
-              await _applyRows(rows, s.epoch);
+              await _applyRows(rows, s.epoch, lockedAt);
           }
       }
     } finally {
@@ -208,9 +208,10 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     }
   }
 
-  Future<void> _applyRows(List<AdminRow> rows, int epoch) async {
+  Future<void> _applyRows(List<AdminRow> rows, int epoch, int lockedAt) async {
     final repo = ref.read(adminPanelsRepositoryProvider);
     final persisted = await repo.lastDownSeq(epoch);
+    if (!ref.mounted || _lockCount != lockedAt) return;
 
     var snap = state.snapshot;
     var has = state.hasSnapshot;
@@ -277,7 +278,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
             AdminSavedSnapshot(epoch: epoch, lastId: _lastId, snapshot: snap),
           );
     }
-    if (!ref.mounted) return;
+    if (!ref.mounted || _lockCount != lockedAt) return;
 
     _applyResults(results);
     _expireAnswers();
@@ -290,6 +291,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     );
 
     await _ensureSeen();
+    if (!ref.mounted || _lockCount != lockedAt) return;
     if (!has || gap) await _resync();
   }
 
@@ -400,9 +402,10 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
   /// Loads what was seen (first run: everything now in the snapshot counts as seen) once a snapshot is shown.
   Future<void> _ensureSeen() async {
     if (state.seen != null || !state.hasSnapshot) return;
+    final lockedAt = _lockCount;
     final store = ref.read(adminSeenStoreProvider);
     final saved = await store.load();
-    if (!ref.mounted || state.seen != null) return;
+    if (!ref.mounted || _lockCount != lockedAt || state.seen != null) return;
     final seen = saved ?? adminTabIds(state.snapshot);
     if (saved == null) unawaited(store.save(seen));
     state = state.copyWith(seen: seen);
@@ -421,6 +424,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
 
   /// Asks the computer for a full snapshot, at most once a minute.
   Future<void> _resync() async {
+    final lockedAt = _lockCount;
     final now = ref.read(adminClockProvider)();
     final at = _resyncAt;
     state = state.copyWith(syncing: true);
@@ -429,7 +433,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     final r = await ref.read(adminPanelsRepositoryProvider).send({
       'kind': 'resync',
     });
-    if (!ref.mounted) return;
+    if (!ref.mounted || _lockCount != lockedAt) return;
     if (r is Err<AdminSentRef?>) {
       _resyncAt = null;
       state = state.copyWith(failure: r.failure);

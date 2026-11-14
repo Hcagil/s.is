@@ -36,9 +36,6 @@ class _AdminEntryButtonState extends ConsumerState<AdminEntryButton>
         state != AppLifecycleState.hidden) {
       return;
     }
-    if (!(ref.read(adminEntryProvider).value ?? false)) {
-      return;
-    }
     ref.read(adminPanelsProvider.notifier).lock();
   }
 

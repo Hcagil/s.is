@@ -9,6 +9,7 @@ import '../../../l10n/app_localizations.dart';
 import '../application/admin_drafts.dart';
 import '../application/admin_panels_controller.dart';
 import '../application/admin_panels_state.dart';
+import 'admin_cards_view.dart';
 import 'admin_dashboard_view.dart';
 import 'admin_link_view.dart';
 import 'admin_questions_view.dart';
@@ -75,7 +76,7 @@ class _AdminPanelsScreenState extends ConsumerState<AdminPanelsScreen>
     final t = SisBrand.of(context);
     final l = AppLocalizations.of(context);
 
-    const tabs = [null, 'talk', 'questions', 'tasks'];
+    const tabs = [null, 'talk', 'questions', 'tasks', null];
     final openTab = tabs[_index];
     final counts = panels.newCounts;
     if (gate == AdminGate.ready &&
@@ -116,6 +117,7 @@ class _AdminPanelsScreenState extends ConsumerState<AdminPanelsScreen>
             1 => const AdminTalkView(key: ValueKey('admin-panel-0')),
             2 => const AdminQuestionsView(key: ValueKey('admin-panel-1')),
             3 => const AdminTasksView(key: ValueKey('admin-panel-2')),
+            4 => const AdminCardsView(key: ValueKey('admin-panel-4')),
             _ => const AdminDashboardView(key: ValueKey('admin-panel-3')),
           },
         },
@@ -156,6 +158,11 @@ class _AdminPanelsScreenState extends ConsumerState<AdminPanelsScreen>
                   ),
                   selectedIcon: const Icon(Icons.checklist_rounded),
                   label: l.adminTasks,
+                ),
+                NavigationDestination(
+                  icon: const Icon(Icons.style_outlined),
+                  selectedIcon: const Icon(Icons.style_rounded),
+                  label: l.adminCards,
                 ),
               ],
             )

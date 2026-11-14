@@ -2855,6 +2855,51 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminTasksEmpty => 'No tasks waiting for you';
 
   @override
+  String get adminCards => 'Cards';
+
+  @override
+  String get adminCardsEmpty => 'No cards yet';
+
+  @override
+  String get adminCardsNoMatch => 'No card matches';
+
+  @override
+  String get adminCardsSearch => 'Search cards';
+
+  @override
+  String get adminCardsAll => 'All';
+
+  @override
+  String get adminCardsActive => 'Active';
+
+  @override
+  String get adminCardsProposed => 'Proposed';
+
+  @override
+  String get adminCardsRule => 'Rule';
+
+  @override
+  String get adminCardsApp => 'App';
+
+  @override
+  String get adminCardApplies => 'Applies to';
+
+  @override
+  String get adminCardArea => 'Area';
+
+  @override
+  String get adminCardWhen => 'When';
+
+  @override
+  String get adminCardWords => 'Owner\'s words';
+
+  @override
+  String get adminCardAllows => 'Allows';
+
+  @override
+  String get adminCardForbids => 'Forbids';
+
+  @override
   String get adminDashContext => 'Context size';
 
   @override
@@ -2912,7 +2957,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String adminDashWorkCalledBy(String state, String caller) {
-    return '$state, called by $caller';
+    return '$state, started by $caller';
   }
 
   @override

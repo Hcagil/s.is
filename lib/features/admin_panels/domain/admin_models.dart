@@ -176,6 +176,106 @@ final class AdminConversation {
       : mat > (seen > readUpto ? seen : readUpto);
 }
 
+/// A card item from the admin export.
+final class AdminCard {
+  /// Creates an [AdminCard] with the given values.
+  const AdminCard({
+    required this.id,
+    required this.type,
+    required this.state,
+    required this.applies,
+    required this.area,
+    required this.when,
+    required this.oneLiner,
+    required this.words,
+    required this.allows,
+    required this.forbids,
+  });
+
+  /// Parses values safely using `is` checks. Never throws.
+  factory AdminCard.fromFields(Map<String, Object?> f) {
+    final id = f['id'] is String ? f['id'] as String : '';
+    final type = f['type'] == 'app' ? 'app' : 'rule';
+    final state = f['state'] == 'proposed' ? 'proposed' : 'active';
+    final applies =
+        f['applies'] is String && (f['applies'] as String).isNotEmpty
+        ? f['applies'] as String
+        : null;
+    final area = f['area'] is String && (f['area'] as String).isNotEmpty
+        ? f['area'] as String
+        : null;
+
+    final whenRaw = f['when'];
+    final List<String> when;
+    if (whenRaw is List) {
+      when = whenRaw.whereType<String>().toList();
+    } else {
+      when = const [];
+    }
+
+    final oneLiner = f['one_liner'] is String ? f['one_liner'] as String : '';
+
+    final wordsRaw = f['words'];
+    final List<String> words;
+    if (wordsRaw is List) {
+      words = wordsRaw.whereType<String>().toList();
+    } else {
+      words = const [];
+    }
+
+    final allows = f['allows'] is String && (f['allows'] as String).isNotEmpty
+        ? f['allows'] as String
+        : null;
+    final forbids =
+        f['forbids'] is String && (f['forbids'] as String).isNotEmpty
+        ? f['forbids'] as String
+        : null;
+
+    return AdminCard(
+      id: id,
+      type: type,
+      state: state,
+      applies: applies,
+      area: area,
+      when: when,
+      oneLiner: oneLiner,
+      words: words,
+      allows: allows,
+      forbids: forbids,
+    );
+  }
+
+  /// The card id.
+  final String id;
+
+  /// 'app' or 'rule'.
+  final String type;
+
+  /// 'proposed' or 'active'.
+  final String state;
+
+  /// Role letters of a rule card as one string (for example 'M, L'), else null.
+  final String? applies;
+
+  /// The area of an app card, else null.
+  final String? area;
+
+  /// When the card is read (for example 'always').
+  final List<String> when;
+
+  /// The first words of the card.
+  final String oneLiner;
+
+  /// The owner's words, one entry per line.
+  final List<String> words;
+
+  /// What the card allows, if any.
+  final String? allows;
+
+  /// What the card forbids, if any.
+  final String? forbids;
+}
+
 /// A message item from the admin export.
 final class AdminMessage {
   /// Creates an [AdminMessage] with the given values.

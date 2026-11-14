@@ -4952,6 +4952,96 @@ abstract class AppLocalizations {
   /// **'No tasks waiting for you'**
   String get adminTasksEmpty;
 
+  /// Admin panels, Cards tab text
+  ///
+  /// In en, this message translates to:
+  /// **'Cards'**
+  String get adminCards;
+
+  /// Admin panels, Cards tab text
+  ///
+  /// In en, this message translates to:
+  /// **'No cards yet'**
+  String get adminCardsEmpty;
+
+  /// Admin panels, Cards tab text
+  ///
+  /// In en, this message translates to:
+  /// **'No card matches'**
+  String get adminCardsNoMatch;
+
+  /// Admin panels, Cards tab text
+  ///
+  /// In en, this message translates to:
+  /// **'Search cards'**
+  String get adminCardsSearch;
+
+  /// Admin panels, Cards tab text
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get adminCardsAll;
+
+  /// Admin panels, Cards tab text
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get adminCardsActive;
+
+  /// Admin panels, Cards tab text
+  ///
+  /// In en, this message translates to:
+  /// **'Proposed'**
+  String get adminCardsProposed;
+
+  /// Admin panels, Cards tab text
+  ///
+  /// In en, this message translates to:
+  /// **'Rule'**
+  String get adminCardsRule;
+
+  /// Admin panels, Cards tab text
+  ///
+  /// In en, this message translates to:
+  /// **'App'**
+  String get adminCardsApp;
+
+  /// Admin panels, Cards tab text
+  ///
+  /// In en, this message translates to:
+  /// **'Applies to'**
+  String get adminCardApplies;
+
+  /// Admin panels, Cards tab text
+  ///
+  /// In en, this message translates to:
+  /// **'Area'**
+  String get adminCardArea;
+
+  /// Admin panels, Cards tab text
+  ///
+  /// In en, this message translates to:
+  /// **'When'**
+  String get adminCardWhen;
+
+  /// Admin panels, Cards tab text
+  ///
+  /// In en, this message translates to:
+  /// **'Owner\'s words'**
+  String get adminCardWords;
+
+  /// Admin panels, Cards tab text
+  ///
+  /// In en, this message translates to:
+  /// **'Allows'**
+  String get adminCardAllows;
+
+  /// Admin panels, Cards tab text
+  ///
+  /// In en, this message translates to:
+  /// **'Forbids'**
+  String get adminCardForbids;
+
   /// Admin panels screen text
   ///
   /// In en, this message translates to:
@@ -5048,10 +5138,10 @@ abstract class AppLocalizations {
   /// **'state unknown'**
   String get adminDashWorkStateUnknown;
 
-  /// Dashboard, Running now row: screen-reader label, the state and the name of who called this agent
+  /// Dashboard, Running now row: screen-reader label, the state and the name of who started this agent
   ///
   /// In en, this message translates to:
-  /// **'{state}, called by {caller}'**
+  /// **'{state}, started by {caller}'**
   String adminDashWorkCalledBy(String state, String caller);
 
   /// Admin panels screen text

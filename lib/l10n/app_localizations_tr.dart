@@ -2828,6 +2828,51 @@ class AppLocalizationsTr extends AppLocalizations {
   String get adminTasksEmpty => 'Sizi bekleyen görev yok';
 
   @override
+  String get adminCards => 'Kartlar';
+
+  @override
+  String get adminCardsEmpty => 'Henüz kart yok';
+
+  @override
+  String get adminCardsNoMatch => 'Eşleşen kart yok';
+
+  @override
+  String get adminCardsSearch => 'Kartlarda ara';
+
+  @override
+  String get adminCardsAll => 'Tümü';
+
+  @override
+  String get adminCardsActive => 'Etkin';
+
+  @override
+  String get adminCardsProposed => 'Önerilen';
+
+  @override
+  String get adminCardsRule => 'Kural';
+
+  @override
+  String get adminCardsApp => 'Uygulama';
+
+  @override
+  String get adminCardApplies => 'Geçerli olduğu';
+
+  @override
+  String get adminCardArea => 'Alan';
+
+  @override
+  String get adminCardWhen => 'Ne zaman';
+
+  @override
+  String get adminCardWords => 'Sahibin sözleri';
+
+  @override
+  String get adminCardAllows => 'İzin verir';
+
+  @override
+  String get adminCardForbids => 'Yasaklar';
+
+  @override
   String get adminDashContext => 'Bağlam boyutu';
 
   @override
@@ -2885,7 +2930,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String adminDashWorkCalledBy(String state, String caller) {
-    return '$state, çağıran: $caller';
+    return '$state, başlatan: $caller';
   }
 
   @override

@@ -260,8 +260,9 @@ the Xcode build.
 in Docker: same compose files, `TZ=JST-9`, the release bundle (throwaway key),
 db lint, pgTAP, the Edge function tests, the Realtime warmup and the
 integration tests with `--concurrency=1`. The Database job starts from zero:
-it wipes any leftover local Supabase stack and its data, starts a fresh one,
-replays the migrations, and stops it at the end (never `down -v`). Each job
+it starts its own Supabase stack (own project id and ports, so two worktrees
+can run it at once and your development stack is untouched), replays the
+migrations, and removes the stack at the end or on Ctrl-C (never `down -v`). Each job
 stops at its first failing step, both always run, and the script ends with
 `RESULT <job> PASS|FAIL (step: ...)` lines and a non-zero exit on failure.
 The iOS build needs macOS and runs only in GitHub CI. The script and `ci.yml`

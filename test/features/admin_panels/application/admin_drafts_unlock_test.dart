@@ -218,4 +218,40 @@ void main() {
       d.dispose();
     },
   );
+
+  test('T6 prune finished after forget schedules no save', () async {
+    final store = _HoldStore()..saved = {'q:2': 'gone'};
+    final d = AdminDrafts(store);
+    final pruning = d.prune('q:', <String>{});
+    // not awaited; first load is held
+    await d.forget(); // cache is null, so no save
+    expect(
+      await d.read('q:2'),
+      'gone',
+    ); // second load (not held) fills the cache from store.saved
+    store.firstLoad.complete({'q:2': 'gone'});
+    await pruning;
+    await Future<void>.delayed(
+      adminDraftDebounce + const Duration(milliseconds: 100),
+    );
+    expect(store.saveLog, isEmpty);
+    d.dispose();
+  });
+
+  test('T7 write finished after wipe schedules no save', () async {
+    final store = _HoldStore()..saved = {'q:2': 'gone'};
+    final d = AdminDrafts(store);
+    final writing = d.write('q:9', 'late');
+    await d.wipe(); // wipe clears the store (store.saved becomes {})
+    // after wipe, set store.saved = {'q:2': 'gone'} again
+    store.saved = {'q:2': 'gone'};
+    expect(await d.read('q:2'), 'gone');
+    store.firstLoad.complete({'q:2': 'gone'});
+    await writing;
+    await Future<void>.delayed(
+      adminDraftDebounce + const Duration(milliseconds: 100),
+    );
+    expect(store.saveLog, isEmpty);
+    d.dispose();
+  });
 }

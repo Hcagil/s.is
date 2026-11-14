@@ -2867,6 +2867,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminDashTasksLeft => 'Tasks left';
 
   @override
+  String get adminConnConnected => 'Connected';
+
+  @override
+  String get adminConnConnecting => 'Connecting';
+
+  @override
+  String get adminConnOffline => 'No connection';
+
+  @override
   String get adminDashEmpty => 'Nothing open';
 
   @override

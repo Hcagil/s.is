@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../application/admin_entry_provider.dart';
 import '../application/admin_panels_controller.dart';
+import '../application/admin_panels_state.dart';
 import 'admin_panels_screen.dart';
 
 /// Home top-bar icon into Admin Panels; shown only to the owner account.
@@ -18,6 +20,7 @@ class AdminEntryButton extends ConsumerStatefulWidget {
 class _AdminEntryButtonState extends ConsumerState<AdminEntryButton>
     with WidgetsBindingObserver {
   AdminPanelsController? _panels;
+  ProviderSubscription<AdminPanelsState>? _keepAlive;
 
   @override
   void initState() {
@@ -32,6 +35,7 @@ class _AdminEntryButtonState extends ConsumerState<AdminEntryButton>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _panels?.stopBackground();
+    _keepAlive?.close();
     super.dispose();
   }
 
@@ -43,6 +47,8 @@ class _AdminEntryButtonState extends ConsumerState<AdminEntryButton>
       return;
     }
     if (!(ref.read(adminEntryProvider).value ?? false)) return;
+    // autoDispose: without a listener the controller (and its poll) dies one frame later.
+    _keepAlive ??= ref.listenManual(adminPanelsProvider, (_, _) {});
     _panels = ref.read(adminPanelsProvider.notifier);
     _panels!.startBackground();
   }
@@ -59,6 +65,7 @@ class _AdminEntryButtonState extends ConsumerState<AdminEntryButton>
       return;
     }
     ref.read(adminPanelsProvider.notifier).lock();
+    SchedulerBinding.instance.scheduleForcedFrame();
   }
 
   @override

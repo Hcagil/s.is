@@ -39,7 +39,17 @@ export async function fetchSalesTotal(day: string, prev: boolean): Promise<strin
     const page = await fetch(`${base}/Authentication/Login`, { redirect: 'manual', signal });
     const pre = page.headers.getSetCookie().map((c) => c.split(';')[0]);
     const pageHtml = page.status === 200 ? await readCapped(page) : (await page.body?.cancel(), '');
-    const field = pageHtml.match(/<input[^>]*name="__RequestVerificationToken"[^>]*value="([^"]*)"/)?.[1];
+    // bounded window against regex backtracking
+    const ti = pageHtml.indexOf('name="__RequestVerificationToken"');
+    let field: string | undefined;
+    if (ti >= 0) {
+      const start = pageHtml.lastIndexOf('<input', ti);
+      const end = pageHtml.indexOf('>', ti);
+      if (start >= 0 && end >= 0) {
+        const tag = pageHtml.slice(start, Math.min(end, start + 1024));
+        field = tag.match(/value="([^"]*)"/)?.[1];
+      }
+    }
     if (!field || !pre.some((c) => c.startsWith('__RequestVerificationToken='))) throw new SalesError('login');
     const res = await fetch(`${base}/Authentication/LoginAction`, {
       method: 'POST', redirect: 'manual', signal,

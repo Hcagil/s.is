@@ -1,10 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/loading.dart';
 import '../../../app/notice.dart';
 import '../../../l10n/app_localizations.dart';
+import '../application/admin_drafts.dart';
 import '../application/admin_panels_controller.dart';
+import '../application/admin_panels_state.dart';
+import '../domain/admin_answer.dart';
 import '../domain/admin_models.dart';
 import 'admin_question_card.dart';
 import 'admin_answer_status.dart';
@@ -17,12 +22,29 @@ class AdminQuestionsView extends ConsumerStatefulWidget {
 }
 
 class _AdminQuestionsViewState extends ConsumerState<AdminQuestionsView> {
+  late final _drafts = ref.read(adminDraftsProvider);
+  final Set<String> _restored = {};
   final Map<String, int> _sel = {};
   final Map<String, TextEditingController> _ctl = {};
   bool _sending = false;
 
   TextEditingController _controller(String id) =>
       _ctl.putIfAbsent(id, TextEditingController.new);
+
+  void _restore(AdminQuestion q) {
+    if (!_restored.add(q.id)) return;
+    unawaited(
+      _drafts.read(adminQuestionDraftKey(q.id)).then((t) {
+        final c = _controller(q.id);
+        if (!mounted || t.isEmpty || c.text.isNotEmpty) return;
+        c.text = t;
+        if (q.kind != 'action' && q.kind != 'text' && !_sel.containsKey(q.id)) {
+          _sel[q.id] = q.answers.length;
+        }
+        setState(() {});
+      }),
+    );
+  }
 
   String? _answerOf(AdminQuestion q) {
     final sel = _sel[q.id] ?? -1;
@@ -46,6 +68,7 @@ class _AdminQuestionsViewState extends ConsumerState<AdminQuestionsView> {
 
   @override
   void dispose() {
+    unawaited(_drafts.flush());
     for (final c in _ctl.values) {
       c.dispose();
     }
@@ -85,24 +108,7 @@ class _AdminQuestionsViewState extends ConsumerState<AdminQuestionsView> {
         Expanded(
           child: ListView(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            children: [
-              for (final q in list) ...[
-                AdminQuestionCard(
-                  key: ValueKey('admin-question-${q.id}'),
-                  question: q,
-                  waiting: q.waiting || s.sentQuestions.contains(q.id),
-                  selected: _sel[q.id] ?? -1,
-                  controller: _controller(q.id),
-                  onSelected: (i) => setState(() => _sel[q.id] = i),
-                  onTextChanged: () => setState(() {}),
-                ),
-                if (s.latestAnswer('question', id: q.id) case final a?)
-                  AdminAnswerStatusLine(
-                    key: ValueKey('admin-answer-${q.id}'),
-                    answer: a,
-                  ),
-              ],
-            ],
+            children: [for (final q in list) ..._rows(q, s)],
           ),
         ),
         Padding(
@@ -118,6 +124,32 @@ class _AdminQuestionsViewState extends ConsumerState<AdminQuestionsView> {
         ),
       ],
     );
+  }
+
+  // One status per question: 'sending' wins until the computer marks it waiting.
+  List<Widget> _rows(AdminQuestion q, AdminPanelsState s) {
+    _restore(q);
+    final a = s.latestAnswer('question', id: q.id);
+    final sending =
+        a != null && a.status == AdminAnswerStatus.sending && !q.waiting;
+    return [
+      AdminQuestionCard(
+        key: ValueKey('admin-question-${q.id}'),
+        question: q,
+        waiting: !sending && (q.waiting || s.sentQuestions.contains(q.id)),
+        selected: _sel[q.id] ?? -1,
+        controller: _controller(q.id),
+        onSelected: (i) => setState(() => _sel[q.id] = i),
+        onTextChanged: () {
+          unawaited(
+            _drafts.write(adminQuestionDraftKey(q.id), _controller(q.id).text),
+          );
+          setState(() {});
+        },
+      ),
+      if (a != null && (a.status != AdminAnswerStatus.sending || !q.waiting))
+        AdminAnswerStatusLine(key: ValueKey('admin-answer-${q.id}'), answer: a),
+    ];
   }
 
   Future<void> _send(List<AdminQuestion> ready) async {
@@ -139,6 +171,7 @@ class _AdminQuestionsViewState extends ConsumerState<AdminQuestionsView> {
       } else {
         _sel.remove(q.id);
         _controller(q.id).clear();
+        unawaited(_drafts.remove(adminQuestionDraftKey(q.id)));
       }
     }
     if (mounted) {

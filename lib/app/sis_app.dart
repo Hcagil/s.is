@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/failure.dart';
 import '../core/startup_failure.dart';
+import '../features/admin_panels/application/admin_owner_wipe.dart';
 import '../features/appearance/application/appearance_controller.dart';
 import '../features/appearance/domain/appearance_settings.dart';
 import '../features/appearance/domain/custom_theme.dart';
@@ -321,6 +322,8 @@ class _SessionGateState extends ConsumerState<SessionGate> {
       ref.listen(chatListSnapshotOwnerProvider, (_, _) {});
       // And the files kept from file messages.
       ref.listen(deviceFilesOwnerProvider, (_, _) {});
+      // The admin panels' key, saved snapshot and seen marks go the same way.
+      ref.listen(adminOwnerWipeProvider, (_, _) {});
       // The saved send queue is forgotten the same way, and listening to the
       // queue itself brings back the sends that were waiting when the app
       // was killed.

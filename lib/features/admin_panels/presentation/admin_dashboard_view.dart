@@ -7,6 +7,8 @@ import '../../../app/theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../application/admin_panels_controller.dart';
 import '../domain/admin_dashboard.dart';
+import 'admin_work_colors.dart';
+import 'admin_work_row.dart';
 
 class AdminDashboardView extends ConsumerWidget {
   const AdminDashboardView({super.key});
@@ -39,6 +41,7 @@ class AdminDashboardView extends ConsumerWidget {
       return Center(child: Text(l.adminDashEmpty));
     }
 
+    final families = adminWorkFamilies(d.working);
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       children: [
@@ -51,11 +54,11 @@ class AdminDashboardView extends ConsumerWidget {
             ),
           ),
           for (var i = 0; i < d.working.length; i++)
-            SisSettingsRow(
+            AdminWorkRow(
               key: ValueKey('admin-dash-work-$i'),
-              icon: Icons.play_circle_outline_rounded,
-              title: d.working[i],
-              showArrow: false,
+              entry: d.working[i],
+              entries: d.working,
+              family: families[i],
             ),
         ],
         if (d.sessions.isNotEmpty) ...[

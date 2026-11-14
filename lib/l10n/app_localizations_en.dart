@@ -2899,6 +2899,23 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get adminDashWorkStateRunning => 'running';
+
+  @override
+  String get adminDashWorkStateShell => 'running a command';
+
+  @override
+  String get adminDashWorkStateStale => 'not responding';
+
+  @override
+  String get adminDashWorkStateUnknown => 'state unknown';
+
+  @override
+  String adminDashWorkCalledBy(String state, String caller) {
+    return '$state, called by $caller';
+  }
+
+  @override
   String get adminLinkTitle => 'Link this phone';
 
   @override

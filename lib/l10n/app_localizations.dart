@@ -5024,6 +5024,36 @@ abstract class AppLocalizations {
   /// **'Not started {count}'**
   String adminDashStatePending(int count);
 
+  /// Dashboard, Running now row: screen-reader state word for a working agent
+  ///
+  /// In en, this message translates to:
+  /// **'running'**
+  String get adminDashWorkStateRunning;
+
+  /// Dashboard, Running now row: screen-reader state word for an agent waiting on a command
+  ///
+  /// In en, this message translates to:
+  /// **'running a command'**
+  String get adminDashWorkStateShell;
+
+  /// Dashboard, Running now row: screen-reader state word for an agent that sent no news for a while
+  ///
+  /// In en, this message translates to:
+  /// **'not responding'**
+  String get adminDashWorkStateStale;
+
+  /// Dashboard, Running now row: screen-reader state word when the computer sent no state
+  ///
+  /// In en, this message translates to:
+  /// **'state unknown'**
+  String get adminDashWorkStateUnknown;
+
+  /// Dashboard, Running now row: screen-reader label, the state and the name of who called this agent
+  ///
+  /// In en, this message translates to:
+  /// **'{state}, called by {caller}'**
+  String adminDashWorkCalledBy(String state, String caller);
+
   /// Admin panels screen text
   ///
   /// In en, this message translates to:

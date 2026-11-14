@@ -2872,6 +2872,23 @@ class AppLocalizationsTr extends AppLocalizations {
   }
 
   @override
+  String get adminDashWorkStateRunning => 'çalışıyor';
+
+  @override
+  String get adminDashWorkStateShell => 'komut çalıştırıyor';
+
+  @override
+  String get adminDashWorkStateStale => 'yanıt vermiyor';
+
+  @override
+  String get adminDashWorkStateUnknown => 'durum bilinmiyor';
+
+  @override
+  String adminDashWorkCalledBy(String state, String caller) {
+    return '$state, çağıran: $caller';
+  }
+
+  @override
   String get adminLinkTitle => 'Bu telefonu bağla';
 
   @override

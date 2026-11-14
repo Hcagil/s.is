@@ -126,7 +126,10 @@ void main() {
     ) async {
       await prepareTaskSnapshot();
       await _pump(tester, container, textScale: scale);
-      await tester.tap(find.byKey(const ValueKey('admin-task-T-M-001')));
+      final nameFinder = find.text(taskName);
+      await tester.ensureVisible(nameFinder);
+      await tester.pumpAndSettle();
+      await tester.tap(nameFinder.hitTestable());
       await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('admin-task-go-T-M-001')),

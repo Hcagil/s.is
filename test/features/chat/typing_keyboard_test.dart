@@ -77,6 +77,25 @@ void main() {
       expect(s.send, findsOneWidget);
     });
 
+    testWidgets('a send or done action from the keyboard never sends either', (
+      t,
+    ) async {
+      final chat = HeldSendChat()..history['c1'] = [s.msg('m1')];
+      await s.pump(t, chat);
+
+      for (var action in [
+        TextInputAction.send,
+        TextInputAction.done,
+        TextInputAction.go,
+      ]) {
+        await typeFocused(t, 'hello');
+        await t.testTextInput.receiveAction(action);
+        await t.pump();
+      }
+
+      expect(chat.asked, isEmpty, reason: 'only the send button sends');
+    });
+
     testWidgets(
       'send button after the keyboard action: sends once, empties, keeps focus',
       (t) async {

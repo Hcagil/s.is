@@ -94,6 +94,57 @@ final class AdminSession {
   }
 }
 
+/// One row of "running now": a session, agent or worker, with its caller.
+final class AdminWorkEntry {
+  const AdminWorkEntry({
+    required this.title,
+    this.who = '',
+    this.id,
+    this.parent,
+    this.state = '',
+    this.depth = 0,
+  });
+
+  /// Builds an entry from one exported element; never throws.
+  factory AdminWorkEntry.fromElement(Object? element) {
+    if (element is! Map) return AdminWorkEntry(title: element.toString());
+    final who = (element['who'] ?? element['name'])?.toString() ?? '';
+    final goal = (element['doing'] ?? element['goal'])?.toString() ?? '';
+    final rawState = element['state']?.toString() ?? '';
+    final state = const {'running', 'shell', 'stale'}.contains(rawState)
+        ? rawState
+        : (element['stale'] == true ? 'stale' : '');
+    final id = element['id']?.toString();
+    final parent = element['parent']?.toString();
+    return AdminWorkEntry(
+      title: [if (who.isNotEmpty) who, if (goal.isNotEmpty) goal].join(': '),
+      who: who,
+      id: (id == null || id.isEmpty) ? null : id,
+      parent: (parent == null || parent.isEmpty) ? null : parent,
+      state: state,
+      depth: element['depth'] is num ? (element['depth'] as num).toInt() : 0,
+    );
+  }
+
+  /// The text shown: "who: doing".
+  final String title;
+
+  /// The name of this session or agent (empty when unknown).
+  final String who;
+
+  /// Its id, or null (old computer).
+  final String? id;
+
+  /// The id of the caller, or null (top level, or old computer).
+  final String? parent;
+
+  /// 'running', 'shell', 'stale', or '' when unknown.
+  final String state;
+
+  /// 0 for a top-level session, 1 for what it called, and so on.
+  final int depth;
+}
+
 /// Dashboard data: what works now and the sessions.
 final class AdminDashboard {
   /// True when the computer status is missing or older than 5 minutes.
@@ -108,10 +159,10 @@ final class AdminDashboard {
   /// Builds an [AdminDashboard] from the exported fields; never throws.
   factory AdminDashboard.fromFields(Map<String, Object?> f) {
     final workingRaw = f['working'];
-    final List<String> working;
+    final List<AdminWorkEntry> working;
     if (workingRaw is List) {
-      working = <String>[
-        for (final element in workingRaw) _parseWorkingElement(element),
+      working = <AdminWorkEntry>[
+        for (final element in workingRaw) AdminWorkEntry.fromElement(element),
       ];
     } else {
       working = const [];
@@ -137,20 +188,8 @@ final class AdminDashboard {
   }
 
   /// What works now (sessions and workers).
-  final List<String> working;
+  final List<AdminWorkEntry> working;
 
   /// The desk sessions.
   final List<AdminSession> sessions;
-
-  static String _parseWorkingElement(Object? element) {
-    if (element is Map) {
-      final parts = <String>[];
-      final name = (element['who'] ?? element['name'])?.toString() ?? '';
-      final goal = (element['doing'] ?? element['goal'])?.toString() ?? '';
-      if (name.isNotEmpty) parts.add(name);
-      if (goal.isNotEmpty) parts.add(goal);
-      return parts.join(': ');
-    }
-    return element.toString();
-  }
 }

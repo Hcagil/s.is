@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -38,11 +40,28 @@ class _AdminTalkViewState extends ConsumerState<AdminTalkView> {
 
     if (_open != null) {
       final c = convs.where((c) => c.id == _open).firstOrNull;
-      return AdminConversationView(
-        key: ValueKey('admin-conv-$_open'),
-        conv: _open!,
-        topic: c?.topic ?? '',
-        onBack: () => setState(() => _open = null),
+      if (c != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            unawaited(
+              ref
+                  .read(adminPanelsProvider.notifier)
+                  .markConversationRead(c, c.mat),
+            );
+          }
+        });
+      }
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) setState(() => _open = null);
+        },
+        child: AdminConversationView(
+          key: ValueKey('admin-conv-$_open'),
+          conv: _open!,
+          topic: c?.topic ?? '',
+          onBack: () => setState(() => _open = null),
+        ),
       );
     }
 
@@ -58,13 +77,22 @@ class _AdminTalkViewState extends ConsumerState<AdminTalkView> {
                         key: ValueKey('admin-conv-tile-${c.id}'),
                         children: [
                           SisSettingsRow(
-                            icon: c.unread
+                            icon: c.isUnread(s.readUpto[c.id] ?? 0)
                                 ? Icons.mark_chat_unread_outlined
                                 : Icons.chat_bubble_outline_rounded,
-                            iconColor: c.unread ? t.brand : null,
+                            iconColor: c.isUnread(s.readUpto[c.id] ?? 0)
+                                ? t.brand
+                                : null,
                             title: c.topic,
                             value: c.waiting > 0 ? '${c.waiting}' : null,
-                            onTap: () => setState(() => _open = c.id),
+                            onTap: () {
+                              unawaited(
+                                ref
+                                    .read(adminPanelsProvider.notifier)
+                                    .markConversationRead(c, c.mat),
+                              );
+                              setState(() => _open = c.id);
+                            },
                           ),
                           const FadeDivider(),
                         ],

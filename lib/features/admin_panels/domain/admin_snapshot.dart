@@ -53,6 +53,15 @@ final class AdminSnapshot {
       .map((item) => AdminTask.fromFields(item.fields))
       .toList();
 
+  /// Cards in this snapshot, by id.
+  List<AdminCard> get cards =>
+      _items.values
+          .where((item) => item.kind == 'card')
+          .map((item) => AdminCard.fromFields(item.fields))
+          .where((c) => c.id.isNotEmpty)
+          .toList()
+        ..sort((a, b) => a.id.compareTo(b.id));
+
   /// Conversations in this snapshot, newest first.
   List<AdminConversation> get conversations {
     final list = _items.values

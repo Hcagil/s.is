@@ -70,7 +70,7 @@ class AdminConversationView extends ConsumerWidget {
         ),
         if (s.latestAnswer('talk', id: conv) case final a?)
           AdminAnswerStatusLine(answer: a),
-        AdminTalkComposer(conv: conv),
+        AdminTalkComposer(key: ValueKey('admin-composer-$conv'), conv: conv),
       ],
     );
   }

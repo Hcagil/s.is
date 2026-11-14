@@ -1,11 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/loading.dart';
 import '../../../app/theme.dart';
 import '../../../l10n/app_localizations.dart';
+import '../application/admin_drafts.dart';
 import '../application/admin_panels_controller.dart';
 import '../application/admin_panels_state.dart';
+import 'admin_cards_view.dart';
 import 'admin_dashboard_view.dart';
 import 'admin_link_view.dart';
 import 'admin_questions_view.dart';
@@ -26,11 +30,13 @@ class _AdminPanelsScreenState extends ConsumerState<AdminPanelsScreen>
     with WidgetsBindingObserver {
   int _index = 0;
   bool _locked = false;
+  late final AdminPanelsController _panels;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _panels = ref.read(adminPanelsProvider.notifier);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final n = ref.read(adminPanelsProvider.notifier);
@@ -42,6 +48,8 @@ class _AdminPanelsScreenState extends ConsumerState<AdminPanelsScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    // The home icon keeps the panels alive: stop the refresh when leaving.
+    _panels.setForeground(false);
     super.dispose();
   }
 
@@ -49,7 +57,8 @@ class _AdminPanelsScreenState extends ConsumerState<AdminPanelsScreen>
   void didChangeAppLifecycleState(AppLifecycleState s) {
     final n = ref.read(adminPanelsProvider.notifier);
     if (s == AppLifecycleState.paused || s == AppLifecycleState.hidden) {
-      // Background: lock; the unlock is asked again on return.
+      // Background: save unsent text, then lock; the unlock is asked again on return.
+      unawaited(ref.read(adminDraftsProvider).flush());
       if (n.lock()) _locked = true;
     } else if (s == AppLifecycleState.resumed) {
       n.setForeground(true);
@@ -67,7 +76,7 @@ class _AdminPanelsScreenState extends ConsumerState<AdminPanelsScreen>
     final t = SisBrand.of(context);
     final l = AppLocalizations.of(context);
 
-    const tabs = [null, 'talk', 'questions', 'tasks'];
+    const tabs = [null, 'talk', 'questions', 'tasks', null];
     final openTab = tabs[_index];
     final counts = panels.newCounts;
     if (gate == AdminGate.ready &&
@@ -81,7 +90,10 @@ class _AdminPanelsScreenState extends ConsumerState<AdminPanelsScreen>
 
     return Scaffold(
       backgroundColor: t.background,
-      appBar: AppBar(title: Text(l.adminTitle)),
+      appBar: AppBar(
+        title: Text(l.adminTitle),
+        actions: [if (gate == AdminGate.ready) _ConnIcon(panels.conn, t.muted)],
+      ),
       body: SafeArea(
         child: switch (gate) {
           AdminGate.checking => const Align(
@@ -105,6 +117,7 @@ class _AdminPanelsScreenState extends ConsumerState<AdminPanelsScreen>
             1 => const AdminTalkView(key: ValueKey('admin-panel-0')),
             2 => const AdminQuestionsView(key: ValueKey('admin-panel-1')),
             3 => const AdminTasksView(key: ValueKey('admin-panel-2')),
+            4 => const AdminCardsView(key: ValueKey('admin-panel-4')),
             _ => const AdminDashboardView(key: ValueKey('admin-panel-3')),
           },
         },
@@ -145,6 +158,11 @@ class _AdminPanelsScreenState extends ConsumerState<AdminPanelsScreen>
                   ),
                   selectedIcon: const Icon(Icons.checklist_rounded),
                   label: l.adminTasks,
+                ),
+                NavigationDestination(
+                  icon: const Icon(Icons.style_outlined),
+                  selectedIcon: const Icon(Icons.style_rounded),
+                  label: l.adminCards,
                 ),
               ],
             )
@@ -193,6 +211,47 @@ class _Message extends StatelessWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The connection icon in the top bar: exactly one state at a time.
+class _ConnIcon extends StatelessWidget {
+  const _ConnIcon(this.conn, this.mutedColor);
+
+  final AdminConn conn;
+  final Color mutedColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final (key, icon, color, label) = switch (conn) {
+      AdminConn.connected => (
+        'connected',
+        Icons.cloud_done_rounded,
+        Colors.green,
+        l.adminConnConnected,
+      ),
+      AdminConn.connecting => (
+        'connecting',
+        Icons.cloud_sync_rounded,
+        Colors.orange,
+        l.adminConnConnecting,
+      ),
+      AdminConn.offline => (
+        'offline',
+        Icons.cloud_off_rounded,
+        mutedColor,
+        l.adminConnOffline,
+      ),
+    };
+    return Padding(
+      padding: const EdgeInsets.only(right: 16),
+      child: Semantics(
+        label: label,
+        excludeSemantics: true,
+        child: Icon(icon, key: ValueKey('admin-conn-$key'), color: color),
       ),
     );
   }

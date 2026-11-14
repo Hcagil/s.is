@@ -8,10 +8,12 @@ import '../domain/admin_answer.dart';
 import '../domain/admin_assembler.dart';
 import '../domain/admin_item.dart';
 import '../domain/admin_marks.dart';
+import '../domain/admin_models.dart';
 import '../domain/admin_panels_repository.dart';
 import '../domain/admin_seen_store.dart';
 import '../domain/admin_snapshot.dart';
 import '../domain/admin_snapshot_store.dart';
+import 'admin_drafts.dart';
 import 'admin_panels_state.dart';
 
 /// The repository for the owner-only panels (set in main).
@@ -34,8 +36,8 @@ final adminSeenStoreProvider = Provider<AdminSeenStore>(
   (_) => MemoryAdminSeenStore(),
 );
 
-/// How often the open panels ask the server for news (light: one small call; stops when the screen is left or the app goes to the background).
-const adminPollEvery = Duration(seconds: 20);
+/// How often the panels ask the server for news (light: one small call; runs only while the app is in the foreground).
+const adminPollEvery = Duration(seconds: 5);
 
 /// The same while the link screen waits for the computer's code.
 const adminLinkPollEvery = Duration(seconds: 8);
@@ -56,6 +58,12 @@ final adminPanelsProvider =
 class AdminPanelsController extends Notifier<AdminPanelsState> {
   Timer? _timer;
   bool _foreground = false;
+
+  /// The panels screen is open.
+  bool _screen = false;
+
+  /// Background count mode: the owner is in the app, no unlock yet.
+  bool _bg = false;
   bool _busy = false;
 
   /// The id of the newest down row fetched so far (this screen session).
@@ -147,10 +155,30 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
 
   /// True while the screen is on top and the app is in the foreground; the poll runs only then.
   void setForeground(bool on) {
-    _foreground = on;
-    if (on) {
+    _screen = on;
+    _foreground = _screen || _bg;
+    if (_foreground) {
       _schedule();
     } else {
+      _timer?.cancel();
+      _timer = null;
+    }
+  }
+
+  /// Owner in the foreground, panels closed: refresh the counts without asking the unlock.
+  void startBackground() {
+    if (_bg) return;
+    _bg = true;
+    _foreground = true;
+    _schedule();
+    if (state.gate == AdminGate.checking && !_unlocking) unawaited(refresh());
+  }
+
+  /// The home icon is gone (sign-out or leaving home): stop the background count; the screen's own poll, if open, goes on.
+  void stopBackground() {
+    _bg = false;
+    _foreground = _screen;
+    if (!_foreground) {
       _timer?.cancel();
       _timer = null;
     }
@@ -167,6 +195,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     _resyncAt = null;
     _assembler.reset();
     state = const AdminPanelsState();
+    unawaited(ref.read(adminDraftsProvider).forget());
     return true;
   }
 
@@ -182,9 +211,14 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
       switch (st) {
         case Err(:final failure):
           // Keep showing what is there.
-          state = state.copyWith(failure: failure);
+          state = state.copyWith(failure: failure, conn: AdminConn.offline);
           return;
         case Ok(value: final s):
+          // Background count mode never changes the gate: the screen does.
+          if (state.gate == AdminGate.checking &&
+              (s == null || s.phase != AdminLinkPhase.linked)) {
+            return;
+          }
           if (s == null || s.phase != AdminLinkPhase.linked) {
             _resetSync();
             await _apply(st);
@@ -192,14 +226,19 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
           }
           if (_epoch != null && _epoch != s.epoch) _resetSync();
           _epoch = s.epoch;
+          if (state.gate == AdminGate.checking) {
+            await _loadSaved(s.epoch);
+            if (!ref.mounted || _lockCount != lockedAt) return;
+          }
           final fetched = await repo.fetch(_lastId);
           if (!ref.mounted || _lockCount != lockedAt) return;
           switch (fetched) {
             case Err(:final failure):
-              state = state.copyWith(failure: failure);
+              state = state.copyWith(failure: failure, conn: AdminConn.offline);
               return;
             case Ok(value: final rows):
-              await _applyRows(rows, s.epoch);
+              state = state.copyWith(conn: AdminConn.connected);
+              await _applyRows(rows, s.epoch, lockedAt);
           }
       }
     } finally {
@@ -207,9 +246,10 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     }
   }
 
-  Future<void> _applyRows(List<AdminRow> rows, int epoch) async {
+  Future<void> _applyRows(List<AdminRow> rows, int epoch, int lockedAt) async {
     final repo = ref.read(adminPanelsRepositoryProvider);
     final persisted = await repo.lastDownSeq(epoch);
+    if (!ref.mounted || _lockCount != lockedAt) return;
 
     var snap = state.snapshot;
     var has = state.hasSnapshot;
@@ -269,6 +309,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     if (seq != null && seq > persisted) {
       await repo.saveLastDownSeq(epoch, seq);
     }
+    if (!ref.mounted || _lockCount != lockedAt) return;
     if (has && rows.isNotEmpty) {
       await ref
           .read(adminSnapshotStoreProvider)
@@ -276,7 +317,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
             AdminSavedSnapshot(epoch: epoch, lastId: _lastId, snapshot: snap),
           );
     }
-    if (!ref.mounted) return;
+    if (!ref.mounted || _lockCount != lockedAt) return;
 
     _applyResults(results);
     _expireAnswers();
@@ -288,7 +329,21 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
       clearFailure: true,
     );
 
+    // A complete snapshot is the truth: drafts of items that are gone are dropped.
+    // Only when unlocked: background count mode must not decrypt the drafts.
+    if (completed && state.gate == AdminGate.ready) {
+      final drafts = ref.read(adminDraftsProvider);
+      unawaited(drafts.prune('q:', {for (final q in snap.questions) q.id}));
+      unawaited(
+        drafts.prune('talk:', {
+          'new',
+          for (final c in snap.conversations) c.id,
+        }),
+      );
+    }
+
     await _ensureSeen();
+    if (!ref.mounted || _lockCount != lockedAt) return;
     if (!has || gap) await _resync();
   }
 
@@ -372,8 +427,10 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
       snapshot: AdminSnapshot.empty,
       hasSnapshot: false,
       syncing: false,
+      clearSeen: true,
     );
     unawaited(ref.read(adminSnapshotStoreProvider).clear());
+    unawaited(ref.read(adminSeenStoreProvider).clear());
   }
 
   /// Shows the snapshot saved on the phone at once (only when it belongs to [epoch]); later rows are fetched after its last id.
@@ -385,6 +442,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     if (!ref.mounted || _lockCount != lockedAt || saved == null) return;
     if (saved.epoch != epoch) {
       await store.clear();
+      await ref.read(adminSeenStoreProvider).clear();
       return;
     }
     _epoch = epoch;
@@ -396,9 +454,10 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
   /// Loads what was seen (first run: everything now in the snapshot counts as seen) once a snapshot is shown.
   Future<void> _ensureSeen() async {
     if (state.seen != null || !state.hasSnapshot) return;
+    final lockedAt = _lockCount;
     final store = ref.read(adminSeenStoreProvider);
     final saved = await store.load();
-    if (!ref.mounted || state.seen != null) return;
+    if (!ref.mounted || _lockCount != lockedAt || state.seen != null) return;
     final seen = saved ?? adminTabIds(state.snapshot);
     if (saved == null) unawaited(store.save(seen));
     state = state.copyWith(seen: seen);
@@ -417,6 +476,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
 
   /// Asks the computer for a full snapshot, at most once a minute.
   Future<void> _resync() async {
+    final lockedAt = _lockCount;
     final now = ref.read(adminClockProvider)();
     final at = _resyncAt;
     state = state.copyWith(syncing: true);
@@ -425,7 +485,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     final r = await ref.read(adminPanelsRepositoryProvider).send({
       'kind': 'resync',
     });
-    if (!ref.mounted) return;
+    if (!ref.mounted || _lockCount != lockedAt) return;
     if (r is Err<AdminSentRef?>) {
       _resyncAt = null;
       state = state.copyWith(failure: r.failure);
@@ -453,6 +513,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
 
   /// Records what was just sent so the card shows as waiting.
   void _track(Map<String, Object?> message, AdminSentRef? sent) {
+    if (message['kind'] == 'read') return; // a read note shows no waiting card
     final kind = message['kind'];
     final id = message['id'] as String?;
     var questions = state.sentQuestions;
@@ -476,6 +537,20 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
       decidedTasks: tasks,
       answers: answers,
     );
+  }
+
+  /// Tells the computer the owner read [conv] up to [upto] (the computer's own message time, never the phone clock). Sent once per open, only when [upto] is newer than what the computer and this phone already know; the local mark stays when the send fails (no retry queue). Null = nothing to send or sent, else why not.
+  Future<Failure?> markConversationRead(AdminConversation conv, int upto) {
+    final known = state.readUpto[conv.id] ?? 0;
+    final base = conv.seen > known ? conv.seen : known;
+    if (upto <= base) return Future.value();
+    state = state.copyWith(readUpto: {...state.readUpto, conv.id: upto});
+    return _send({
+      'answer_id': _newAnswerId(),
+      'kind': 'read',
+      'conv': conv.id,
+      'upto': upto,
+    });
   }
 
   /// Sends the owner's answer to one question; the card then shows as waiting.
@@ -565,7 +640,11 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
   void _schedule() {
     _timer?.cancel();
     if (!_foreground) return;
-    if (state.gate != AdminGate.link && state.gate != AdminGate.ready) return;
+    if (state.gate != AdminGate.link &&
+        state.gate != AdminGate.ready &&
+        !(_bg && state.gate == AdminGate.checking)) {
+      return;
+    }
     _timer = Timer(
       state.gate == AdminGate.link ? adminLinkPollEvery : adminPollEvery,
       _tick,
@@ -576,7 +655,8 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     if (!ref.mounted || !_foreground) return;
     if (state.gate == AdminGate.link) {
       await checkLink();
-    } else if (state.gate == AdminGate.ready) {
+    } else if (state.gate == AdminGate.ready ||
+        (_bg && state.gate == AdminGate.checking && !_unlocking)) {
       await refresh();
     }
     if (ref.mounted) _schedule();
@@ -586,5 +666,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     _timer?.cancel();
     _timer = null;
     _foreground = false;
+    _screen = false;
+    _bg = false;
   }
 }

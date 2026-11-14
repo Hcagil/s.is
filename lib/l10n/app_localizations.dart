@@ -4952,6 +4952,96 @@ abstract class AppLocalizations {
   /// **'No tasks waiting for you'**
   String get adminTasksEmpty;
 
+  /// Admin panels, Cards tab text
+  ///
+  /// In en, this message translates to:
+  /// **'Cards'**
+  String get adminCards;
+
+  /// Admin panels, Cards tab text
+  ///
+  /// In en, this message translates to:
+  /// **'No cards yet'**
+  String get adminCardsEmpty;
+
+  /// Admin panels, Cards tab text
+  ///
+  /// In en, this message translates to:
+  /// **'No cards found'**
+  String get adminCardsNoMatch;
+
+  /// Admin panels, Cards tab text
+  ///
+  /// In en, this message translates to:
+  /// **'Search cards'**
+  String get adminCardsSearch;
+
+  /// Admin panels, Cards tab text
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get adminCardsAll;
+
+  /// Admin panels, Cards tab text
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get adminCardsActive;
+
+  /// Admin panels, Cards tab text
+  ///
+  /// In en, this message translates to:
+  /// **'Proposed'**
+  String get adminCardsProposed;
+
+  /// Admin panels, Cards tab text
+  ///
+  /// In en, this message translates to:
+  /// **'Rule'**
+  String get adminCardsRule;
+
+  /// Admin panels, Cards tab text
+  ///
+  /// In en, this message translates to:
+  /// **'App'**
+  String get adminCardsApp;
+
+  /// Admin panels, Cards tab text
+  ///
+  /// In en, this message translates to:
+  /// **'Applies to'**
+  String get adminCardApplies;
+
+  /// Admin panels, Cards tab text
+  ///
+  /// In en, this message translates to:
+  /// **'Area'**
+  String get adminCardArea;
+
+  /// Admin panels, Cards tab text
+  ///
+  /// In en, this message translates to:
+  /// **'When'**
+  String get adminCardWhen;
+
+  /// Admin panels, Cards tab text
+  ///
+  /// In en, this message translates to:
+  /// **'Your words'**
+  String get adminCardWords;
+
+  /// Admin panels, Cards tab text
+  ///
+  /// In en, this message translates to:
+  /// **'Allows'**
+  String get adminCardAllows;
+
+  /// Admin panels, Cards tab text
+  ///
+  /// In en, this message translates to:
+  /// **'Forbids'**
+  String get adminCardForbids;
+
   /// Admin panels screen text
   ///
   /// In en, this message translates to:
@@ -4975,6 +5065,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Tasks left'**
   String get adminDashTasksLeft;
+
+  /// Admin panels: screen-reader label of the connection icon when the last check worked
+  ///
+  /// In en, this message translates to:
+  /// **'Connected'**
+  String get adminConnConnected;
+
+  /// Admin panels: screen-reader label of the connection icon while the first check runs
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting'**
+  String get adminConnConnecting;
+
+  /// Admin panels: screen-reader label of the connection icon when the last check failed
+  ///
+  /// In en, this message translates to:
+  /// **'No connection'**
+  String get adminConnOffline;
 
   /// Admin panels screen text
   ///
@@ -5005,6 +5113,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Not started {count}'**
   String adminDashStatePending(int count);
+
+  /// Dashboard, Running now row: screen-reader state word for a working agent
+  ///
+  /// In en, this message translates to:
+  /// **'running'**
+  String get adminDashWorkStateRunning;
+
+  /// Dashboard, Running now row: screen-reader state word for an agent waiting on a command
+  ///
+  /// In en, this message translates to:
+  /// **'running a command'**
+  String get adminDashWorkStateShell;
+
+  /// Dashboard, Running now row: screen-reader state word for an agent that sent no news for a while
+  ///
+  /// In en, this message translates to:
+  /// **'not responding'**
+  String get adminDashWorkStateStale;
+
+  /// Dashboard, Running now row: screen-reader state word when the computer sent no state
+  ///
+  /// In en, this message translates to:
+  /// **'state unknown'**
+  String get adminDashWorkStateUnknown;
+
+  /// Dashboard, Running now row: screen-reader label, the state and the name of who started this agent
+  ///
+  /// In en, this message translates to:
+  /// **'{state}, started by {caller}'**
+  String adminDashWorkCalledBy(String state, String caller);
 
   /// Admin panels screen text
   ///

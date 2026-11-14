@@ -2855,6 +2855,51 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminTasksEmpty => 'No tasks waiting for you';
 
   @override
+  String get adminCards => 'Cards';
+
+  @override
+  String get adminCardsEmpty => 'No cards yet';
+
+  @override
+  String get adminCardsNoMatch => 'No cards found';
+
+  @override
+  String get adminCardsSearch => 'Search cards';
+
+  @override
+  String get adminCardsAll => 'All';
+
+  @override
+  String get adminCardsActive => 'Active';
+
+  @override
+  String get adminCardsProposed => 'Proposed';
+
+  @override
+  String get adminCardsRule => 'Rule';
+
+  @override
+  String get adminCardsApp => 'App';
+
+  @override
+  String get adminCardApplies => 'Applies to';
+
+  @override
+  String get adminCardArea => 'Area';
+
+  @override
+  String get adminCardWhen => 'When';
+
+  @override
+  String get adminCardWords => 'Your words';
+
+  @override
+  String get adminCardAllows => 'Allows';
+
+  @override
+  String get adminCardForbids => 'Forbids';
+
+  @override
   String get adminDashContext => 'Context size';
 
   @override
@@ -2865,6 +2910,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminDashTasksLeft => 'Tasks left';
+
+  @override
+  String get adminConnConnected => 'Connected';
+
+  @override
+  String get adminConnConnecting => 'Connecting';
+
+  @override
+  String get adminConnOffline => 'No connection';
 
   @override
   String get adminDashEmpty => 'Nothing open';
@@ -2887,6 +2941,23 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String adminDashStatePending(int count) {
     return 'Not started $count';
+  }
+
+  @override
+  String get adminDashWorkStateRunning => 'running';
+
+  @override
+  String get adminDashWorkStateShell => 'running a command';
+
+  @override
+  String get adminDashWorkStateStale => 'not responding';
+
+  @override
+  String get adminDashWorkStateUnknown => 'state unknown';
+
+  @override
+  String adminDashWorkCalledBy(String state, String caller) {
+    return '$state, started by $caller';
   }
 
   @override

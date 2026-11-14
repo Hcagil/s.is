@@ -28,6 +28,18 @@ enum AdminGate {
   failed,
 }
 
+/// The link to the computer as the polls show it.
+enum AdminConn {
+  /// A poll round is running and none has worked since the screen opened.
+  connecting,
+
+  /// The last round worked.
+  connected,
+
+  /// The last round failed (stays so until a round works).
+  offline,
+}
+
 /// The whole state of the admin panels while the screen is open.
 final class AdminPanelsState {
   const AdminPanelsState({
@@ -42,6 +54,8 @@ final class AdminPanelsState {
     this.linkBusy = false,
     this.answers = const [],
     this.seen,
+    this.conn = AdminConn.connecting,
+    this.readUpto = const {},
   });
 
   final AdminGate gate;
@@ -49,6 +63,9 @@ final class AdminPanelsState {
   /// The link status while [gate] is link.
   final AdminStatus? link;
   final AdminSnapshot snapshot;
+
+  /// What the icon in the top bar shows.
+  final AdminConn conn;
 
   /// True once one complete snapshot has arrived (the panels show data only then).
   final bool hasSnapshot;
@@ -71,6 +88,9 @@ final class AdminPanelsState {
 
   /// Item ids already seen per tab (talk, questions, tasks); null until loaded.
   final Map<String, Set<String>>? seen;
+
+  /// Per conversation id: the newest message time (computer seconds) the owner read on this phone.
+  final Map<String, int> readUpto;
 
   /// The newest answer of [kind] for [id] (a question or task id; for talk the conversation id, null = no conversation).
   AdminAnswer? latestAnswer(String kind, {String? id}) {
@@ -96,6 +116,9 @@ final class AdminPanelsState {
     bool? linkBusy,
     List<AdminAnswer>? answers,
     Map<String, Set<String>>? seen,
+    AdminConn? conn,
+    Map<String, int>? readUpto,
+    bool clearSeen = false,
     bool clearFailure = false,
   }) {
     return AdminPanelsState(
@@ -109,7 +132,9 @@ final class AdminPanelsState {
       decidedTasks: decidedTasks ?? this.decidedTasks,
       linkBusy: linkBusy ?? this.linkBusy,
       answers: answers ?? this.answers,
-      seen: seen ?? this.seen,
+      seen: clearSeen ? null : (seen ?? this.seen),
+      conn: conn ?? this.conn,
+      readUpto: readUpto ?? this.readUpto,
     );
   }
 }

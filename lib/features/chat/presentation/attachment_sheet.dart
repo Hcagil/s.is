@@ -556,32 +556,38 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
             },
           );
 
-    return SizedBox(
-      height: height,
-      child: Column(
-        children: [
-          header,
-          Expanded(child: body),
-          if (_picked.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-              child: SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  key: const ValueKey('sheet-send'),
-                  onPressed: _opening ? null : _sendPicked,
-                  child: Text(
-                    AppLocalizations.of(context)
-                        .attachSendPhotos(_picked.length),
+    return PopScope(
+      canPop: !_opening,
+      child: AbsorbPointer(
+        absorbing: _opening,
+        child: SizedBox(
+          height: height,
+          child: Column(
+            children: [
+              header,
+              Expanded(child: body),
+              if (_picked.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      key: const ValueKey('sheet-send'),
+                      onPressed: _opening ? null : _sendPicked,
+                      child: Text(
+                        AppLocalizations.of(context)
+                            .attachSendPhotos(_picked.length),
+                      ),
+                    ),
                   ),
                 ),
+              SizedBox(
+                height: 3,
+                child: _loadingMore ? const SisProgressLine() : null,
               ),
-            ),
-          SizedBox(
-            height: 3,
-            child: _loadingMore ? const SisProgressLine() : null,
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

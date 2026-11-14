@@ -165,4 +165,73 @@ void main() {
     expect(repo.sent, isEmpty);
     expect(find.textContaining('Goal review two'), findsOneWidget);
   });
+  Map<String, Object?> dashMany() => {
+    'working': [],
+    'stale': false,
+    'sessions': [
+      {
+        'name': 'Session Beta',
+        'ctx': 50,
+        'counts': {'running': 3, 'review': 2, 'blocked': 1, 'pending': 2},
+        'rows': [
+          {'state': 'running', 'goal': 'Live goal 1'},
+          {'state': 'running', 'goal': 'Live goal 2'},
+          {'state': 'running', 'goal': 'Live goal 3'},
+          {'state': 'review', 'goal': 'Live goal 4'},
+          {'state': 'review', 'goal': 'Live goal 5'},
+          {'state': 'blocked', 'goal': 'Live goal 6'},
+          {'state': 'pending', 'goal': 'Waiting goal 1'},
+          {'state': 'pending', 'goal': 'Waiting goal 2'},
+        ],
+        'todo': [
+          {
+            'list': 'List Two',
+            'open': [
+              'todo item 1',
+              'todo item 2',
+              'todo item 3',
+              'todo item 4',
+              'todo item 5',
+            ],
+          },
+        ],
+      },
+    ],
+  };
+
+  testWidgets(
+    'the opened list shows every task the computer sent, waiting ones too',
+    (tester) async {
+      await prepareDashboard(dashMany());
+      await _pump(tester, container, size: const Size(800, 4000));
+      await tester.tap(
+        find.byKey(const ValueKey('admin-dash-tasks-Session Beta')),
+      );
+      await tester.pumpAndSettle();
+      for (var i = 1; i <= 6; i++) {
+        expect(find.textContaining('Live goal $i'), findsOneWidget);
+      }
+      for (var i = 1; i <= 2; i++) {
+        expect(find.textContaining('Waiting goal $i'), findsOneWidget);
+      }
+      for (var i = 1; i <= 5; i++) {
+        expect(find.textContaining('todo item $i'), findsOneWidget);
+      }
+    },
+  );
+
+  testWidgets('a second tap closes the list', (tester) async {
+    await prepareDashboard(dash());
+    await _pump(tester, container);
+    final row = find.byKey(const ValueKey('admin-dash-tasks-Session Alpha'));
+    await tester.tap(row);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Goal running one'), findsOneWidget);
+    await tester.tap(row);
+    await tester.pumpAndSettle();
+    for (final g in goals) {
+      expect(find.textContaining(g), findsNothing);
+    }
+    expect(find.textContaining('item a'), findsNothing);
+  });
 }

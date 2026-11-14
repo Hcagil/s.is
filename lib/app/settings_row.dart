@@ -11,6 +11,7 @@ class SisSettingsRow extends StatelessWidget {
     required this.title,
     this.value,
     this.subtitle,
+    this.fullSubtitle = false,
     this.onTap,
     this.iconColor,
     this.showArrow = true,
@@ -20,6 +21,9 @@ class SisSettingsRow extends StatelessWidget {
   final String title;
   final String? value;
   final String? subtitle;
+
+  /// When true the subtitle is not cut and uses bodyMedium.
+  final bool fullSubtitle;
   final VoidCallback? onTap;
   final Color? iconColor;
   final bool showArrow;
@@ -50,10 +54,15 @@ class SisSettingsRow extends StatelessWidget {
                             Text(title, style: style),
                             Text(
                               subtitle!,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(color: t.muted),
+                              maxLines: fullSubtitle ? null : 2,
+                              overflow: fullSubtitle
+                                  ? TextOverflow.clip
+                                  : TextOverflow.ellipsis,
+                              style:
+                                  (fullSubtitle
+                                          ? Theme.of(context).textTheme.bodyMedium
+                                          : Theme.of(context).textTheme.bodySmall)
+                                      ?.copyWith(color: t.muted),
                             ),
                           ],
                         ),

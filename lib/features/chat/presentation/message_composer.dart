@@ -324,6 +324,7 @@ class _ComposerState extends ConsumerState<_Composer>
       return;
     }
     setState(() => _sending = true);
+    final textAtSend = _controller.text;
     final result = await ref
         .read(messagesProvider.notifier)
         .sendImages(picked.images, body: picked.caption);
@@ -331,7 +332,8 @@ class _ComposerState extends ConsumerState<_Composer>
     setState(() => _sending = false);
     switch (result) {
       case Ok():
-        _controller.clear();
+        // Text typed while the photos upload must stay in the box.
+        if (_controller.text == textAtSend) _controller.clear();
         if (picked.dropped > 0) {
           showSisNotice(
             context,

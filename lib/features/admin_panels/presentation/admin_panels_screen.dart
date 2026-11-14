@@ -26,11 +26,13 @@ class _AdminPanelsScreenState extends ConsumerState<AdminPanelsScreen>
     with WidgetsBindingObserver {
   int _index = 0;
   bool _locked = false;
+  late final AdminPanelsController _panels;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _panels = ref.read(adminPanelsProvider.notifier);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final n = ref.read(adminPanelsProvider.notifier);
@@ -42,6 +44,8 @@ class _AdminPanelsScreenState extends ConsumerState<AdminPanelsScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    // The home icon keeps the panels alive: stop the refresh when leaving.
+    _panels.setForeground(false);
     super.dispose();
   }
 

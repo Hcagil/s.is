@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/brand.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../admin_panels/presentation/admin_entry_button.dart';
 import '../../auth/domain/member.dart';
 import '../../chat/application/chat_controllers.dart';
 import '../../chat/application/chat_selection_controller.dart';
@@ -61,6 +62,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             : AppBar(
                 title: const SisBrandRow(),
                 actions: [
+                  const AdminEntryButton(),
                   IconButton(
                     key: const ValueKey('home-settings'),
                     tooltip: AppLocalizations.of(context).commonSettings,

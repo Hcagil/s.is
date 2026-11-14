@@ -15,7 +15,13 @@ abstract interface class BackgroundDelivery {
 }
 
 final class SupabaseBackgroundDelivery implements BackgroundDelivery {
-  const SupabaseBackgroundDelivery();
+  /// Null means the compile-time RuntimeConfig value (tests pass the test server's).
+  final String? url;
+
+  /// Null means the compile-time RuntimeConfig value (tests pass the test server's).
+  final String? publishableKey;
+
+  const SupabaseBackgroundDelivery({this.url, this.publishableKey});
 
   @override
   Future<String?> savedUserId() async {
@@ -45,15 +51,17 @@ final class SupabaseBackgroundDelivery implements BackgroundDelivery {
     }
     final cfg = RuntimeConfig.fromEnvironment();
     final client = SupabaseClient(
-      cfg.supabaseUrl,
-      cfg.supabasePublishableKey,
+      url ?? cfg.supabaseUrl,
+      publishableKey ?? cfg.supabasePublishableKey,
       accessToken: () async => token,
     );
     try {
-      await client.rpc(
-        'mark_delivered',
-        params: {'conversation': conversationId, 'up_to': null},
-      );
+      try {
+        await client.rpc(
+          'mark_delivered',
+          params: {'conversation': conversationId, 'up_to': null},
+        );
+      } catch (_) {}
     } finally {
       await client.dispose();
     }

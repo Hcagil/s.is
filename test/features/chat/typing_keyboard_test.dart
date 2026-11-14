@@ -1,6 +1,5 @@
 // Typing on a phone (0.30.2), written from the contract, not the screen's
-// source: sending -- from the keyboard's send key or the send button --
-// leaves the keyboard up with the cursor in the composer, and the New chat
+// source: sending -- from the send button -- leaves the keyboard up with the cursor in the composer, and the New chat
 // sheet's tag box and its result stay above an open keyboard.
 //
 // The keyboard is the test binding's TestTextInput: it is "visible" while a
@@ -37,8 +36,8 @@ Future<void> typeFocused(WidgetTester t, String text) async {
   expectTyping(t, 'while typing');
 }
 
-Future<void> keyboardSend(WidgetTester t) async {
-  await t.testTextInput.receiveAction(TextInputAction.send);
+Future<void> keyboardNewline(WidgetTester t) async {
+  await t.testTextInput.receiveAction(TextInputAction.newline);
   await t.pump();
 }
 
@@ -52,25 +51,50 @@ Future<void> settleSends(WidgetTester t, HeldSendChat chat) async {
 
 void main() {
   group('the composer keeps the keyboard up after a send', () {
-    testWidgets('keyboard send key: one send, field empty, still typing', (
+    testWidgets('composer field: keyboard action is newline, multiline', (
+      t,
+    ) async {
+      final chat = HeldSendChat()..history['c1'] = [s.msg('m1')];
+      await s.pump(t, chat);
+
+      final field = t.widget<TextField>(s.field);
+      expect(field.textInputAction, TextInputAction.newline);
+      expect(field.keyboardType, TextInputType.multiline);
+    });
+
+    testWidgets('keyboard action key does not send and keeps the text', (
       t,
     ) async {
       final chat = HeldSendChat()..history['c1'] = [s.msg('m1')];
       await s.pump(t, chat);
 
       await typeFocused(t, 'hello');
-      await keyboardSend(t);
+      await keyboardNewline(t);
 
-      expect(chat.asked.map((a) => a.body), ['hello'], reason: 'sent once');
-      expect(s.composerText(t), isEmpty);
-      expectTyping(t, 'after the keyboard send key');
-
-      await t.pump(const Duration(milliseconds: 300));
-      expectTyping(t, 'a moment after the keyboard send key');
-      await settleSends(t, chat);
-      expectTyping(t, 'after the server answered');
-      expect(chat.asked, hasLength(1), reason: 'no second send');
+      expect(chat.asked, isEmpty);
+      expect(s.composerText(t), 'hello');
+      expectTyping(t, 'after the keyboard action');
+      expect(s.send, findsOneWidget);
     });
+
+    testWidgets(
+      'send button after the keyboard action: sends once, empties, keeps focus',
+      (t) async {
+        final chat = HeldSendChat()..history['c1'] = [s.msg('m1')];
+        await s.pump(t, chat);
+
+        await typeFocused(t, 'hello');
+        await keyboardNewline(t);
+        await t.tap(s.send);
+        await t.pump();
+
+        expect(chat.asked.map((a) => a.body), ['hello']);
+        expect(s.composerText(t), isEmpty);
+        expectTyping(t, 'after tapping send');
+        await settleSends(t, chat);
+        expect(chat.asked, hasLength(1));
+      },
+    );
 
     testWidgets('send button: one send, field empty, still typing', (t) async {
       final chat = HeldSendChat()..history['c1'] = [s.msg('m1')];
@@ -117,13 +141,12 @@ void main() {
       );
     }
 
-    testWidgets('empty or whitespace sends nothing and keeps focus', (t) async {
+    testWidgets('empty or whitespace never sends', (t) async {
       final chat = HeldSendChat()..history['c1'] = [s.msg('m1')];
       await s.pump(t, chat);
 
       await typeFocused(t, '   ');
-      await keyboardSend(t);
-      expectTyping(t, 'after a keyboard send of spaces');
+      await keyboardNewline(t);
       await t.tap(s.send);
       await t.pump();
       expectTyping(t, 'after tapping send on spaces');
@@ -131,59 +154,34 @@ void main() {
       await t.showKeyboard(s.field);
       t.testTextInput.enterText('');
       await t.pump();
-      await keyboardSend(t);
-      expectTyping(t, 'after a keyboard send of nothing');
+      await keyboardNewline(t);
+      expectTyping(t, 'after a keyboard action of nothing');
 
       await t.pumpAndSettle();
       expect(chat.asked, isEmpty, reason: 'nothing to send');
     });
 
-    testWidgets('sending again while the first is in flight: each text once, '
-        'focus kept', (t) async {
-      final chat = HeldSendChat()..history['c1'] = [s.msg('m1')];
-      await s.pump(t, chat);
+    testWidgets(
+      'the keyboard action key while editing a message does not send and does not save',
+      (t) async {
+        final chat = HeldSendChat()
+          ..history['c1'] = [s.msg('m1', body: 'mine', from: me.userId)];
+        await s.pump(t, chat);
 
-      await typeFocused(t, 'one');
-      await keyboardSend(t);
-      // The field is empty now; the second press has nothing to send.
-      await keyboardSend(t);
-      // An empty field offers the mic, not the send button.
-      expect(s.send, findsNothing);
-      expectTyping(t, 'after repeated sends in flight');
+        await t.longPress(s.bubble('m1'));
+        await t.pumpAndSettle();
+        await t.tap(s.editAction);
+        await t.pumpAndSettle();
+        expect(s.editBar, findsOneWidget, reason: 'edit mode did not open');
 
-      t.testTextInput.enterText('two');
-      await t.pump();
-      await keyboardSend(t);
-      expectTyping(t, 'after a second text while one is in flight');
-
-      await settleSends(t, chat);
-      expect(chat.asked.map((a) => a.body), ['one', 'two']);
-      expectTyping(t, 'after both answered');
-    });
-
-    testWidgets('the send key while editing a message does not send a new '
-        'message and keeps focus', (t) async {
-      final chat = HeldSendChat()
-        ..history['c1'] = [s.msg('m1', body: 'mine', from: me.userId)];
-      await s.pump(t, chat);
-
-      await t.longPress(s.bubble('m1'));
-      await t.pumpAndSettle();
-      await t.tap(s.editAction);
-      await t.pumpAndSettle();
-      expect(s.editBar, findsOneWidget, reason: 'edit mode did not open');
-
-      await typeFocused(t, 'mine, edited');
-      await keyboardSend(t);
-      expectTyping(t, 'after the send key while editing');
-      await keyboardSend(t);
-      expectTyping(t, 'after a second send key while editing');
-      await t.pumpAndSettle();
-
-      expect(chat.asked, isEmpty, reason: 'an edit is not a new message');
-      expect(chat.edits.length, lessThanOrEqualTo(1), reason: 'saved twice');
-      expectTyping(t, 'after the edit settled');
-    });
+        await typeFocused(t, 'mine, edited');
+        await keyboardNewline(t);
+        expect(chat.asked, isEmpty, reason: 'an edit is not a new message');
+        expect(chat.edits.length, lessThanOrEqualTo(1), reason: 'saved twice');
+        expect(s.editBar, findsOneWidget);
+        expect(s.composerText(t), 'mine, edited');
+      },
+    );
   });
 
   group('New chat sheet above the keyboard', () {

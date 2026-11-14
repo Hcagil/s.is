@@ -23,9 +23,41 @@ concurrency: { group: release, cancel-in-progress: false }
 permissions:
   contents: read
 jobs:
+  # A quiet release (only Admin Panels changes, see tool/release_kind.sh) waits for the end of the clock hour,
+  # so merges of the same hour go out as one build. `scope` re-picks the newest green commit after the wait.
+  # The `release` group queues other runs behind this one, and a newer pending run replaces an older pending
+  # one (GitHub concurrency docs).
+  hold:
+    # Main only: a manual run started on another branch is refused.
+    if: github.ref == 'refs/heads/main' && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Wait for the end of the hour when the change is quiet
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          [ "$EVENT" = workflow_run ] || exit 0
+          sha=$(gh run list --workflow ci.yml --branch main --event push --status success --limit 1 --json headSha --jq '.[0].headSha // empty') || exit 0
+          [ -n "$sha" ] || exit 0
+          prev=$(gh release list --limit 1 --json tagName --jq '.[0].tagName // empty') || exit 0
+          kind=$(tool/release_kind.sh "$prev" "$sha" 2>/dev/null) || exit 0
+          [ "$kind" = quiet=true ] || exit 0
+          wait=$(( 3600 - $(date +%s) % 3600 ))
+          echo "Quiet change: waiting $wait s for the end of the hour."
+          sleep "$wait"
   scope:
     # Main only: a manual run started on another branch is refused.
     if: github.ref == 'refs/heads/main' && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
+    needs: hold
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -35,6 +67,7 @@ jobs:
       sha: ${{ steps.pick.outputs.sha }}
       code: ${{ steps.v.outputs.code }}
       name: ${{ steps.v.outputs.name }}
+      quiet: ${{ steps.kind.outputs.quiet }}
     steps:
       # The release commit is the newest one whose CI run on main passed, so a
       # red or unfinished tip never holds back the green commits before it.
@@ -69,11 +102,32 @@ jobs:
           prev=$(gh release list --limit 1 --json tagName --jq '.[0].tagName // empty')
           ship=$(tool/release_scope.sh "$prev" "$SHA")
           if [ "$EVENT" != workflow_dispatch ] || [ "$REASON" = daily ]; then
-            last=$(gh release list --limit 1 --json publishedAt --jq '.[0].publishedAt // empty')
-            if [ -n "$last" ] && [ "$(TZ=Europe/Istanbul date -d "$last" +%F)" = "$(TZ=Europe/Istanbul date +%F)" ]; then ship=ship=false; fi
+            if [ "$ship" = ship=true ] && ! tool/release_kind.sh "$prev" "$SHA" 2>/dev/null | grep -qx quiet=true; then
+              last=$(gh release list --limit 1 --json publishedAt --jq '.[0].publishedAt // empty')
+              # A quiet release does not use up the day: the guard looks at the newest normal one; a failed read keeps the line above.
+              normal=$(gh release list --limit 20 --json name,publishedAt --jq '[.[]|select(.name|endswith("(quiet)")|not)][0].publishedAt // empty' 2>/dev/null) && last=$normal
+              if [ -n "$last" ] && [ "$(TZ=Europe/Istanbul date -d "$last" +%F)" = "$(TZ=Europe/Istanbul date +%F)" ]; then ship=ship=false; fi
+            fi
           fi
           echo "$ship" >> "$GITHUB_OUTPUT"
           echo "Release range ${prev:-start}..$SHA: $ship (${REASON:-$EVENT})" >> "$GITHUB_STEP_SUMMARY"
+      # A quiet release is only Admin Panels changes; publish gives it a low in-app update priority and no What's new.
+      - name: Mark a quiet release
+        id: kind
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ steps.pick.outputs.sha }}
+          SHIP: ${{ steps.diff.outputs.ship }}
+          EVENT: ${{ github.event_name }}
+          REASON: ${{ inputs.reason }}
+        run: |
+          quiet=false
+          if [ "$SHIP" = true ] && { [ "$EVENT" != workflow_dispatch ] || [ "$REASON" = daily ]; }; then
+            prev=$(gh release list --limit 1 --json tagName --jq '.[0].tagName // empty')
+            quiet=$(tool/release_kind.sh "$prev" "$SHA" | sed 's/^quiet=//')
+          fi
+          echo "quiet=$quiet" >> "$GITHUB_OUTPUT"
       # One source for the version, read by the Play job and the iOS job alike,
       # so both builds carry the same number.
       - name: Compute version
@@ -267,6 +321,9 @@ jobs:
           releaseFiles: build/app/outputs/bundle/release/app-release.aab
           track: internal
           status: completed
+          # Play reads this per release (0-5, cannot be changed later): a quiet release (only Admin Panels changes) is 0, a normal one 2.
+          # The app's normalUpdatePriority (lib/features/update/domain/update_repository.dart) is 2: lower than that is shown only to Admin Panels users.
+          inAppUpdatePriority: ${{ needs.scope.outputs.quiet == 'true' && '0' || '2' }}
       # The "What's new" note for this build: the `For users:` line of every PR
       # merged since the previous release (docs/DECISIONS.md, 2026-09-30). The
       # app fetches it on its first start of this build. No such line: the note is
@@ -284,7 +341,10 @@ jobs:
           BUILD: ${{ needs.scope.outputs.code }}
           VERSION: ${{ needs.scope.outputs.name }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          QUIET: ${{ needs.scope.outputs.quiet }}
         run: |
+          # A quiet release has no What's new note; note_b64 is then empty.
+          [ "$QUIET" = true ] && exit 0
           set -o pipefail
           export LC_ALL=C.UTF-8  # ${note:0:N} counts characters, never splits a Turkish letter
           prev=$(gh release list --limit 1 --json tagName --jq '.[0].tagName // empty')
@@ -309,14 +369,16 @@ jobs:
           echo "b64=$b64" >> "$GITHUB_OUTPUT"
           supabase db query --linked "insert into public.release_notes(build, note) values ($BUILD, convert_from(decode('$b64', 'base64'), 'utf8')) on conflict (build) do nothing"
       - name: Tag and publish release notes
+        # The release title ends with (quiet) for a quiet release; the daily guard in `scope` ignores those.
         env:
           GH_TOKEN: ${{ github.token }}
+          QUIET_SUFFIX: ${{ needs.scope.outputs.quiet == 'true' && ' (quiet)' || '' }}
         run: |
           tag="v${{ needs.scope.outputs.name }}+${{ needs.scope.outputs.code }}"
           # A GitHub error once failed this step after the build was already uploaded: retry, waiting 10 s then 30 s.
           for wait in 10 30 0; do
             gh release create "$tag" --target "$SHA" --generate-notes \
-              --title "SIS ${{ needs.scope.outputs.name }}" && exit 0
+              --title "SIS ${{ needs.scope.outputs.name }}$QUIET_SUFFIX" && exit 0
             # An earlier try may have created it before the error came back.
             gh release view "$tag" >/dev/null 2>&1 && exit 0
             [ "$wait" -gt 0 ] && { echo "Release create failed, retrying in $wait s." >&2; sleep "$wait"; }

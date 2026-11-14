@@ -34,8 +34,8 @@ final adminSeenStoreProvider = Provider<AdminSeenStore>(
   (_) => MemoryAdminSeenStore(),
 );
 
-/// How often the open panels ask the server for news (light: one small call; stops when the screen is left or the app goes to the background).
-const adminPollEvery = Duration(seconds: 20);
+/// How often the panels ask the server for news (light: one small call; runs only while the app is in the foreground).
+const adminPollEvery = Duration(seconds: 5);
 
 /// The same while the link screen waits for the computer's code.
 const adminLinkPollEvery = Duration(seconds: 8);
@@ -56,6 +56,12 @@ final adminPanelsProvider =
 class AdminPanelsController extends Notifier<AdminPanelsState> {
   Timer? _timer;
   bool _foreground = false;
+
+  /// The panels screen is open.
+  bool _screen = false;
+
+  /// Background count mode: the owner is in the app, no unlock yet.
+  bool _bg = false;
   bool _busy = false;
 
   /// The id of the newest down row fetched so far (this screen session).
@@ -147,10 +153,30 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
 
   /// True while the screen is on top and the app is in the foreground; the poll runs only then.
   void setForeground(bool on) {
-    _foreground = on;
-    if (on) {
+    _screen = on;
+    _foreground = _screen || _bg;
+    if (_foreground) {
       _schedule();
     } else {
+      _timer?.cancel();
+      _timer = null;
+    }
+  }
+
+  /// Owner in the foreground, panels closed: refresh the counts without asking the unlock.
+  void startBackground() {
+    if (_bg) return;
+    _bg = true;
+    _foreground = true;
+    _schedule();
+    if (state.gate == AdminGate.checking && !_unlocking) unawaited(refresh());
+  }
+
+  /// The home icon is gone (sign-out or leaving home): stop the background count; the screen's own poll, if open, goes on.
+  void stopBackground() {
+    _bg = false;
+    _foreground = _screen;
+    if (!_foreground) {
       _timer?.cancel();
       _timer = null;
     }
@@ -185,6 +211,11 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
           state = state.copyWith(failure: failure, conn: AdminConn.offline);
           return;
         case Ok(value: final s):
+          // Background count mode never changes the gate: the screen does.
+          if (state.gate == AdminGate.checking &&
+              (s == null || s.phase != AdminLinkPhase.linked)) {
+            return;
+          }
           if (s == null || s.phase != AdminLinkPhase.linked) {
             _resetSync();
             await _apply(st);
@@ -192,6 +223,10 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
           }
           if (_epoch != null && _epoch != s.epoch) _resetSync();
           _epoch = s.epoch;
+          if (state.gate == AdminGate.checking) {
+            await _loadSaved(s.epoch);
+            if (!ref.mounted || _lockCount != lockedAt) return;
+          }
           final fetched = await repo.fetch(_lastId);
           if (!ref.mounted || _lockCount != lockedAt) return;
           switch (fetched) {
@@ -574,7 +609,11 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
   void _schedule() {
     _timer?.cancel();
     if (!_foreground) return;
-    if (state.gate != AdminGate.link && state.gate != AdminGate.ready) return;
+    if (state.gate != AdminGate.link &&
+        state.gate != AdminGate.ready &&
+        !(_bg && state.gate == AdminGate.checking)) {
+      return;
+    }
     _timer = Timer(
       state.gate == AdminGate.link ? adminLinkPollEvery : adminPollEvery,
       _tick,
@@ -585,7 +624,8 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     if (!ref.mounted || !_foreground) return;
     if (state.gate == AdminGate.link) {
       await checkLink();
-    } else if (state.gate == AdminGate.ready) {
+    } else if (state.gate == AdminGate.ready ||
+        (_bg && state.gate == AdminGate.checking && !_unlocking)) {
       await refresh();
     }
     if (ref.mounted) _schedule();
@@ -595,5 +635,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     _timer?.cancel();
     _timer = null;
     _foreground = false;
+    _screen = false;
+    _bg = false;
   }
 }

@@ -1,5 +1,5 @@
-// The the sales source reader (supabase/functions/sales-total/source.ts) against a fake sales source HTTP
-// server on 127.0.0.1. Never calls the real the sales source address. No database needed.
+// The sales source reader (supabase/functions/sales-total/source.ts) against a fake sales source HTTP
+// server on 127.0.0.1. Never calls the real sales source address. No database needed.
 //
 // Contract: fetchSalesTotal(day, prev). Step 0: GET {base}/Authentication/Login first; its token cookie and hidden __RequestVerificationToken field go with the login POST (the site answers 500 without them). Env SALES_SOURCE_URL (trailing slashes
 // stripped), SALES_SOURCE_USER, SALES_SOURCE_PASSWORD; any missing => SalesError('config')
@@ -230,7 +230,7 @@ Deno.test({ ...opts, name: 'an endless reply is cut at the cap => shape, quickly
     cancel() { cancelled = true; },
   }));
   const t0 = Date.now();
-  let timer = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   await Promise.race([
     fails('shape'),
     new Promise((_, rej) => timer = setTimeout(() => rej(new Error('no answer in 20 s')), 20000)),
@@ -310,6 +310,23 @@ Deno.test({ ...opts, name: 'a login page without any token makes the site answer
   setup();
   onLoginPage = () => new Response('<html>no token</html>');
   await fails('login');
+} });
+
+Deno.test({ ...opts, name: 'a crafted ~64 KB login page (repeated token input tag, never closed) cannot stall the reader: login or shape in under 1 s', fn: async () => {
+  setup();
+  const body = '<input name="__RequestVerificationToken" '.repeat(Math.ceil(64 * 1024 / 41));
+  onLoginPage = () => new Response(body, {
+    headers: { 'set-cookie': '__RequestVerificationToken=qa-crafted; path=/; HttpOnly' },
+  });
+  const t0 = Date.now();
+  try {
+    await fetchSalesTotal('d', false);
+    throw new Error('expected a failure');
+  } catch (e) {
+    assert(e instanceof SalesError && (e.code === 'login' || e.code === 'shape'), `unexpected ${e}`);
+  }
+  const ms = Date.now() - t0;
+  assert(ms < 1000, `took ${ms} ms`);
 } });
 
 Deno.test({ ...opts, name: 'teardown', fn: async () => {

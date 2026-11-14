@@ -12,6 +12,7 @@ import '../domain/admin_panels_repository.dart';
 import '../domain/admin_seen_store.dart';
 import '../domain/admin_snapshot.dart';
 import '../domain/admin_snapshot_store.dart';
+import 'admin_drafts.dart';
 import 'admin_panels_state.dart';
 
 /// The repository for the owner-only panels (set in main).
@@ -193,6 +194,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     _resyncAt = null;
     _assembler.reset();
     state = const AdminPanelsState();
+    unawaited(ref.read(adminDraftsProvider).forget());
     return true;
   }
 
@@ -325,6 +327,18 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
       syncing: completed ? false : state.syncing,
       clearFailure: true,
     );
+
+    // A complete snapshot is the truth: drafts of items that are gone are dropped.
+    if (completed) {
+      final drafts = ref.read(adminDraftsProvider);
+      unawaited(drafts.prune('q:', {for (final q in snap.questions) q.id}));
+      unawaited(
+        drafts.prune('talk:', {
+          'new',
+          for (final c in snap.conversations) c.id,
+        }),
+      );
+    }
 
     await _ensureSeen();
     if (!ref.mounted || _lockCount != lockedAt) return;

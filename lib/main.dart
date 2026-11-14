@@ -24,11 +24,13 @@ import 'features/appearance/data/shared_prefs_appearance_store.dart';
 import 'features/autodownload/application/auto_download_controller.dart';
 import 'features/autodownload/data/connectivity_network_probe.dart';
 import 'features/autodownload/data/shared_prefs_auto_download_store.dart';
+import 'features/admin_panels/application/admin_drafts.dart';
 import 'features/admin_panels/application/admin_panels_controller.dart';
 import 'features/admin_panels/data/admin_key_store.dart';
 import 'features/admin_panels/data/drift_admin_seen_store.dart';
 import 'features/admin_panels/data/drift_admin_snapshot_store.dart';
 import 'features/admin_panels/data/local_auth_unlock.dart';
+import 'features/admin_panels/data/secure_admin_draft_store.dart';
 import 'features/admin_panels/data/supabase_admin_panels_repository.dart';
 import 'features/auth/application/session_controller.dart';
 import 'features/auth/data/file_last_session_store.dart';
@@ -476,6 +478,7 @@ Future<void> main() async {
             ref.watch(messageStoreProvider);
             return DriftAdminSnapshotStore(builtStore!);
           }),
+          adminDraftStoreProvider.overrideWithValue(SecureAdminDraftStore()),
           adminSeenStoreProvider.overrideWith((ref) {
             ref.watch(messageStoreProvider);
             return DriftAdminSeenStore(builtStore!);

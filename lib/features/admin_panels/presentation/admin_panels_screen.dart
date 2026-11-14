@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/loading.dart';
 import '../../../app/theme.dart';
 import '../../../l10n/app_localizations.dart';
+import '../application/admin_drafts.dart';
 import '../application/admin_panels_controller.dart';
 import '../application/admin_panels_state.dart';
 import 'admin_dashboard_view.dart';
@@ -53,7 +56,8 @@ class _AdminPanelsScreenState extends ConsumerState<AdminPanelsScreen>
   void didChangeAppLifecycleState(AppLifecycleState s) {
     final n = ref.read(adminPanelsProvider.notifier);
     if (s == AppLifecycleState.paused || s == AppLifecycleState.hidden) {
-      // Background: lock; the unlock is asked again on return.
+      // Background: save unsent text, then lock; the unlock is asked again on return.
+      unawaited(ref.read(adminDraftsProvider).flush());
       if (n.lock()) _locked = true;
     } else if (s == AppLifecycleState.resumed) {
       n.setForeground(true);

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
+import 'admin_drafts.dart';
 import 'admin_panels_controller.dart';
 
 /// Wipes what the admin panels keep on this phone when the session ends, like attachmentCacheOwnerProvider.
@@ -34,5 +35,9 @@ Future<void> _wipe(Ref ref) async {
 
   try {
     await ref.read(adminSeenStoreProvider).clear();
+  } catch (_) {}
+
+  try {
+    await ref.read(adminDraftsProvider).wipe();
   } catch (_) {}
 }

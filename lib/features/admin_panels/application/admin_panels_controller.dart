@@ -271,6 +271,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     if (seq != null && seq > persisted) {
       await repo.saveLastDownSeq(epoch, seq);
     }
+    if (!ref.mounted || _lockCount != lockedAt) return;
     if (has && rows.isNotEmpty) {
       await ref
           .read(adminSnapshotStoreProvider)

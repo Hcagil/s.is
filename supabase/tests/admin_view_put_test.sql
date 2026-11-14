@@ -96,28 +96,28 @@ select is(try_exec($$select public.admin_view_bridge_put(0,50,bytes(1073))$$), '
 select is(try_exec($$select public.admin_view_bridge_put(1,10,bytes(1073))$$), 'ok:1', 'gap accepted');
 reset role;
 
--- 6. Rate 120/h
--- fill 119 calls
+-- 6. Rate 720/h
+-- fill 719 calls
 delete from app_private.admin_view_calls;
 insert into app_private.admin_view_calls(user_id,kind,called_at)
-select '00000000-0000-0000-0000-0000000a1003','bridge_put',now() from generate_series(1,119);
+select '00000000-0000-0000-0000-0000000a1003','bridge_put',now() from generate_series(1,719);
 select as_brg();
--- 120th allowed
-select is(try_exec($$select public.admin_view_bridge_put(1,11,bytes(1073))$$), 'ok:1', '120th put in the hour allowed');
--- 121st refused
-select is(try_exec($$select public.admin_view_bridge_put(1,12,bytes(1073))$$), 'err:RLMT1', '121st put refused');
+-- 720th allowed
+select is(try_exec($$select public.admin_view_bridge_put(1,11,bytes(1073))$$), 'ok:1', '720th put in the hour allowed');
+-- 721st refused
+select is(try_exec($$select public.admin_view_bridge_put(1,12,bytes(1073))$$), 'err:RLMT1', '721st put refused');
 reset role;
 -- old calls older than 2 hours
 delete from app_private.admin_view_calls;
 insert into app_private.admin_view_calls(user_id,kind,called_at)
-select '00000000-0000-0000-0000-0000000a1003','bridge_put',now() - interval '2 hours' from generate_series(1,200);
+select '00000000-0000-0000-0000-0000000a1003','bridge_put',now() - interval '2 hours' from generate_series(1,800);
 select as_brg();
 select is(try_exec($$select public.admin_view_bridge_put(1,12,bytes(1073))$$), 'ok:1', 'old calls do not count');
 reset role;
 -- owner_send calls do not count
 delete from app_private.admin_view_calls;
 insert into app_private.admin_view_calls(user_id,kind,called_at)
-select '00000000-0000-0000-0000-0000000a1003','owner_send',now() from generate_series(1,200);
+select '00000000-0000-0000-0000-0000000a1003','owner_send',now() from generate_series(1,800);
 select as_brg();
 select is(try_exec($$select public.admin_view_bridge_put(1,13,bytes(1073))$$), 'ok:1', 'owner_send calls do not count against bridge put');
 reset role;

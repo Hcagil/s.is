@@ -77,23 +77,22 @@ void main() {
   }
 
   /// Helper to create a conversation item.
-  AdminItem convItem({int? seen, int? mat, bool unread = false}) =>
-      AdminItem(
-        id: 'c:c1',
-        kind: 'talk',
-        seq: 1,
-        removed: false,
-        fields: {
-          'id': 'c1',
-          'topic': 'Topic',
-          'at': 1000,
-          'unread': unread,
-          'waiting': 0,
-          'conv': true,
-          'seen': ?(mat == null ? null : (seen ?? 0)),
-          'mat': ?mat,
-        },
-      );
+  AdminItem convItem({int? seen, int? mat, bool unread = false}) => AdminItem(
+    id: 'c:c1',
+    kind: 'talk',
+    seq: 1,
+    removed: false,
+    fields: {
+      'id': 'c1',
+      'topic': 'Topic',
+      'at': 1000,
+      'unread': unread,
+      'waiting': 0,
+      'conv': true,
+      'seen': ?(mat == null ? null : (seen ?? 0)),
+      'mat': ?mat,
+    },
+  );
 
   /// Finder for the conversation tile.
   Finder tile = find.byKey(const ValueKey('admin-conv-tile-c1'));

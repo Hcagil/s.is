@@ -527,20 +527,12 @@ void main() {
       reason: 'messages.deleted_by_admin must reach Message.deletedByAdmin',
     );
 
-    // The server clock decides (rule 2): the phone loaded "late" while it
-    // was fresh, so the box still offers "for everyone"; the server now
-    // holds it as 7 h old and must refuse. The app says so; it stays.
-    await t.runAsync(
-      () => service
-          .from('messages')
-          .update({
-            'created_at': DateTime.now()
-                .toUtc()
-                .subtract(const Duration(hours: 7))
-                .toIso8601String(),
-          })
-          .eq('id', lateMessage.id),
-    );
+    // The server clock decides (rule 2): the box opens while "late" is
+    // fresh, so it offers "for everyone"; only then does the server come
+    // to hold it as 7 h old, and it must refuse. The app says so; it stays.
+    // Backdated after the box opens, never before: the app hears the
+    // created_at change over Realtime, and a box opened after that rightly
+    // offers no "for everyone" (the CI flake of 2026-11-13).
     await t.longPress(
       within('a', find.byKey(ValueKey('message-${lateMessage.id}'))),
     );
@@ -553,6 +545,17 @@ void main() {
       'the action row to open for the late message',
     );
     await openBoxAndTick(t);
+    await t.runAsync(
+      () => service
+          .from('messages')
+          .update({
+            'created_at': DateTime.now()
+                .toUtc()
+                .subtract(const Duration(hours: 7))
+                .toIso8601String(),
+          })
+          .eq('id', lateMessage.id),
+    );
     await t.tap(find.byKey(const ValueKey('delete-confirm')));
     await settle(t);
     await until(

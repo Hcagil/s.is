@@ -468,6 +468,15 @@ class _AttachmentSheetState extends ConsumerState<AttachmentSheet> {
 
   @override
   Widget build(BuildContext context) {
+    // A tap leaking through a closing native picker must neither close the
+    // sheet nor press anything under it (flutter/flutter#173453).
+    return PopScope(
+      canPop: !_opening,
+      child: AbsorbPointer(absorbing: _opening, child: _buildBody(context)),
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
     final height = MediaQuery.sizeOf(context).height * 0.6;
     if (_loading) {
       return SizedBox(

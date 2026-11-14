@@ -6,6 +6,9 @@ import '../../../app/settings_row.dart';
 import '../../../app/theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../application/admin_panels_controller.dart';
+import '../domain/admin_dashboard.dart';
+import 'admin_work_colors.dart';
+import 'admin_work_row.dart';
 
 class AdminDashboardView extends ConsumerWidget {
   const AdminDashboardView({super.key});
@@ -38,6 +41,7 @@ class AdminDashboardView extends ConsumerWidget {
       return Center(child: Text(l.adminDashEmpty));
     }
 
+    final families = adminWorkFamilies(d.working);
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       children: [
@@ -50,11 +54,11 @@ class AdminDashboardView extends ConsumerWidget {
             ),
           ),
           for (var i = 0; i < d.working.length; i++)
-            SisSettingsRow(
+            AdminWorkRow(
               key: ValueKey('admin-dash-work-$i'),
-              icon: Icons.play_circle_outline_rounded,
-              title: d.working[i],
-              showArrow: false,
+              entry: d.working[i],
+              entries: d.working,
+              family: families[i],
             ),
         ],
         if (d.sessions.isNotEmpty) ...[
@@ -86,15 +90,10 @@ class AdminDashboardView extends ConsumerWidget {
             ),
           ),
           for (final session in d.sessions)
-            if (session.counts.isNotEmpty)
-              SisSettingsRow(
-                icon: Icons.checklist_rounded,
-                title: session.name,
-                showArrow: false,
-                subtitle: session.counts.entries
-                    .map((e) => _stateLabel(l, e.key, e.value))
-                    .join('  '),
-              ),
+            if (session.counts.isNotEmpty ||
+                session.rows.isNotEmpty ||
+                session.todo.isNotEmpty)
+              _TasksLeftTile(session: session),
         ],
       ],
     );
@@ -109,3 +108,67 @@ String _stateLabel(AppLocalizations l, String code, int count) =>
       'pending' => l.adminDashStatePending(count),
       _ => '$code $count',
     };
+
+/// One session in "Tasks left": tap opens its tasks and to-do lines, tap again closes. Read-only text.
+class _TasksLeftTile extends StatefulWidget {
+  const _TasksLeftTile({required this.session});
+
+  final AdminSession session;
+
+  @override
+  State<_TasksLeftTile> createState() => _TasksLeftTileState();
+}
+
+class _TasksLeftTileState extends State<_TasksLeftTile> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final t = SisBrand.of(context);
+    final session = widget.session;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SisSettingsRow(
+          key: ValueKey('admin-dash-tasks-${session.name}'),
+          icon: Icons.checklist_rounded,
+          title: session.name,
+          showArrow: false,
+          onTap: () => setState(() => _open = !_open),
+          subtitle: session.counts.isEmpty
+              ? null
+              : session.counts.entries
+                    .map((e) => _stateLabel(l, e.key, e.value))
+                    .join('  '),
+        ),
+        if (_open)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(40, 0, 16, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final r in session.rows)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(r.state, style: TextStyle(color: t.muted)),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(r.goal)),
+                      ],
+                    ),
+                  ),
+                for (final line in session.todo)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Text(line, style: TextStyle(color: t.muted)),
+                  ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}

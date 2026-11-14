@@ -2828,6 +2828,51 @@ class AppLocalizationsTr extends AppLocalizations {
   String get adminTasksEmpty => 'Sizi bekleyen görev yok';
 
   @override
+  String get adminCards => 'Kartlar';
+
+  @override
+  String get adminCardsEmpty => 'Henüz kart yok';
+
+  @override
+  String get adminCardsNoMatch => 'Kart bulunamadı';
+
+  @override
+  String get adminCardsSearch => 'Kartlarda ara';
+
+  @override
+  String get adminCardsAll => 'Tümü';
+
+  @override
+  String get adminCardsActive => 'Etkin';
+
+  @override
+  String get adminCardsProposed => 'Önerilen';
+
+  @override
+  String get adminCardsRule => 'Kural';
+
+  @override
+  String get adminCardsApp => 'Uygulama';
+
+  @override
+  String get adminCardApplies => 'Kimler için';
+
+  @override
+  String get adminCardArea => 'Alan';
+
+  @override
+  String get adminCardWhen => 'Ne zaman';
+
+  @override
+  String get adminCardWords => 'Sözleriniz';
+
+  @override
+  String get adminCardAllows => 'İzin verilenler';
+
+  @override
+  String get adminCardForbids => 'Yasaklananlar';
+
+  @override
   String get adminDashContext => 'Bağlam boyutu';
 
   @override
@@ -2838,6 +2883,15 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get adminDashTasksLeft => 'Kalan görevler';
+
+  @override
+  String get adminConnConnected => 'Bağlandı';
+
+  @override
+  String get adminConnConnecting => 'Bağlanıyor';
+
+  @override
+  String get adminConnOffline => 'Bağlantı yok';
 
   @override
   String get adminDashEmpty => 'Açık bir şey yok';
@@ -2860,6 +2914,23 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String adminDashStatePending(int count) {
     return 'Başlamadı $count';
+  }
+
+  @override
+  String get adminDashWorkStateRunning => 'çalışıyor';
+
+  @override
+  String get adminDashWorkStateShell => 'komut çalıştırıyor';
+
+  @override
+  String get adminDashWorkStateStale => 'yanıt vermiyor';
+
+  @override
+  String get adminDashWorkStateUnknown => 'durum bilinmiyor';
+
+  @override
+  String adminDashWorkCalledBy(String state, String caller) {
+    return '$state, başlatan: $caller';
   }
 
   @override

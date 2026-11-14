@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../app/controls.dart';
 import '../../../app/theme.dart';
 import '../../../l10n/app_localizations.dart';
+import '../application/admin_drafts.dart';
 import '../domain/admin_models.dart';
 
 class AdminQuestionCard extends StatelessWidget {
@@ -81,6 +83,7 @@ class AdminQuestionCard extends StatelessWidget {
         key: ValueKey('admin-question-text-${question.id}'),
         controller: controller,
         onChanged: (_) => onTextChanged(),
+        inputFormatters: [LengthLimitingTextInputFormatter(adminDraftMax)],
         minLines: 1,
         maxLines: 4,
         decoration: const InputDecoration(border: OutlineInputBorder()),

@@ -30,8 +30,8 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _bgUrl = String.fromEnvironment('SUPABASE_URL');
-const _bgKey = String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY');
+
+const _delivery = SupabaseBackgroundDelivery(url: _url, publishableKey: _key);
 
 Future<SupabaseClient> _signedIn(String email) async {
   await setLocalTestPassword(_url, email, localTestPassword);
@@ -120,28 +120,16 @@ void main() {
     test(
       'a member token in the saved session advances the member delivery mark',
       () async {
-        if (_bgUrl.isEmpty || _bgKey.isEmpty) {
-          markTestSkipped(
-            'needs --dart-define=SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY',
-          );
-          return;
-        }
         final m = await _send(ava, direct);
         expect(await _delivered(ava, direct, m, benId), isFalse);
         secure.put(null, 'sis.supabase.session', sessionOf(benClient));
-        await const SupabaseBackgroundDelivery().markDelivered(direct);
+        await _delivery.markDelivered(direct);
         expect(await _delivered(ava, direct, m, benId), isTrue);
         expect(secure.changes, isEmpty);
       },
     );
 
     test('a token expiring within 30 s is not used', () async {
-      if (_bgUrl.isEmpty || _bgKey.isEmpty) {
-        markTestSkipped(
-          'needs --dart-define=SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY',
-        );
-        return;
-      }
       final m = await _send(ava, direct);
       final soon = DateTime.now().millisecondsSinceEpoch ~/ 1000 + 10;
       secure.put(
@@ -149,20 +137,14 @@ void main() {
         'sis.supabase.session',
         sessionOf(benClient, expiresAt: soon),
       );
-      await const SupabaseBackgroundDelivery().markDelivered(direct);
+      await _delivery.markDelivered(direct);
       expect(await _delivered(ava, direct, m, benId), isFalse);
       secure.put(null, 'sis.supabase.session', sessionOf(benClient));
-      await const SupabaseBackgroundDelivery().markDelivered(direct);
+      await _delivery.markDelivered(direct);
       expect(await _delivered(ava, direct, m, benId), isTrue);
     });
 
     test('a non-member is refused by the server and nothing throws', () async {
-      if (_bgUrl.isEmpty || _bgKey.isEmpty) {
-        markTestSkipped(
-          'needs --dart-define=SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY',
-        );
-        return;
-      }
       await expectLater(
         cyClient.rpc('mark_delivered', params: {'conversation': direct}),
         throwsA(
@@ -171,26 +153,14 @@ void main() {
       );
       final m = await _send(ava, direct);
       secure.put(null, 'sis.supabase.session', sessionOf(cyClient));
-      await expectLater(
-        const SupabaseBackgroundDelivery().markDelivered(direct),
-        completes,
-      );
+      await expectLater(_delivery.markDelivered(direct), completes);
       expect(await _delivered(ava, direct, m, benId), isFalse);
       expect(secure.changes, isEmpty);
     });
 
     test('no saved session: completes, nothing advances', () async {
-      if (_bgUrl.isEmpty || _bgKey.isEmpty) {
-        markTestSkipped(
-          'needs --dart-define=SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY',
-        );
-        return;
-      }
       final m = await _send(ava, direct);
-      await expectLater(
-        const SupabaseBackgroundDelivery().markDelivered(direct),
-        completes,
-      );
+      await expectLater(_delivery.markDelivered(direct), completes);
       expect(await _delivered(ava, direct, m, benId), isFalse);
     });
   });

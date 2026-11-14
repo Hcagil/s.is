@@ -203,6 +203,50 @@ void main() {
     expect(hasSnap(), isTrue);
     expectConn('connected');
   });
+
+  // Scene A: after lock and open the icon starts as connecting again
+  scene('after lock and open the icon starts as connecting again', (
+    tester,
+  ) async {
+    repo.fetchQueue = [
+      [snapRow1()],
+    ];
+    await _pump(tester, container);
+    expectConn('connected');
+    final n = container.read(adminPanelsProvider.notifier);
+    n.lock();
+    await tester.pump();
+    repo.fetchHold = Completer();
+    unawaited(n.open('r'));
+    await tester.pump();
+    await tester.pump();
+    expect(repo.fetchHold, isNotNull);
+    expectConn('connecting');
+    repo.fetchHold!.complete(const Ok(<AdminRow>[]));
+    repo.fetchHold = null;
+    await tester.pump();
+    await tester.pump();
+    expectConn('connected');
+  });
+
+  // Scene B: each state has its colour: green, orange, gray
+  scene('each state has its colour: green, orange, gray', (tester) async {
+    Color? colorOf(String k) =>
+        tester.widget<Icon>(find.byKey(ValueKey('admin-conn-$k'))).color;
+    repo.fetchHold = Completer();
+    await _pump(tester, container);
+    expect(colorOf('connecting'), Colors.orange);
+    repo.fetchHold!.complete(Ok([snapRow1()]));
+    repo.fetchHold = null;
+    await tester.pump();
+    await tester.pump();
+    expect(colorOf('connected'), Colors.green);
+    repo.fetchFail = Err(NetworkFailure('x'));
+    await nextRound(tester);
+    final off = colorOf('offline');
+    expect(off, isNot(Colors.green));
+    expect(off, isNot(Colors.orange));
+  });
 }
 
 /// Fake repository that allows controlled failures and holds.

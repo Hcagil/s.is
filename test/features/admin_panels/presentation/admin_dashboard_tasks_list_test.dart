@@ -234,4 +234,20 @@ void main() {
     }
     expect(find.textContaining('item a'), findsNothing);
   });
+
+  testWidgets('each opened task shows its state word next to its goal', (
+    tester,
+  ) async {
+    await prepareDashboard(dashMany());
+    await _pump(tester, container, size: const Size(800, 4000));
+    expect(find.text('pending'), findsNothing);
+    await tester.tap(
+      find.byKey(const ValueKey('admin-dash-tasks-Session Beta')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('running'), findsNWidgets(3));
+    expect(find.text('review'), findsNWidgets(2));
+    expect(find.text('blocked'), findsOneWidget);
+    expect(find.text('pending'), findsNWidgets(2));
+  });
 }

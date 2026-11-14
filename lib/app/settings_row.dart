@@ -60,8 +60,12 @@ class SisSettingsRow extends StatelessWidget {
                                   : TextOverflow.ellipsis,
                               style:
                                   (fullSubtitle
-                                          ? Theme.of(context).textTheme.bodyMedium
-                                          : Theme.of(context).textTheme.bodySmall)
+                                          ? Theme.of(context)
+                                                .textTheme
+                                                .bodyMedium
+                                          : Theme.of(context)
+                                                .textTheme
+                                                .bodySmall)
                                       ?.copyWith(color: t.muted),
                             ),
                           ],

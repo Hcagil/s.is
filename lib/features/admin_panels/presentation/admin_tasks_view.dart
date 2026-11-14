@@ -84,7 +84,6 @@ class _AdminTasksViewState extends ConsumerState<AdminTasksView> {
               title: t.name,
               subtitle: t.change,
               fullSubtitle: true,
-              showArrow: false,
               onTap: () => setState(() => _open = _open == t.id ? null : t.id),
             ),
             if (ref.watch(adminPanelsProvider).latestAnswer('task', id: t.id)

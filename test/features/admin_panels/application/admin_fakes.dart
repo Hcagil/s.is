@@ -6,6 +6,7 @@ import 'package:sis/features/admin_panels/domain/admin_answer.dart';
 import 'package:sis/features/admin_panels/domain/admin_panels_repository.dart';
 import 'package:sis/features/admin_panels/domain/admin_item.dart';
 import 'package:sis/features/admin_panels/domain/admin_snapshot_store.dart';
+import 'package:sis/features/admin_panels/domain/admin_seen_store.dart';
 
 /// Fake implementation of [AdminPanelsRepository] for testing.
 class FakeAdminRepository implements AdminPanelsRepository {
@@ -125,6 +126,40 @@ class FakeAdminSnapshotStore implements AdminSnapshotStore {
   @override
   Future<void> save(AdminSavedSnapshot saved) async {
     this.saved = saved;
+    saveCalls++;
+  }
+
+  @override
+  Future<void> clear() async {
+    saved = null;
+    clearCalls++;
+  }
+}
+
+/// Fake implementation of [AdminSeenStore] for testing.
+class FakeAdminSeenStore implements AdminSeenStore {
+  /// The seen map currently stored.
+  Map<String, Set<String>>? saved;
+
+  /// Call counters.
+  int loadCalls = 0;
+  int saveCalls = 0;
+  int clearCalls = 0;
+
+  @override
+  Future<Map<String, Set<String>>?> load() async {
+    loadCalls++;
+    return saved;
+  }
+
+  @override
+  Future<void> save(Map<String, Set<String>> seen) async {
+    // Deep copy to avoid external mutation.
+    final Map<String, Set<String>> copy = {};
+    for (final e in seen.entries) {
+      copy[e.key] = {...e.value};
+    }
+    saved = copy;
     saveCalls++;
   }
 

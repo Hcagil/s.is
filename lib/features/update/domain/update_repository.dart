@@ -29,9 +29,16 @@ abstract interface class UpdateRepository {
   Future<bool> openStoreListing();
 }
 
+/// Play's per-release update priority (0-5) from which every member sees the flexible-update box; a lower one (a quiet release, docs/DELIVERY.md) is shown only to people with Admin Panels access.
+const normalUpdatePriority = 2;
+
 /// The result of asking Play about an update for this app.
 class PlayUpdateCheck {
-  const PlayUpdateCheck({this.offeredBuild, this.downloaded = false});
+  const PlayUpdateCheck({
+    this.offeredBuild,
+    this.downloaded = false,
+    this.updatePriority = normalUpdatePriority,
+  });
 
   /// A newer build Play offers as a flexible update; null when none is
   /// offered.
@@ -41,4 +48,8 @@ class PlayUpdateCheck {
   /// an earlier app session) and is waiting for
   /// [UpdateRepository.completeFlexibleUpdate].
   final bool downloaded;
+
+  /// The priority Play reports for the offered build; meaningful only when
+  /// [offeredBuild] is set.
+  final int updatePriority;
 }

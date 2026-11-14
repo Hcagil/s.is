@@ -71,6 +71,10 @@ merge an administrator forced past a red check, because the release takes only
 a commit whose CI passed on `main`. The `play-internal` environment, which holds the secrets, only
 deploys from protected branches.
 
+### Quiet releases (Admin Panels only)
+
+When every shipping change since the last release is under `lib/features/admin_panels/` or is a string used only there (`tool/release_kind.sh` prints `quiet=true`), the release is **quiet**: it skips the once-per-day guard (the guard counts only releases whose title lacks `(quiet)`), waits for the end of the clock hour so merges of that hour go out together (the `hold` job; the `release` concurrency group queues other runs, and a newer pending run replaces an older one), stores no What's new note, and uploads to Play with `inAppUpdatePriority` 0 (normal releases: 2). The app shows the flexible-update box for a priority below `normalUpdatePriority` (2) only to an account with Admin Panels access; everyone else gets the build when Play auto-updates. Any other change keeps the daily path. Limit: Play reports the priority of the newest release only, so a quiet release right after a normal one hides that normal one's box until auto-update.
+
 ### Server scripts without an app release
 
 The private server scripts (the staff commands that live in the database) are installed only from the owner's computer, never from GitHub: no workflow, secret or runner holds them. `tool/private_install.sh` (database mode, run by a timer on that computer) re-installs the live version and, after a release, installs a new one without a build or store upload. It refuses to change the live version while any workflow under `.github/workflows` or the folder `.github/actions/private-server` still installs a pack, and while a release is running or production is behind or ahead of the released commit's migrations. The release itself only runs the public-side hash check of `tool/private_check.sql` against production.

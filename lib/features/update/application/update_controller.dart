@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/failure.dart';
+import '../../admin_panels/application/admin_entry_provider.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
 import '../domain/update_repository.dart';
@@ -45,9 +46,11 @@ class UpdateController extends AsyncNotifier<UpdateState> {
     return switch (await repo.checkForUpdate()) {
       Ok(value: PlayUpdateCheck(downloaded: true)) =>
         const UpdateReadyToInstall(),
-      Ok(value: PlayUpdateCheck(:final offeredBuild))
+      Ok(value: PlayUpdateCheck(:final offeredBuild, :final updatePriority))
           when offeredBuild != null && offeredBuild > installed =>
-        UpdateAvailableFlexible(offeredBuild),
+        updatePriority >= normalUpdatePriority || await _adminAccess()
+            ? UpdateAvailableFlexible(offeredBuild)
+            : const UpdateIdle(),
       _ => const UpdateIdle(),
     };
   }
@@ -88,6 +91,20 @@ class UpdateController extends AsyncNotifier<UpdateState> {
     } catch (_) {
       if (!ref.mounted) return;
       state = const AsyncData(UpdateIdle());
+    }
+  }
+
+  /// True when the signed-in account has Admin Panels access; a quiet update
+  /// is offered only to them.
+  Future<bool> _adminAccess() async {
+    // adminEntryProvider is autoDispose: keep it alive while we await it.
+    final keep = ref.listen(adminEntryProvider, (_, _) {});
+    try {
+      return await ref.read(adminEntryProvider.future);
+    } catch (_) {
+      return false; // never offer a quiet update on a failed check
+    } finally {
+      keep.close();
     }
   }
 

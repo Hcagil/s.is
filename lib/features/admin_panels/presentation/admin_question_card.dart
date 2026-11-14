@@ -83,6 +83,8 @@ class AdminQuestionCard extends StatelessWidget {
         onChanged: (_) => onTextChanged(),
         minLines: 1,
         maxLines: 4,
+        keyboardType: TextInputType.multiline,
+        textInputAction: TextInputAction.newline,
         decoration: const InputDecoration(border: OutlineInputBorder()),
       ),
     );

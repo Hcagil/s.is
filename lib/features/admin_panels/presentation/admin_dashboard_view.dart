@@ -148,7 +148,14 @@ class _TasksLeftTileState extends State<_TasksLeftTile> {
                 for (final r in session.rows)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Text(r.goal),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(r.state, style: TextStyle(color: t.muted)),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(r.goal)),
+                      ],
+                    ),
                   ),
                 for (final line in session.todo)
                   Padding(

@@ -114,20 +114,15 @@ void main() {
       of: find.byKey(const ValueKey('home-admin')),
       matching: find.byType(Badge),
     );
-    expect(badgeFinder, findsNothing);
-
-    final c = ProviderScope.containerOf(
-      t.element(find.byType(AdminEntryButton)),
-    );
-    await c.read(adminPanelsProvider.notifier).open('r');
-    await t.pump();
     await t.pump(const Duration(milliseconds: 100));
-
     expect(
       find.descendant(of: badgeFinder, matching: find.text('3')),
       findsOneWidget,
     );
 
+    final c = ProviderScope.containerOf(
+      t.element(find.byType(AdminEntryButton)),
+    );
     c.read(adminPanelsProvider.notifier).markSeen('questions');
     await t.pump();
     expect(
@@ -142,7 +137,7 @@ void main() {
     await t.pumpWidget(const SizedBox());
   });
 
-  testWidgets('leaving Admin Panels stops the refresh', (t) async {
+  testWidgets('leaving Admin Panels keeps the 5 s home poll', (t) async {
     final repo = FakeAdminRepository();
     await pumpApp(t, repo);
 
@@ -151,18 +146,15 @@ void main() {
     await t.pump(const Duration(milliseconds: 500));
     expect(find.byType(AdminPanelsScreen), findsOneWidget);
 
-    final before = repo.fetchCalls.length;
-    await t.pump(const Duration(seconds: 25));
-    expect(repo.fetchCalls.length, greaterThan(before));
-
     await t.pageBack();
     await t.pump();
     await t.pump(const Duration(seconds: 1));
     expect(find.byType(AdminPanelsScreen), findsNothing);
 
     final after = repo.fetchCalls.length;
-    await t.pump(const Duration(seconds: 70));
-    expect(repo.fetchCalls.length, equals(after));
+    await t.pump(const Duration(seconds: 30));
+    final grown = repo.fetchCalls.length - after;
+    expect(grown, inInclusiveRange(5, 7));
 
     await t.pumpWidget(const SizedBox());
   });

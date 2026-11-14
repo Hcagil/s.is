@@ -236,6 +236,12 @@ void main() {
       ],
     ];
     TestWidgetsFlutterBinding.instance.handleAppLifecycleStateChanged(
+      AppLifecycleState.hidden,
+    );
+    TestWidgetsFlutterBinding.instance.handleAppLifecycleStateChanged(
+      AppLifecycleState.inactive,
+    );
+    TestWidgetsFlutterBinding.instance.handleAppLifecycleStateChanged(
       AppLifecycleState.resumed,
     );
     await t.pump();
@@ -381,9 +387,11 @@ void main() {
       await t.tap(find.byKey(const ValueKey('home-admin')));
       await t.pump();
       await t.pump(const Duration(milliseconds: 500));
+      await t.pump(const Duration(seconds: 6));
 
       expect(find.byType(AdminPanelsScreen), findsOneWidget);
       expect(find.byType(SisProgressLine), findsOneWidget);
+      expect(find.byKey(const ValueKey('admin-bottom-bar')), findsNothing);
       expect(find.text('text Q-1'), findsNothing);
       expect(find.text('text Q-2'), findsNothing);
 

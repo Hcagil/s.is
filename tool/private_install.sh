@@ -67,7 +67,8 @@ run_sql() {
   if [ "$mode" = db ]; then
     run_sql_out "$1" >/dev/null
   else
-    $sup db query "--$mode" -f "$1" >/dev/null 2>&1
+    # An absolute path: with `supabase --workdir <copy>` a relative file would be looked up inside the copy.
+    $sup db query "--$mode" -f "$PWD/$1" >/dev/null 2>&1
   fi
 }
 

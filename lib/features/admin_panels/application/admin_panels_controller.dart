@@ -8,6 +8,7 @@ import '../domain/admin_answer.dart';
 import '../domain/admin_assembler.dart';
 import '../domain/admin_item.dart';
 import '../domain/admin_marks.dart';
+import '../domain/admin_models.dart';
 import '../domain/admin_panels_repository.dart';
 import '../domain/admin_seen_store.dart';
 import '../domain/admin_snapshot.dart';
@@ -511,6 +512,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
 
   /// Records what was just sent so the card shows as waiting.
   void _track(Map<String, Object?> message, AdminSentRef? sent) {
+    if (message['kind'] == 'read') return; // a read note shows no waiting card
     final kind = message['kind'];
     final id = message['id'] as String?;
     var questions = state.sentQuestions;
@@ -534,6 +536,20 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
       decidedTasks: tasks,
       answers: answers,
     );
+  }
+
+  /// Tells the computer the owner read [conv] up to [upto] (the computer's own message time, never the phone clock). Sent once per open, only when [upto] is newer than what the computer and this phone already know; the local mark stays when the send fails (no retry queue). Null = nothing to send or sent, else why not.
+  Future<Failure?> markConversationRead(AdminConversation conv, int upto) {
+    final known = state.readUpto[conv.id] ?? 0;
+    final base = conv.seen > known ? conv.seen : known;
+    if (upto <= base) return Future.value();
+    state = state.copyWith(readUpto: {...state.readUpto, conv.id: upto});
+    return _send({
+      'answer_id': _newAnswerId(),
+      'kind': 'read',
+      'conv': conv.id,
+      'upto': upto,
+    });
   }
 
   /// Sends the owner's answer to one question; the card then shows as waiting.

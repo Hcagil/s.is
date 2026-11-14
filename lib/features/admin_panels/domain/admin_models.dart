@@ -126,6 +126,8 @@ final class AdminConversation {
     required this.at,
     required this.unread,
     required this.waiting,
+    this.seen = 0,
+    this.mat = 0,
   });
 
   /// Parses values safely using `is` checks. Never throws.
@@ -142,6 +144,8 @@ final class AdminConversation {
       at: at,
       unread: unread,
       waiting: waiting,
+      seen: f['seen'] is int ? f['seen'] as int : 0,
+      mat: f['mat'] is int ? f['mat'] as int : 0,
     );
   }
 
@@ -159,6 +163,17 @@ final class AdminConversation {
 
   /// How many owner messages nobody has answered yet.
   final int waiting;
+
+  /// Seconds since the epoch up to which the owner has read (computer value); 0 = unknown.
+  final int seen;
+
+  /// Seconds since the epoch of the newest manager message; 0 = none or unknown.
+  final int mat;
+
+  /// Whether the conversation is unread, given what this phone read ([readUpto]). An old computer sends neither [seen] nor [mat]: then the old [unread] bool decides.
+  bool isUnread(int readUpto) => seen == 0 && mat == 0
+      ? unread
+      : mat > (seen > readUpto ? seen : readUpto);
 }
 
 /// A message item from the admin export.

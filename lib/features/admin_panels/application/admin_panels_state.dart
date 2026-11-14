@@ -55,6 +55,7 @@ final class AdminPanelsState {
     this.answers = const [],
     this.seen,
     this.conn = AdminConn.connecting,
+    this.readUpto = const {},
   });
 
   final AdminGate gate;
@@ -88,6 +89,9 @@ final class AdminPanelsState {
   /// Item ids already seen per tab (talk, questions, tasks); null until loaded.
   final Map<String, Set<String>>? seen;
 
+  /// Per conversation id: the newest message time (computer seconds) the owner read on this phone.
+  final Map<String, int> readUpto;
+
   /// The newest answer of [kind] for [id] (a question or task id; for talk the conversation id, null = no conversation).
   AdminAnswer? latestAnswer(String kind, {String? id}) {
     for (final a in answers.reversed) {
@@ -113,6 +117,7 @@ final class AdminPanelsState {
     List<AdminAnswer>? answers,
     Map<String, Set<String>>? seen,
     AdminConn? conn,
+    Map<String, int>? readUpto,
     bool clearSeen = false,
     bool clearFailure = false,
   }) {
@@ -129,6 +134,7 @@ final class AdminPanelsState {
       answers: answers ?? this.answers,
       seen: clearSeen ? null : (seen ?? this.seen),
       conn: conn ?? this.conn,
+      readUpto: readUpto ?? this.readUpto,
     );
   }
 }

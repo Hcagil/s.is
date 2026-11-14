@@ -25,7 +25,7 @@ final adminDraftsProvider = Provider<AdminDrafts>((ref) {
   return d;
 });
 
-/// Unsent panel text by key: debounced writes, nothing loaded before the first read (the panels are unlocked by then).
+/// Unsent panel text by key: debounced writes, nothing loaded before the first read (the panels are unlocked by then). A load still running when [forget] or [wipe] is called is dropped.
 class AdminDrafts {
   AdminDrafts(this._store);
 
@@ -33,15 +33,23 @@ class AdminDrafts {
   Map<String, String>? _cache;
   Future<Map<String, String>>? _loading;
   Timer? _timer;
+  int _gen = 0;
 
-  Future<Map<String, String>> _all() =>
-      _loading ??= _store.load().then((m) => _cache = m);
+  Future<Map<String, String>> _all() {
+    final gen = _gen;
+    return _loading ??= _store.load().then((m) {
+      if (gen == _gen) _cache = m; // a late load after wipe/forget is dropped
+      return m;
+    });
+  }
 
   Future<String> read(String key) async => (await _all())[key] ?? '';
 
   /// Blank text removes the draft; longer text is cut to [adminDraftMax].
   Future<void> write(String key, String text) async {
+    final gen = _gen;
     final m = await _all();
+    if (gen != _gen) return;
     if (text.trim().isEmpty) {
       m.remove(key);
     } else {
@@ -60,7 +68,9 @@ class AdminDrafts {
 
   /// Drops drafts under [prefix] whose id is not in [live].
   Future<void> prune(String prefix, Set<String> live) async {
+    final gen = _gen;
     final m = await _all();
+    if (gen != _gen) return;
     final dead = [
       for (final k in m.keys)
         if (k.startsWith(prefix) && !live.contains(k.substring(prefix.length)))
@@ -82,12 +92,14 @@ class AdminDrafts {
   /// Writes, then drops the memory copy (panels locked).
   Future<void> forget() async {
     await flush();
+    _gen++;
     _cache = null;
     _loading = null;
   }
 
   /// Sign-out: removes the saved drafts and the memory copy.
   Future<void> wipe() async {
+    _gen++;
     _timer?.cancel();
     _timer = null;
     _cache = null;

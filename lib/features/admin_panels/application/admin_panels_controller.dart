@@ -330,7 +330,8 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     );
 
     // A complete snapshot is the truth: drafts of items that are gone are dropped.
-    if (completed) {
+    // Only when unlocked: background count mode must not decrypt the drafts.
+    if (completed && state.gate == AdminGate.ready) {
       final drafts = ref.read(adminDraftsProvider);
       unawaited(drafts.prune('q:', {for (final q in snap.questions) q.id}));
       unawaited(

@@ -31,6 +31,7 @@ final class PlayUpdateRepository
       return Ok(
         PlayUpdateCheck(
           offeredBuild: offered ? info.availableVersionCode : null,
+          updatePriority: info.updatePriority,
         ),
       );
     } catch (e) {

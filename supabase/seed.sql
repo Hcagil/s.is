@@ -349,5 +349,11 @@ insert into app_private.allowlist(email) values
   ('clo-other@integration.test'),
   -- removed tester status (test/integration/removed_tester_status_test.dart)
   ('removed-status@integration.test'),
+  -- background delivery (test/integration/background_delivery_seam_test.dart):
+  -- ava sends, ben is the member whose saved session reports delivery, cy is
+  -- allowlisted and active but not in their chat
+  ('bd-ava@mail.test'),
+  ('bd-ben@mail.test'),
+  ('bd-cy@mail.test'),
   ('sis-destek-bot@example.com')
 on conflict do nothing;

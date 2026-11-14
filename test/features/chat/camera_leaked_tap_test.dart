@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -88,6 +89,17 @@ List<SisNotice> notices(WidgetTester tester) =>
 Future<void> drain(WidgetTester tester) async {
   await tester.pump(const Duration(seconds: 5));
   await tester.pumpAndSettle();
+}
+
+class _ThrowingPicker extends ExternalPickerFake {
+  final Completer<void> gate = Completer<void>();
+
+  @override
+  Future<ExternalPickResult> takePhoto() async {
+    cameraCalls++;
+    await gate.future;
+    throw Exception('camera crashed');
+  }
 }
 
 void main() {
@@ -231,6 +243,214 @@ void main() {
         );
         expect(chat.sentImages.single.image.bytes, shot(3).bytes);
         expect(chat.sentImages.single.conversationId, 'c1');
+
+        await drain(tester);
+      },
+    );
+
+    // NEW TESTS
+
+    for (final access in [
+      GalleryAccess.denied,
+      GalleryAccess.permanentlyDenied,
+    ]) {
+      testWidgets(
+        '${access.name}: Gallery, a leaked tap on the barrier keeps the sheet open and the photo is sent',
+        (tester) async {
+          final chat = ChatFake();
+          final picker = ExternalPickerFake()
+            ..offered = [shot(3)]
+            ..hold();
+
+          await pump(tester, chat, galleryAt(access), picker);
+
+          // open denied screen
+          await tester.tap(find.byKey(const ValueKey('composer-attach')));
+          await tester.pumpAndSettle();
+          await tester.tap(find.byKey(const ValueKey('attach-photo')));
+          await tester.pumpAndSettle();
+
+          await tester.tap(find.byKey(const ValueKey('sheet-from-app')));
+          await steps(tester);
+
+          expect(picker.attachmentCalls, 1);
+
+          // leaked tap
+          await tester.tapAt(const Offset(10, 10));
+          await steps(tester);
+
+          expect(
+            find.byKey(const ValueKey('sheet-from-app')),
+            findsOneWidget,
+            reason: 'the leaked tap closed the attachment sheet',
+          );
+
+          picker.release();
+          await steps(tester);
+
+          if (find
+              .byKey(const ValueKey('preview-page'))
+              .evaluate()
+              .isNotEmpty) {
+            await previewSend(tester);
+          }
+
+          expect(
+            chat.sentImages,
+            hasLength(1),
+            reason: 'the picked photo was dropped',
+          );
+          expect(chat.sentImages.single.image.bytes, shot(3).bytes);
+          expect(chat.sentImages.single.conversationId, 'c1');
+
+          await drain(tester);
+        },
+      );
+    }
+
+    testWidgets(
+      'camera: a back press while the camera is open does not close the sheet',
+      (tester) async {
+        final chat = ChatFake();
+        final picker = ExternalPickerFake()
+          ..shot = shot(7)
+          ..hold();
+
+        await pump(tester, chat, galleryAt(GalleryAccess.full), picker);
+
+        await openGrid(tester);
+        await tester.tap(find.byKey(const ValueKey('sheet-camera')));
+        await steps(tester);
+
+        await tester.binding.handlePopRoute();
+        await steps(tester);
+
+        expect(
+          find.byKey(const ValueKey('sheet-camera')),
+          findsOneWidget,
+          reason: 'sheet should stay open after back press',
+        );
+        expect(
+          find.byType(MessageScreen),
+          findsOneWidget,
+          reason: 'main screen should still be present',
+        );
+
+        picker.release();
+        await steps(tester);
+
+        if (find.byKey(const ValueKey('preview-page')).evaluate().isNotEmpty) {
+          await previewSend(tester);
+        }
+
+        expect(
+          chat.sentImages,
+          hasLength(1),
+          reason: 'the camera photo was dropped',
+        );
+        expect(chat.sentImages.single.image.bytes, shot(7).bytes);
+        expect(chat.sentImages.single.conversationId, 'c1');
+
+        await drain(tester);
+      },
+    );
+
+    testWidgets(
+      'camera: cancel after a leaked tap releases the guard (a barrier tap now closes the sheet) and sends nothing',
+      (tester) async {
+        final chat = ChatFake();
+        final picker = ExternalPickerFake()
+          ..shot = null
+          ..hold();
+
+        await pump(tester, chat, galleryAt(GalleryAccess.full), picker);
+
+        await openGrid(tester);
+        await tester.tap(find.byKey(const ValueKey('sheet-camera')));
+        await steps(tester);
+
+        // leaked tap
+        await tester.tapAt(const Offset(10, 10));
+        await steps(tester);
+
+        expect(
+          find.byKey(const ValueKey('sheet-camera')),
+          findsOneWidget,
+          reason: 'a cancel keeps the grid open',
+        );
+
+        picker.release();
+        await steps(tester);
+
+        await tester.tapAt(const Offset(10, 10));
+        await steps(tester, 40);
+
+        expect(
+          find.byKey(const ValueKey('sheet-camera')),
+          findsNothing,
+          reason: 'the guard stayed set after the cancel: the barrier tap was ignored',
+        );
+        expect(chat.sentImages, isEmpty, reason: 'no image should be sent');
+        expect(notices(tester), isEmpty, reason: 'no notices should appear');
+
+        await drain(tester);
+      },
+    );
+
+    testWidgets(
+      'camera: an exception from the camera releases the guard (a barrier tap now closes the sheet) and shows the error notice',
+      (tester) async {
+        final chat = ChatFake();
+        final picker = _ThrowingPicker()..hold();
+
+        await pump(tester, chat, galleryAt(GalleryAccess.full), picker);
+
+        await openGrid(tester);
+        await tester.tap(find.byKey(const ValueKey('sheet-camera')));
+        await steps(tester);
+
+        // leaked tap
+        await tester.tapAt(const Offset(10, 10));
+        await steps(tester);
+
+        expect(
+          find.byKey(const ValueKey('sheet-camera')),
+          findsOneWidget,
+          reason: 'sheet should stay open while exception is pending',
+        );
+
+        picker.gate.complete();
+        await steps(tester);
+
+        expect(
+          find.byKey(const ValueKey('sheet-camera')),
+          findsOneWidget,
+          reason: 'a failure keeps the grid open',
+        );
+        expect(
+          notices(tester),
+          hasLength(1),
+          reason: 'one error notice should appear',
+        );
+        expect(
+          notices(tester).single.message,
+          'The camera could not take a photo.',
+          reason: 'error message should match',
+        );
+        expect(
+          notices(tester).single.isError,
+          isTrue,
+          reason: 'notice should be marked as error',
+        );
+        await tester.tapAt(const Offset(10, 10));
+        await steps(tester, 40);
+        expect(
+          find.byKey(const ValueKey('sheet-camera')),
+          findsNothing,
+          reason: 'the guard stayed set after the exception',
+        );
+
+        expect(chat.sentImages, isEmpty, reason: 'no image should be sent');
 
         await drain(tester);
       },

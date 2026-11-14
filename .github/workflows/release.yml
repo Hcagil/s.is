@@ -394,7 +394,8 @@ jobs:
     # but leaves the Play release intact, and Play never waits on Apple.
     # Repository variable IOS_RELEASE=off skips it; unset means on.
     needs: scope
-    if: needs.scope.outputs.ship == 'true' && vars.IOS_RELEASE != 'off'
+    # A quiet release (Admin Panels only) sends no TestFlight build: testers get no message.
+    if: needs.scope.outputs.ship == 'true' && vars.IOS_RELEASE != 'off' && needs.scope.outputs.quiet != 'true'
     uses: ./.github/workflows/ios-ipa.yml
     with:
       ref: ${{ needs.scope.outputs.sha }}

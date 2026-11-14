@@ -3,15 +3,35 @@ import 'dart:ui';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart'
-    show defaultTargetPlatform, TargetPlatform;
+    show defaultTargetPlatform, TargetPlatform, visibleForTesting;
 
 import '../domain/push.dart';
 import '../domain/reaction_push.dart';
+import 'background_delivery.dart';
 import 'local_push_display.dart';
 import 'push_receipt_log.dart';
 
 // The Android receiver starts a second Flutter engine at this entry point (PeekRunner.kt); this export keeps its library in the release build, where only code reachable from main and marked vm:entry-point survives.
 export 'push_peek_entry.dart' show peekMain;
+export 'background_delivery.dart' show BackgroundDelivery;
+
+/// Reports a chat push as delivered from the background isolate (the saved session, no sign-in).
+@visibleForTesting
+BackgroundDelivery backgroundDelivery = const SupabaseBackgroundDelivery();
+
+/// The sender's tick becomes "delivered" when the push lands, not when SIS is opened. Only a chat push for the saved user; never throws.
+Future<void> _reportDelivered(RemoteMessage message) async {
+  try {
+    final d = message.data;
+    final id = d['conversation_id'], user = d['user_id'];
+    if (id is! String || id.isEmpty || user is! String) return;
+    if (d['kind'] == 'reaction') return;
+    if (await backgroundDelivery.savedUserId() != user) return;
+    await backgroundDelivery
+        .markDelivered(id)
+        .timeout(const Duration(seconds: 5));
+  } catch (_) {}
+}
 
 /// A push while the app is in the background or closed. Pushes carry data
 /// only (the chat, and the title and body the server worded for this
@@ -58,6 +78,8 @@ Future<void> onBackgroundPush(RemoteMessage message) async {
     // Never rethrown into the plugin, never swallowed unreported.
     await PushReceiptLog.add('error', messageId: messageId, error: e);
   }
+  // After the terminal receipt: the network call never delays it.
+  await _reportDelivered(message);
 }
 
 /// Judges the push (nothing is drawn here); returns its terminal stage, `shown` or `dropped:reason`.

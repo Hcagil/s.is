@@ -2,6 +2,7 @@
 # Replays .github/workflows/ci.yml locally, in Docker: the `android` and
 # `database` jobs, same steps, same order, same commands.
 # mirrors ci.yml jobs android + database; update both together.
+# The "Migration versions are unique" step runs in both jobs here (in CI it is a step of the Classify changes job).
 #
 # Not replayed: the iOS jobs (build, signed build; need macOS and Apple secrets,
 # GitHub CI only), the classify/documentation jobs, and the "Restore Firebase
@@ -153,6 +154,7 @@ private_hashes() {
 }
 
 job_android() {
+  step "Migration versions are unique" tool/check_migration_versions.sh || return 1
   step "Build development image" "${CI[@]}" build || return 1
   step "Resolve dependencies" "${CI[@]}" run --rm flutter flutter pub get || return 1
   step "Layer rules" layer_rules || return 1
@@ -269,6 +271,7 @@ gradle_cleanup() {
 }
 
 job_database() {
+  step "Migration versions are unique" tool/check_migration_versions.sh || return 1
   # Own project id, ports and database per run, so two worktrees can run at once; cleaned up on any exit.
   trap 'sb_cleanup; gradle_cleanup' EXIT
   trap 'sb_cleanup; gradle_cleanup; exit 130' INT TERM

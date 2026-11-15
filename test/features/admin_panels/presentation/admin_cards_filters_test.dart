@@ -89,6 +89,14 @@ void main() {
   Finder tile(String id) => find.byKey(ValueKey('admin-card-tile-$id'));
 
   Future<void> tapKey(WidgetTester t, String k) async {
+    // Chips live in the filter sheet: open it first when it is closed.
+    if (find
+        .byKey(const ValueKey('admin-cards-filter-sheet'))
+        .evaluate()
+        .isEmpty) {
+      await t.tap(find.byKey(const ValueKey('admin-cards-filter-button')));
+      await t.pumpAndSettle();
+    }
     await t.tap(find.byKey(ValueKey(k)));
     await t.pumpAndSettle();
   }

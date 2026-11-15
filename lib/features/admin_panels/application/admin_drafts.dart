@@ -34,11 +34,16 @@ class AdminDrafts {
   Future<Map<String, String>>? _loading;
   Timer? _timer;
   int _gen = 0;
+  // Sent keys a later load must not restore, until the next save.
+  final Set<String> _removed = {};
 
   Future<Map<String, String>> _all() {
     final gen = _gen;
     return _loading ??= _store.load().then((m) {
-      if (gen == _gen) _cache = m; // a late load after wipe/forget is dropped
+      if (gen == _gen) {
+        _cache = m; // a late load after wipe/forget is dropped
+        _removed.forEach(m.remove);
+      }
       return m;
     });
   }
@@ -50,6 +55,7 @@ class AdminDrafts {
     final gen = _gen;
     final m = await _all();
     if (gen != _gen) return;
+    _removed.remove(key);
     if (text.trim().isEmpty) {
       m.remove(key);
     } else {
@@ -63,6 +69,7 @@ class AdminDrafts {
   /// Removes one draft now (it was sent).
   Future<void> remove(String key) async {
     final m = await _all();
+    _removed.add(key);
     if (m.remove(key) != null) await flush();
   }
 
@@ -86,7 +93,10 @@ class AdminDrafts {
     _timer?.cancel();
     _timer = null;
     final m = _cache;
-    if (m != null) await _store.save(Map.of(m));
+    if (m != null) {
+      _removed.clear();
+      await _store.save(Map.of(m));
+    }
   }
 
   /// Writes, then drops the memory copy (panels locked).
@@ -104,6 +114,7 @@ class AdminDrafts {
     _timer = null;
     _cache = null;
     _loading = null;
+    _removed.clear();
     await _store.clear();
   }
 

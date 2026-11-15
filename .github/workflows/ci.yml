@@ -408,41 +408,82 @@ jobs:
             exit "$rc"
           }
       # The video copy and its real AVFoundation read, on a booted simulator.
-      # Normally ~11 of the 20 minutes: boot ~1-2, flutter's own start ~3-4,
+      # Normally ~11 of the 30 minutes: boot ~1-2, flutter's own start ~3-4,
       # the cold Xcode build ~4-6, then install, launch and the 3 tests ~1.
       # That last phase once hung silently until the step limit. It gets its
-      # own clock, started by flutter's "Xcode build done" line, and each call
-      # in the test has its own timeout, so a hang fails in minutes, named.
+      # own clock, started by flutter's "Xcode build done" line; a stall with
+      # no result line is retried once (boot again, fresh log), so a hang
+      # fails in minutes, named. A printed result is final, never retried.
       - name: Video prep integration test (simulator)
-        timeout-minutes: 20
+        timeout-minutes: 30
         run: |
           devices=$(xcrun simctl list devices available)
           udid=$(grep -m1 -E '^ +iPhone' <<<"$devices" | grep -oE '[0-9A-F-]{36}')
           test -n "$udid"
-          xcrun simctl bootstatus "$udid" -b
-          log="$RUNNER_TEMP/video-prep.log"
-          : > "$log"
-          tail -f "$log" &
-          tail_pid=$!
-          flutter test integration_test/video_source_prep_ios_test.dart -d "$udid" > "$log" 2>&1 &
-          pid=$!
-          limit=${VIDEO_PREP_AFTER_BUILD_S:-240}
-          waited=0
-          while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt "$limit" ]; do
-            sleep 1
-            grep -q 'Xcode build done' "$log" && waited=$((waited + 1))
-          done
-          rc=0
-          if kill -0 "$pid" 2>/dev/null; then
-            echo "::error::video prep test: no result ${limit}s after the Xcode build (stuck installing, launching or reaching the app); stopped"
-            kill "$pid"
-            rc=1
-          else
+          limit=${VIDEO_PREP_AFTER_BUILD_S:-120}
+          attempts=${VIDEO_PREP_ATTEMPTS:-2}
+          for attempt in $(seq 1 "$attempts"); do
+            xcrun simctl bootstatus "$udid" -b
+            log="$RUNNER_TEMP/video-prep-$attempt.log"
+            : > "$log"
+            tail -f "$log" &
+            tail_pid=$!
+            flutter test integration_test/video_source_prep_ios_test.dart -d "$udid" > "$log" 2>&1 &
+            pid=$!
+            waited=0
+            while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt "$limit" ]; do
+              sleep 1
+              grep -q 'Xcode build done' "$log" && waited=$((waited + 1))
+            done
+            if kill -0 "$pid" 2>/dev/null; then
+              # A retry happens only when the log has no progress line and no result line: the app never reached the tests.
+              progress=false
+              result=false
+              result_fail=false
+              result_pass=false
+              if grep -qE '^::group::|^::error::|^::warning::[0-9]+ tests?|^[0-9]{2}:[0-9]{2} \+[0-9]+[ :]' "$log"; then
+                progress=true
+              fi
+              if grep -qE '^🎉 [0-9]+ tests? passed|^::error::[0-9]+ tests?|^::warning::[0-9]+ tests?|Some tests failed|All tests passed' "$log"; then
+                result=true
+              fi
+              if grep -qE '^::group::❌|^::error::|^::warning::[0-9]+ tests?|Some tests failed|^[0-9]{2}:[0-9]{2} \+[0-9]+ -[1-9][0-9]*[ :]' "$log"; then
+                result_fail=true
+              fi
+              if grep -qE '^🎉 [0-9]+ tests? passed|All tests passed' "$log" && [ "$result_fail" = false ]; then
+                result_pass=true
+              fi
+              if [ "$progress" = true ] || [ "$result" = true ]; then
+                pkill -P "$pid" || true
+                kill "$pid" || true
+                wait "$pid" 2>/dev/null || true
+                sleep 1
+                kill "$tail_pid" || true
+                if [ "$result_pass" = true ]; then
+                  echo "::notice::video prep test passed (the run hung after printing its result; stopped)"
+                  exit 0
+                fi
+                echo "::error::video prep test did not finish with a pass (the run hung after printing: $(grep -E '^::group::|^::error::|^🎉|Some tests failed|All tests passed|^[0-9]{2}:[0-9]{2} \+[0-9]+[ :]' "$log" | tail -1))"
+                exit 1
+              fi
+              echo "::warning::video prep test attempt $attempt: no result ${limit}s after the Xcode build (stuck installing, launching or reaching the app); stopped"
+              ps -axo pid,etime,command | grep -E 'simctl|xcodebuild|flutter|Runner' | grep -v grep || true
+              pkill -P "$pid" || true
+              kill "$pid" || true
+              wait "$pid" 2>/dev/null || true
+              sleep 1
+              kill "$tail_pid" || true
+              xcrun simctl shutdown "$udid" || true
+              continue
+            fi
+            rc=0
             wait "$pid" || rc=$?
-          fi
-          sleep 1
-          kill "$tail_pid"
-          exit "$rc"
+            sleep 1
+            kill "$tail_pid" || true
+            exit "$rc"   # the test ran: pass or fail is final, never retried
+          done
+          echo "::error::video prep test: stuck after the Xcode build in all $attempts attempts"
+          exit 1
 
   # Signing proof on the pull request: the same signed archive + export the
   # Release workflow uploads (.github/workflows/ios-ipa.yml), without the

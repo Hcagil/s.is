@@ -178,17 +178,77 @@ void main() {
     expectNoBadge('Tasks');
   });
 
-  scene('two new Talk messages show 2 on Talk', (tester) async {
+  scene('two conversations with new messages show 2 on Talk', (tester) async {
     await prepareInitial([conv]);
     await _pump(tester, container);
+    final conv1 = AdminItem(
+      id: 'c:c1',
+      kind: 'talk',
+      seq: 2,
+      removed: false,
+      fields: {
+        'id': 'c1',
+        'topic': 'Topic',
+        'at': 1000,
+        'unread': false,
+        'waiting': 0,
+        'conv': true,
+        'seen': 0,
+        'mat': 5,
+      },
+    );
+    final conv2 = AdminItem(
+      id: 'c:c2',
+      kind: 'talk',
+      seq: 2,
+      removed: false,
+      fields: {
+        'id': 'c2',
+        'topic': 'Topic',
+        'at': 1000,
+        'unread': false,
+        'waiting': 0,
+        'conv': true,
+        'seen': 0,
+        'mat': 7,
+      },
+    );
     repo.fetchQueue.add([
-      deltaRow(2, 2, cursor: 6, items: [talkMsg('a'), talkMsg('b')]),
+      deltaRow(2, 2, cursor: 6, items: [conv1, conv2]),
     ]);
     await tester.pump(adminPollEvery);
     await tester.pumpAndSettle();
     expect(badge('Talk', '2'), findsOneWidget);
     expectNoBadge('Questions');
     expectNoBadge('Tasks');
+  });
+
+  scene('two new messages in one conversation show 1 on Talk', (tester) async {
+    await prepareInitial([conv]);
+    await _pump(tester, container);
+    final conv1 = AdminItem(
+      id: 'c:c1',
+      kind: 'talk',
+      seq: 2,
+      removed: false,
+      fields: {
+        'id': 'c1',
+        'topic': 'Topic',
+        'at': 1000,
+        'unread': false,
+        'waiting': 0,
+        'conv': true,
+        'seen': 0,
+        'mat': 9,
+      },
+    );
+    repo.fetchQueue.add([
+      deltaRow(2, 2, cursor: 6, items: [conv1, talkMsg('a'), talkMsg('b')]),
+    ]);
+    await tester.pump(adminPollEvery);
+    await tester.pumpAndSettle();
+    expect(badge('Talk', '1'), findsOneWidget);
+    expect(badge('Talk', '2'), findsNothing);
   });
 
   scene('new tasks show their number on Tasks', (tester) async {

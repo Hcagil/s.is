@@ -102,7 +102,7 @@ final class AdminPanelsState {
   }
 
   /// How many items are new on each tab (keys talk, questions, tasks).
-  Map<String, int> get newCounts => adminNewCounts(snapshot, seen);
+  Map<String, int> get newCounts => adminNewCounts(snapshot, seen, readUpto);
 
   AdminPanelsState copyWith({
     AdminGate? gate,

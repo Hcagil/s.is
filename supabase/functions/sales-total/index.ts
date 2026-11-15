@@ -11,6 +11,7 @@
 // or { error: 'finish' } (500) if saving the result failed,
 // or { ok: true, ran: true, result: 'ok'|'failed' } (200) on success.
 // Never logs or returns the amount, the password or the source's reply.
+// A failed fetch logs one line: "sales: fetch failed code=<login|timeout|shape|other> step=<page|action|report|parse|amount|->" (codes only, no secret, URL or body).
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { fetchSalesTotal, SalesError } from './source.ts';
 
@@ -72,7 +73,8 @@ Deno.serve(async (req) => {
     ]);
   } catch (e) {
     reason = e instanceof SalesError ? e.code : 'other';
-    console.log('sales: fetch failed');
+    const step = e instanceof SalesError ? e.step ?? '-' : '-';
+    console.log(`sales: fetch failed code=${reason} step=${step}`);
   } finally {
     clearTimeout(timer);
   }
@@ -80,6 +82,7 @@ Deno.serve(async (req) => {
   if (amount !== null && (amount.length > 25 || !/^[0-9]{1,3}([.,' ][0-9]{3})*([.,][0-9]{1,2})?$|^[0-9]+([.,][0-9]{1,2})?$/.test(amount))) {
     amount = null;
     reason = 'shape';
+    console.log('sales: fetch failed code=shape step=amount');
   }
 
   const { error } = await db.rpc('sales_job_finish', { job: jobId, amount, reason: amount === null ? reason : null });

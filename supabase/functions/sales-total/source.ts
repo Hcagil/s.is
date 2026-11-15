@@ -1,5 +1,6 @@
+export type SalesStep = 'page' | 'action' | 'report' | 'parse';
 export type SalesErrorCode = 'login' | 'timeout' | 'shape' | 'config';
-export class SalesError extends Error { constructor(readonly code: SalesErrorCode) { super(code); } }
+export class SalesError extends Error { constructor(readonly code: SalesErrorCode, readonly step?: SalesStep) { super(code); } }
 
 /**
  * The one place that talks to the sales source; base URL from secret SALES_SOURCE_URL (so a fake server can stand in), SALES_SOURCE_USER / SALES_SOURCE_PASSWORD;
@@ -34,6 +35,7 @@ export async function fetchSalesTotal(day: string, prev: boolean): Promise<strin
   }
   const base = baseUrl.replace(/\/+$/, '');
   const signal = AbortSignal.timeout(15000);
+  let step: SalesStep = 'page';
   try {
     // the site rejects a login without the anti-forgery token (hidden field + matching cookie from the login page)
     const page = await fetch(`${base}/Authentication/Login`, { redirect: 'manual', signal });
@@ -50,7 +52,8 @@ export async function fetchSalesTotal(day: string, prev: boolean): Promise<strin
         field = tag.match(/value="([^"]*)"/)?.[1];
       }
     }
-    if (!field || !pre.some((c) => c.startsWith('__RequestVerificationToken='))) throw new SalesError('login');
+    if (!field || !pre.some((c) => c.startsWith('__RequestVerificationToken='))) throw new SalesError('login', step);
+    step = 'action';
     const res = await fetch(`${base}/Authentication/LoginAction`, {
       method: 'POST', redirect: 'manual', signal,
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', Cookie: pre.join('; ') },
@@ -58,23 +61,25 @@ export async function fetchSalesTotal(day: string, prev: boolean): Promise<strin
     });
     await res.body?.cancel();
     const set = res.headers.getSetCookie();
-    if (res.status >= 400 || set.length === 0) throw new SalesError('login');
+    if (res.status >= 400 || set.length === 0) throw new SalesError('login', step);
     const cookie = [...pre, ...set.map((c) => c.split(';')[0])].join('; ');
+    step = 'report';
     const res2 = await fetch(`${base}/OzetRaporlar/List?durum=${prev ? 'dun' : 'bugun'}`, { redirect: 'manual', signal, headers: { Cookie: cookie } });
     if (res2.status !== 200) {
       await res2.body?.cancel();
-      throw new SalesError('login'); // a wrong login also answers 302: only 200 means the session is accepted
+      throw new SalesError('login', step); // a wrong login also answers 302: only 200 means the session is accepted
     }
+    step = 'parse';
     const html = await readCapped(res2);
     // the regex backtracks badly on a crafted body, so it only sees the 512 bytes after the label
     const i = html.indexOf('Toplam Ciro</div>');
     const m = i < 0 ? null : html.slice(i, i + 512).match(/Toplam Ciro<\/div>\s*<[^>]*class="[^"]*dash-stat-value[^"]*"[^>]*>\s*([0-9.,]+)\s*</);
-    if (!m) throw new SalesError('shape');
+    if (!m) throw new SalesError('shape', step);
     return m[1];
   } catch (e) {
-    if (e instanceof SalesError) throw e;
+    if (e instanceof SalesError) throw e.step ? e : new SalesError(e.code, step);
     const n = (e as { name?: string }).name;
-    if (n === 'TimeoutError' || n === 'AbortError') throw new SalesError('timeout');
+    if (n === 'TimeoutError' || n === 'AbortError') throw new SalesError('timeout', step);
     throw e; // network error: index.ts counts it as 'other'
   }
 }

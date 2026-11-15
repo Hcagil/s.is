@@ -230,10 +230,48 @@ sb_cleanup() {
   SB_ID=
 }
 
+# Each run gets its own Gradle home: Gradle's lock files cannot work across containers (separate PID namespaces). The shared cache is mounted read-only as GRADLE_RO_DEP_CACHE, so downloads stay fast; the run's new files are merged back at the end. shortcut: the merge writes into the read-only seed while another run may read it (cp -n never overwrites; flock only orders merges), upgrade to a copy-then-rename if a half-copied file ever shows up.
+# Globals: GR_DIR GR_COMPOSE.
+gradle_isolate() {
+  local shared="${SIS_CI_CACHE:-$HOME/.cache/sis-ci}/gradle"
+  GR_DIR="$PWD/.ci-cache/gradle-run-$$"
+  GR_COMPOSE="$PWD/.ci-cache/gradle-run-$$.yaml"
+  mkdir -p "$GR_DIR" "$shared/caches" "$shared/wrapper"
+  cp -a "$shared/wrapper" "$GR_DIR/wrapper"
+  CI+=(-f "$GR_COMPOSE")
+  cat > "$GR_COMPOSE" <<EOF
+services:
+  flutter:
+    environment:
+      GRADLE_RO_DEP_CACHE: /home/ubuntu/.gradle-ro
+    volumes:
+      - $GR_DIR:/home/ubuntu/.gradle
+      - $shared/caches:/home/ubuntu/.gradle-ro:ro
+EOF
+  echo "android run: own Gradle home $GR_DIR"
+}
+
+# Merge this run's new Gradle files into the shared seed, then drop the run's home; safe to call twice or when gradle_isolate never ran.
+gradle_cleanup() {
+  [ -n "${GR_DIR:-}" ] || return 0
+  local shared="${SIS_CI_CACHE:-$HOME/.cache/sis-ci}/gradle" d
+  (
+    flock 8
+    for d in caches/modules-2 wrapper; do
+      [ -d "$GR_DIR/$d" ] || continue
+      mkdir -p "$shared/$d"
+      cp -an "$GR_DIR/$d/." "$shared/$d/"
+    done
+  ) 8>"$shared.lock" || true
+  rm -rf "$GR_DIR" 2>/dev/null || docker run --rm -v "$PWD/.ci-cache:/c" alpine rm -rf "/c/gradle-run-$$" >/dev/null 2>&1 || true
+  rm -f "$GR_COMPOSE"
+  GR_DIR=
+}
+
 job_database() {
   # Own project id, ports and database per run, so two worktrees can run at once; cleaned up on any exit.
-  trap sb_cleanup EXIT
-  trap 'sb_cleanup; exit 130' INT TERM
+  trap 'sb_cleanup; gradle_cleanup' EXIT
+  trap 'sb_cleanup; gradle_cleanup; exit 130' INT TERM
   sb_isolate || return 1
   step "Build Supabase tooling image" docker compose build supabase || return 1
   # Zero state: --no-backup drops this run's data volumes only (project id is per run; never --all).
@@ -265,11 +303,12 @@ run_job() {
   fi
 }
 
-[ "$want_android" = 0 ] || run_job android
+[ "$want_android" = 0 ] || { gradle_isolate; run_job android; }
 if [ "$want_database" = 1 ]; then
   run_job database
   sb_cleanup
 fi
+gradle_cleanup
 # Drops this worktree's compose network (no -v: volumes are kept).
 docker compose down --remove-orphans >/dev/null 2>&1 || true
 echo

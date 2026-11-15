@@ -145,6 +145,41 @@ final class AdminWorkEntry {
   final int depth;
 }
 
+/// One rate limit of the Claude plan (for example the 5 hour or weekly limit).
+final class AdminRateLimit {
+  /// Creates an [AdminRateLimit].
+  const AdminRateLimit({
+    required this.kind,
+    required this.percentUsed,
+    this.resetsAt,
+  });
+
+  /// Builds one from an exported map; null when it has no usable kind or percent.
+  static AdminRateLimit? tryParse(Object? raw) {
+    if (raw is! Map) return null;
+    final kind = raw['kind'];
+    final pct = raw['percentUsed'];
+    if (kind is! String || kind.isEmpty || pct is! num || !pct.isFinite) {
+      return null;
+    }
+    final at = raw['resetsAt'];
+    return AdminRateLimit(
+      kind: kind,
+      percentUsed: pct.toInt(),
+      resetsAt: at is String ? at : null,
+    );
+  }
+
+  /// Which limit it is (for example the 5 hour or the weekly one).
+  final String kind;
+
+  /// How much of the limit is used, in percent.
+  final int percentUsed;
+
+  /// When the limit resets (text from the computer), or null.
+  final String? resetsAt;
+}
+
 /// Dashboard data: what works now and the sessions.
 final class AdminDashboard {
   /// True when the computer status is missing or older than 5 minutes.
@@ -153,6 +188,7 @@ final class AdminDashboard {
   const AdminDashboard({
     required this.working,
     required this.sessions,
+    this.usage = const [],
     this.stale = false,
   });
 
@@ -180,9 +216,17 @@ final class AdminDashboard {
       sessions = const [];
     }
 
+    final usageRaw = f['usage'];
+    final limitsRaw = usageRaw is Map ? usageRaw['rateLimits'] : null;
+    final usage = <AdminRateLimit>[
+      if (limitsRaw is List)
+        for (final e in limitsRaw) ?AdminRateLimit.tryParse(e),
+    ];
+
     return AdminDashboard(
       working: working,
       sessions: sessions,
+      usage: usage,
       stale: f['stale'] == true,
     );
   }
@@ -192,4 +236,7 @@ final class AdminDashboard {
 
   /// The desk sessions.
   final List<AdminSession> sessions;
+
+  /// The rate limits the computer sent (empty when none).
+  final List<AdminRateLimit> usage;
 }

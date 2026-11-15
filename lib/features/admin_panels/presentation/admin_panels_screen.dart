@@ -81,6 +81,7 @@ class _AdminPanelsScreenState extends ConsumerState<AdminPanelsScreen>
     final counts = panels.newCounts;
     if (gate == AdminGate.ready &&
         openTab != null &&
+        openTab != 'talk' && // talk counts unread conversations, not seen ids
         (counts[openTab] ?? 0) > 0) {
       // The tab that is open shows no number: what it holds is seen.
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -92,7 +93,15 @@ class _AdminPanelsScreenState extends ConsumerState<AdminPanelsScreen>
       backgroundColor: t.background,
       appBar: AppBar(
         title: Text(l.adminTitle),
-        actions: [if (gate == AdminGate.ready) _ConnIcon(panels.conn, t.muted)],
+        actions: [
+          if (gate == AdminGate.ready)
+            _ConnIcon(
+              panels.conn,
+              t.muted,
+              () =>
+                  unawaited(ref.read(adminPanelsProvider.notifier).reconnect()),
+            ),
+        ],
       ),
       body: SafeArea(
         child: switch (gate) {
@@ -218,10 +227,11 @@ class _Message extends StatelessWidget {
 
 /// The connection icon in the top bar: exactly one state at a time.
 class _ConnIcon extends StatelessWidget {
-  const _ConnIcon(this.conn, this.mutedColor);
+  const _ConnIcon(this.conn, this.mutedColor, this.onTap);
 
   final AdminConn conn;
   final Color mutedColor;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -250,8 +260,17 @@ class _ConnIcon extends StatelessWidget {
       padding: const EdgeInsets.only(right: 16),
       child: Semantics(
         label: label,
+        button: true,
+        onTap: onTap,
         excludeSemantics: true,
-        child: Icon(icon, key: ValueKey('admin-conn-$key'), color: color),
+        child: InkResponse(
+          onTap: onTap,
+          radius: 24,
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: Icon(icon, key: ValueKey('admin-conn-$key'), color: color),
+          ),
+        ),
       ),
     );
   }

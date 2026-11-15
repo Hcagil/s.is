@@ -434,27 +434,35 @@ jobs:
               grep -q 'Xcode build done' "$log" && waited=$((waited + 1))
             done
             if kill -0 "$pid" 2>/dev/null; then
-              # A retry happens only when the log has no result line: a result line means the test ran, so its result is final.
+              # A retry happens only when the log has no progress line and no result line: the app never reached the tests.
+              progress=false
+              result=false
               result_fail=false
               result_pass=false
-              if grep -qE 'Some tests failed|^[0-9:]+ \+[0-9]+ -[0-9]+' "$log"; then
+              if grep -qE '^[0-9]{2}:[0-9]{2} \+[0-9]+[ :]' "$log"; then
+                progress=true
+              fi
+              if grep -qE 'Some tests failed|All tests passed|[0-9]+ tests? passed' "$log"; then
+                result=true
+              fi
+              if grep -qE 'Some tests failed|^[0-9]{2}:[0-9]{2} \+[0-9]+ -[1-9][0-9]*[ :]' "$log"; then
                 result_fail=true
               fi
               if grep -qE 'All tests passed|[0-9]+ tests? passed' "$log" && [ "$result_fail" = false ]; then
                 result_pass=true
               fi
-              if [ "$result_fail" = true ] || [ "$result_pass" = true ]; then
+              if [ "$progress" = true ] || [ "$result" = true ]; then
                 pkill -P "$pid" || true
                 kill "$pid" || true
                 wait "$pid" 2>/dev/null || true
                 sleep 1
                 kill "$tail_pid" || true
-                if [ "$result_fail" = true ]; then
-                  echo "::error::video prep test failed (the run hung after printing its result): $(grep -E 'Some tests failed|^[0-9:]+ \+[0-9]+ -[0-9]+' "$log" | tail -1)"
-                  exit 1
+                if [ "$result_pass" = true ]; then
+                  echo "::notice::video prep test passed (the run hung after printing its result; stopped)"
+                  exit 0
                 fi
-                echo "::notice::video prep test passed (the run hung after printing its result; stopped)"
-                exit 0
+                echo "::error::video prep test did not finish with a pass (the run hung after printing: $(grep -E 'Some tests failed|[0-9]+ tests? passed|All tests passed|^[0-9]{2}:[0-9]{2} \+[0-9]+[ :]' "$log" | tail -1))"
+                exit 1
               fi
               echo "::warning::video prep test attempt $attempt: no result ${limit}s after the Xcode build (stuck installing, launching or reaching the app); stopped"
               ps -axo pid,etime,command | grep -E 'simctl|xcodebuild|flutter|Runner' | grep -v grep || true

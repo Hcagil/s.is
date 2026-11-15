@@ -406,11 +406,12 @@ jobs:
             exit "$rc"
           }
       # The video copy and its real AVFoundation read, on a booted simulator.
-      # Normally ~11 of the 20 minutes: boot ~1-2, flutter's own start ~3-4,
+      # Normally ~11 of the 30 minutes: boot ~1-2, flutter's own start ~3-4,
       # the cold Xcode build ~4-6, then install, launch and the 3 tests ~1.
       # That last phase once hung silently until the step limit. It gets its
-      # own clock, started by flutter's "Xcode build done" line, and each call
-      # in the test has its own timeout, so a hang fails in minutes, named.
+      # own clock, started by flutter's "Xcode build done" line; a stall with
+      # no result line is retried once (boot again, fresh log), so a hang
+      # fails in minutes, named. A printed result is final, never retried.
       - name: Video prep integration test (simulator)
         timeout-minutes: 30
         run: |
@@ -433,7 +434,28 @@ jobs:
               grep -q 'Xcode build done' "$log" && waited=$((waited + 1))
             done
             if kill -0 "$pid" 2>/dev/null; then
-              # Only this watchdog retries: the app never ran, so no test result is hidden.
+              # A retry happens only when the log has no result line: a result line means the test ran, so its result is final.
+              result_fail=false
+              result_pass=false
+              if grep -qE 'Some tests failed|^[0-9:]+ \+[0-9]+ -[0-9]+' "$log"; then
+                result_fail=true
+              fi
+              if grep -qE 'All tests passed|[0-9]+ tests? passed' "$log" && [ "$result_fail" = false ]; then
+                result_pass=true
+              fi
+              if [ "$result_fail" = true ] || [ "$result_pass" = true ]; then
+                pkill -P "$pid" || true
+                kill "$pid" || true
+                wait "$pid" 2>/dev/null || true
+                sleep 1
+                kill "$tail_pid" || true
+                if [ "$result_fail" = true ]; then
+                  echo "::error::video prep test failed (the run hung after printing its result): $(grep -E 'Some tests failed|^[0-9:]+ \+[0-9]+ -[0-9]+' "$log" | tail -1)"
+                  exit 1
+                fi
+                echo "::notice::video prep test passed (the run hung after printing its result; stopped)"
+                exit 0
+              fi
               echo "::warning::video prep test attempt $attempt: no result ${limit}s after the Xcode build (stuck installing, launching or reaching the app); stopped"
               ps -axo pid,etime,command | grep -E 'simctl|xcodebuild|flutter|Runner' | grep -v grep || true
               pkill -P "$pid" || true

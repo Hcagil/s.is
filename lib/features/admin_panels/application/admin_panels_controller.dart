@@ -86,6 +86,12 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
   /// Counts lock() calls; open() gives up when it changed while it waited.
   int _lockCount = 0;
 
+  /// Read marks not sent yet (conversation id -> upto); re-sent one per poll tick, cleared on success.
+  final Map<String, int> _pendingRead = {};
+
+  /// When the last up message went out (the server allows one per 5 s).
+  DateTime? _lastSendAt;
+
   @override
   AdminPanelsState build() {
     ref.onDispose(_stop);
@@ -193,6 +199,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     _sessionSeq = null;
     _epoch = null;
     _resyncAt = null;
+    _pendingRead.clear();
     _assembler.reset();
     state = const AdminPanelsState();
     unawaited(ref.read(adminDraftsProvider).forget());
@@ -506,7 +513,10 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
       case Err(:final failure):
         return failure;
       case Ok(value: final sent):
-        if (ref.mounted) _track(message, sent);
+        if (ref.mounted) {
+          _lastSendAt = ref.read(adminClockProvider)();
+          _track(message, sent);
+        }
         return null;
     }
   }
@@ -539,18 +549,33 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     );
   }
 
-  /// Tells the computer the owner read [conv] up to [upto] (the computer's own message time, never the phone clock). Sent once per open, only when [upto] is newer than what the computer and this phone already know; the local mark stays when the send fails (no retry queue). Null = nothing to send or sent, else why not.
+  /// Tells the computer the owner read [conv] up to [upto] (the computer's own message time, never the phone clock). Only when [upto] is newer than what the computer, this phone and the pending mark already know. The mark stays pending when the send fails and is re-sent on a later poll tick; the local read state rises only after a successful send. Null = nothing to send or sent, else why not.
   Future<Failure?> markConversationRead(AdminConversation conv, int upto) {
     final known = state.readUpto[conv.id] ?? 0;
     final base = conv.seen > known ? conv.seen : known;
-    if (upto <= base) return Future.value();
+    if (upto <= base || upto <= (_pendingRead[conv.id] ?? 0)) {
+      return Future.value();
+    }
+    _pendingRead[conv.id] = upto;
+    // Read at once on screen; the pending mark is re-sent until it succeeds.
     state = state.copyWith(readUpto: {...state.readUpto, conv.id: upto});
-    return _send({
+    return _sendRead(conv.id, upto);
+  }
+
+  Future<Failure?> _sendRead(String conv, int upto) async {
+    final lockedAt = _lockCount;
+    final f = await _send({
       'answer_id': _newAnswerId(),
       'kind': 'read',
-      'conv': conv.id,
+      'conv': conv,
       'upto': upto,
     });
+    if (f != null || !ref.mounted || _lockCount != lockedAt) return f;
+    if (_pendingRead[conv] == upto) _pendingRead.remove(conv);
+    if (upto > (state.readUpto[conv] ?? 0)) {
+      state = state.copyWith(readUpto: {...state.readUpto, conv: upto});
+    }
+    return null;
   }
 
   /// Sends the owner's answer to one question; the card then shows as waiting.
@@ -653,6 +678,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
 
   Future<void> _tick() async {
     if (!ref.mounted || !_foreground) return;
+    await _retryRead();
     if (state.gate == AdminGate.link) {
       await checkLink();
     } else if (state.gate == AdminGate.ready ||
@@ -660,6 +686,26 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
       await refresh();
     }
     if (ref.mounted) _schedule();
+  }
+
+  /// Re-sends one pending read mark per poll tick, never within 5 s of another send (the server's limit).
+  Future<void> _retryRead() async {
+    if (_pendingRead.isEmpty || state.gate != AdminGate.ready) return;
+    final at = _lastSendAt;
+    if (at != null &&
+        ref.read(adminClockProvider)().difference(at) <
+            const Duration(seconds: 5)) {
+      return;
+    }
+    final e = _pendingRead.entries.first;
+    await _sendRead(e.key, e.value);
+  }
+
+  /// The owner tapped the connection icon: fetch now (the icon turns to connecting first). Never starts a second fetch while one runs.
+  Future<void> reconnect() async {
+    if (_busy) return;
+    state = state.copyWith(conn: AdminConn.connecting);
+    await refresh();
   }
 
   void _stop() {

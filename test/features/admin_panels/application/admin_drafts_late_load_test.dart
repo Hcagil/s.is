@@ -114,4 +114,82 @@ void main() {
       reason: 'sent draft still saved on the phone',
     );
   });
+
+  test(
+    'after a remove, a new write of the same key is kept and saved',
+    () async {
+      store.saved = {'k': 'hello'};
+      store.hold = false;
+
+      await d.remove('k');
+      await d.flush();
+      await pumpEventQueue();
+
+      await d.write('k', 'new text');
+      await d.flush();
+      await pumpEventQueue();
+
+      expect(await d.read('k'), 'new text');
+      expect(store.saved['k'], 'new text');
+    },
+  );
+
+  test(
+    'remove, lock, then a write before the new load lands: the new text wins',
+    () async {
+      store.saved = {'k': 'hello'};
+      store.hold = false;
+
+      await d.remove('k');
+      await pumpEventQueue();
+
+      await d.forget();
+      await pumpEventQueue();
+
+      store.hold = true;
+
+      final r = d.read('k');
+      await pumpEventQueue();
+
+      final w = d.write('k', 'new');
+      await pumpEventQueue();
+
+      store.hold = false;
+      for (final gate in store.gates) {
+        if (!gate.isCompleted) gate.complete();
+      }
+
+      await r;
+      await w;
+      await d.flush();
+      await pumpEventQueue();
+
+      expect(
+        await d.read('k'),
+        'new',
+        reason: 'a write after a sent draft was lost',
+      );
+      expect(store.saved['k'], 'new');
+    },
+  );
+
+  test('a new write after a remove survives a later lock and unlock', () async {
+    store.saved = {'k': 'hello'};
+    await d.remove('k');
+    await pumpEventQueue();
+
+    await d.write('k', 'new');
+    await d.flush();
+    await pumpEventQueue();
+
+    await d.forget();
+    await pumpEventQueue();
+
+    expect(
+      await d.read('k'),
+      'new',
+      reason: 'a sent key stayed blocked after a new write',
+    );
+    expect(store.saved['k'], 'new');
+  });
 }

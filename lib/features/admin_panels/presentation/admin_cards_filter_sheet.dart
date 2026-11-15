@@ -48,9 +48,13 @@ class AdminCardsFilterSheet extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                l.adminCardsFiltersTitle,
-                style: Theme.of(context).textTheme.titleMedium,
+              Semantics(
+                key: const Key('admin-cards-filter-sheet-title'),
+                header: true,
+                child: Text(
+                  l.adminCardsFiltersTitle,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
               ),
               const SizedBox(height: 12),
               Wrap(

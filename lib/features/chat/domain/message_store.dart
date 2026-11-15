@@ -25,7 +25,10 @@ final class ChangeCursor {
 
 /// A store write failed after its retries. Carries no message on purpose: the SQL error text can hold the row being written (message text, ciphertext).
 final class StoreWriteException implements Exception {
-  const StoreWriteException();
+  const StoreWriteException([this.cause]);
+
+  /// The first database error of the failed write (never printed: it can hold row data).
+  final Object? cause;
 
   @override
   String toString() => 'StoreWriteException';

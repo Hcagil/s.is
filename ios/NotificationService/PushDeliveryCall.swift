@@ -10,6 +10,7 @@ final class URLSessionDeliveryCaller: NSObject, DeliveryCalling, URLSessionTaskD
   func send(_ request: URLRequest, completion: @escaping () -> Void) {
     let config = URLSessionConfiguration.ephemeral
     config.timeoutIntervalForRequest = PushDelivery.timeout
+    config.timeoutIntervalForResource = PushDelivery.timeout // hard cap on the whole request, not only idle time
     let session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
     let task = session.dataTask(with: request) { [weak self] _, _, _ in
       self?.finish()

@@ -2775,6 +2775,21 @@ class AppLocalizationsTr extends AppLocalizations {
       'Mesaj gönderilemedi. Yazdığınız metin duruyor. Tekrar deneyin.';
 
   @override
+  String get adminTalkPin => 'Sabitle';
+
+  @override
+  String get adminTalkUnpin => 'Sabitlemeyi kaldır';
+
+  @override
+  String get adminTalkPinned => 'Sabitlenmiş';
+
+  @override
+  String get adminTalkPinFailed => 'Sabitlenemedi. Tekrar deneyin.';
+
+  @override
+  String get adminTalkUnpinFailed => 'Sabitleme kaldırılamadı. Tekrar deneyin.';
+
+  @override
   String get adminRecommended => 'Önerilen';
 
   @override
@@ -2841,6 +2856,17 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get adminCardsAll => 'Tümü';
+
+  @override
+  String get adminCardsFilters => 'Filtreler';
+
+  @override
+  String adminCardsFiltersOn(int count) {
+    return 'Filtreler, $count açık';
+  }
+
+  @override
+  String get adminCardsFiltersTitle => 'Filtreler';
 
   @override
   String get adminCardsActive => 'Etkin';

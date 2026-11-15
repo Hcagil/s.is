@@ -2802,6 +2802,21 @@ class AppLocalizationsEn extends AppLocalizations {
       'Message not sent. Your text is still here. Try again.';
 
   @override
+  String get adminTalkPin => 'Pin';
+
+  @override
+  String get adminTalkUnpin => 'Unpin';
+
+  @override
+  String get adminTalkPinned => 'Pinned';
+
+  @override
+  String get adminTalkPinFailed => 'Could not pin. Try again.';
+
+  @override
+  String get adminTalkUnpinFailed => 'Could not unpin. Try again.';
+
+  @override
   String get adminRecommended => 'Recommended';
 
   @override
@@ -2868,6 +2883,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminCardsAll => 'All';
+
+  @override
+  String get adminCardsFilters => 'Filters';
+
+  @override
+  String adminCardsFiltersOn(int count) {
+    return 'Filters, $count on';
+  }
+
+  @override
+  String get adminCardsFiltersTitle => 'Filters';
 
   @override
   String get adminCardsActive => 'Active';

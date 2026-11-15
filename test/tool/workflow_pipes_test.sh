@@ -26,8 +26,10 @@
 #   ci.yml "Video prep integration test (simulator)"
 #   - flutter's output reaches the log; its exit code is the step's; no
 #     clock before "Xcode build done" (a slow build is not a hang); after it,
-#     no result within VIDEO_PREP_AFTER_BUILD_S -> flutter is stopped and the
-#     step fails at once with an ::error:: line;
+#     no result within VIDEO_PREP_AFTER_BUILD_S -> a ::warning:: per attempt,
+#     flutter stopped, simulator shut down, retried up to VIDEO_PREP_ATTEMPTS
+#     (default 2), then an ::error:: and exit 1; a test that ran is final,
+#     never retried; each attempt has its own log;
 #   release.yml `publish` / "Tag and publish release notes"
 #   - creates release v<name>+<code> targeting $SHA (scope's picked commit);
 #     up to 3 tries, waiting 10 s after the 1st failure and 30 s after the 2nd;
@@ -246,37 +248,164 @@ done
 
 # ---- 2b video prep: flutter's exit code, and a hang after the build ----------
 step_run .github/workflows/ci.yml "Video prep integration test (simulator)" "$tmp/video.sh"
-# flutter: prints its arguments; FL_BUILT=1 prints flutter's "Xcode build
-# done" line; then sleeps FL_SLEEP seconds (exec: the step's kill reaches it)
-# or exits FL_RC.
-stub flutter 'echo "flutter $*"
-[ "${FL_BUILT:-0}" = 1 ] && echo "Xcode build done.                                           248.7s"
-[ "${FL_SLEEP:-0}" = 0 ] || exec sleep "$FL_SLEEP"
-exit "${FL_RC:-0}"'
-video() { # <shell> <FL_BUILT> <FL_SLEEP> <FL_RC> -> rc of the step; output in $tmp/out, seconds in $tmp/secs
+
+# Redefine xcrun stub
+stub xcrun 'case "$*" in
+  "simctl list devices available") cat "$DEVICES" ;;
+  "simctl bootstatus "*" -b") ;;
+  "simctl shutdown "*) echo "$*" >> "$tmp/shutdown.log" ;;
+  *) echo "xcrun stub: unexpected: $*" >&2; exit 2 ;;
+esac'
+
+# flutter stub: per attempt defined by FL_PLAN
+stub flutter '
+  echo "flutter $*"
+  echo x >> "$tmp/fl.count"
+  n=$(wc -l < "$tmp/fl.count")
+  word=$(echo $FL_PLAN | cut -d" " -f$n)
+  case "$word" in
+    hang)
+      echo "Xcode build done.   248.7s"
+      exec sleep 30
+      ;;
+    pass)
+      echo "Xcode build done.   248.7s"
+      exit 0
+      ;;
+    grpok)
+      echo "Xcode build done.   248.7s"
+      echo "::group::✅ (a) one"
+      exec sleep 30
+      ;;
+    grpfail)
+      echo "Xcode build done.   248.7s"
+      echo "::group::❌ (b) two (failed)"
+      exec sleep 30
+      ;;
+    errsum)
+      echo "Xcode build done.   248.7s"
+      echo "::error::2 tests passed, 1 failed."
+      exec sleep 30
+      ;;
+    passsum)
+      echo "Xcode build done.   248.7s"
+      echo "::group::✅ x"
+      echo "🎉 3 tests passed."
+      exec sleep 30
+      ;;
+    cpass)
+      echo "Xcode build done.   248.7s"
+      echo "00:03 +1: x"
+      exec sleep 30
+      ;;
+    cfail)
+      echo "Xcode build done.   248.7s"
+      echo "00:03 +1 -2: x"
+      exec sleep 30
+      ;;
+    flaky)
+      echo "Xcode build done.   248.7s"
+      echo "::warning::3 tests passed, 1 flaky."
+      exec sleep 30
+      ;;
+    failpass)
+      echo "Xcode build done.   248.7s"
+      echo "::group::❌ y (failed)"
+      echo "🎉 2 tests passed."
+      exec sleep 30
+      ;;
+    nobuild)
+      exec sleep 4
+      ;;
+    *)
+      echo "Xcode build done.   248.7s"
+      exit "$word"
+      ;;
+  esac
+'
+
+# helper video()
+video() { # <shell> <FL_PLAN> [attempts]
   local rc=0 t0=$SECONDS
-  PATH="$tmp/bin:$PATH" DEVICES="$tmp/dev-normal" RUNNER_TEMP="$tmp/rt" VIDEO_PREP_AFTER_BUILD_S=2 \
-    FL_BUILT=$2 FL_SLEEP=$3 FL_RC=$4 $1 "$tmp/video.sh" > "$tmp/out" 2>&1 || rc=$?
+  : > "$tmp/fl.count"
+  rm -f "$tmp/shutdown.log" "$tmp/rt"/video-prep-*.log
+  env PATH="$tmp/bin:$PATH" DEVICES="$tmp/dev-normal" RUNNER_TEMP="$tmp/rt" VIDEO_PREP_AFTER_BUILD_S=2 tmp="$tmp" \
+    FL_PLAN="$2" ${3:+VIDEO_PREP_ATTEMPTS=$3} $1 "$tmp/video.sh" > "$tmp/out" 2>&1 || rc=$?
   echo $((SECONDS - t0)) > "$tmp/secs"
   return $rc
 }
+
 mkdir -p "$tmp/rt"
+
 for sh in "${SHELLS[@]}"; do
-  video "$sh" 1 0 0 || fail "a passing flutter test failed the step under '$sh'"
+  # pass
+  rc=0; video "$sh" pass || rc=$?
+  [ "$rc" -eq 0 ] || fail "a passing flutter test failed the step under '$sh'"
   grep -qxF "flutter test integration_test/video_source_prep_ios_test.dart -d $A" "$tmp/out" \
     || fail "flutter's output (or the -d $A) is missing from the step log under '$sh': $(cat "$tmp/out")"
   ! grep -q '::error::' "$tmp/out" || fail "a passing run printed an error under '$sh'"
-  rc=0; video "$sh" 1 0 3 || rc=$?
-  [ "$rc" = 3 ] || fail "flutter test exit 3 ended the step with $rc under '$sh'"
-  ! grep -q '::error::' "$tmp/out" || fail "a failing test was reported as a hang under '$sh'"
-  # Built, then silent: stopped after the 2 s limit, not after the 30 s sleep.
-  rc=0; video "$sh" 1 30 0 || rc=$?
-  [ "$rc" != 0 ] || fail "flutter hanging after the build passed the step under '$sh'"
-  [ "$(cat "$tmp/secs")" -le 10 ] || fail "a hang after the build took $(cat "$tmp/secs")s to fail under '$sh'"
-  grep -q '^::error::video prep test: no result 2s after the Xcode build' "$tmp/out" \
-    || fail "a hang after the build has no ::error:: line under '$sh': $(cat "$tmp/out")"
-  # Still building after the limit (no "Xcode build done" yet): not a hang.
-  video "$sh" 0 4 0 || fail "a build slower than the after-build limit failed the step under '$sh': $(cat "$tmp/out")"
+
+  # 3 pass
+  rc=0; video "$sh" "3 pass" || rc=$?
+  [ "$rc" -eq 3 ] || fail "flutter test exit 3 ended the step with $rc under '$sh': $(cat "$tmp/out")"
+  ! grep -q '::warning::' "$tmp/out" || fail "3 pass test printed a warning under '$sh'"
+  ! grep -q '::error::' "$tmp/out" || fail "3 pass test printed an error under '$sh'"
+  [ ! -s "$tmp/shutdown.log" ] || fail "shutdown.log should be empty for 3 pass under '$sh'"
+  [ ! -f "$tmp/rt/video-prep-2.log" ] || fail "video-prep-2.log should not exist for 3 pass under '$sh'"
+
+  # hang hang
+  rc=0; video "$sh" "hang hang" || rc=$?
+  [ "$rc" -eq 1 ] || fail "a double hang ended the step with $rc, not 1, under '$sh': $(cat "$tmp/out")"
+  warnings=$(grep -c '^::warning::video prep test attempt ' "$tmp/out" || true)
+  [ "$warnings" -eq 2 ] || fail "hang hang should produce 2 warnings under '$sh', got $warnings"
+  grep -q '^::error::video prep test: stuck after the Xcode build in all 2 attempts' "$tmp/out" \
+    || fail "hang hang missing final error under '$sh'"
+  [ "$(wc -l < "$tmp/shutdown.log")" -eq 2 ] || fail "shutdown.log should have 2 lines for hang hang under '$sh'"
+  [ "$(cat "$tmp/secs")" -le 20 ] || fail "hang hang took too long under '$sh'"
+  [ -f "$tmp/rt/video-prep-1.log" ] || fail "video-prep-1.log missing for hang hang under '$sh'"
+  [ -f "$tmp/rt/video-prep-2.log" ] || fail "video-prep-2.log missing for hang hang under '$sh'"
+
+  # hang pass
+  rc=0; video "$sh" "hang pass" || rc=$?
+  [ "$rc" -eq 0 ] || fail "hang pass flutter test failed the step under '$sh'"
+  warnings=$(grep -c '^::warning::video prep test attempt ' "$tmp/out" || true)
+  [ "$warnings" -eq 1 ] || fail "hang pass should produce 1 warning under '$sh', got $warnings"
+  ! grep -q '::error::' "$tmp/out" || fail "hang pass printed an error under '$sh'"
+  [ "$(wc -l < "$tmp/shutdown.log")" -eq 1 ] || fail "shutdown.log should have 1 line for hang pass under '$sh'"
+  [ -f "$tmp/rt/video-prep-1.log" ] || fail "video-prep-1.log missing for hang pass under '$sh'"
+  [ -f "$tmp/rt/video-prep-2.log" ] || fail "video-prep-2.log should exist for hang pass under '$sh'"
+
+  # hang hang with attempts 1
+  rc=0; video "$sh" "hang hang" 1 || rc=$?
+  [ "$rc" -eq 1 ] || fail "a hang with 1 attempt ended the step with $rc, not 1, under '$sh': $(cat "$tmp/out")"
+  warnings=$(grep -c '^::warning::video prep test attempt ' "$tmp/out" || true)
+  [ "$warnings" -eq 1 ] || fail "hang hang attempts 1 should produce 1 warning under '$sh', got $warnings"
+  grep -q '^::error::video prep test: stuck after the Xcode build in all 1 attempts' "$tmp/out" \
+    || fail "hang hang attempts 1 missing final error under '$sh'"
+  [ "$(wc -l < "$tmp/shutdown.log")" -eq 1 ] || fail "shutdown.log should have 1 line for hang hang attempts 1 under '$sh'"
+
+  # nobuild
+  rc=0; video "$sh" nobuild || rc=$?
+  [ "$rc" -eq 0 ] || fail "nobuild flutter test failed the step under '$sh'"
+  ! grep -q '::warning::' "$tmp/out" || fail "nobuild printed a warning under '$sh'"
+  ! grep -q '::error::' "$tmp/out" || fail "nobuild printed an error under '$sh'"
+
+  # a printed reporter line makes the attempt final: no retry, no warning, no shutdown
+  for w in grpok grpfail errsum cpass cfail flaky failpass; do
+    rc=0; video "$sh" "$w pass" || rc=$?
+    [ "$rc" -eq 1 ] || fail "$w then hang ended with $rc, not 1, under '$sh': $(cat "$tmp/out")"
+    ! grep -q '^::warning::video prep test attempt ' "$tmp/out" || fail "$w then hang was retried under '$sh'"
+    grep -q '^::error::video prep test did not finish with a pass' "$tmp/out" || fail "$w then hang missing final error under '$sh'"
+    [ ! -f "$tmp/shutdown.log" ] || fail "$w then hang shut the simulator down under '$sh'"
+    [ ! -f "$tmp/rt/video-prep-2.log" ] || fail "$w then hang started attempt 2 under '$sh'"
+  done
+  # a pass summary then hang: exit 0, no retry
+  rc=0; video "$sh" "passsum pass" || rc=$?
+  [ "$rc" -eq 0 ] || fail "passsum then hang ended with $rc, not 0, under '$sh': $(cat "$tmp/out")"
+  ! grep -q '^::warning::video prep test attempt ' "$tmp/out" || fail "passsum then hang was retried under '$sh'"
+  ! grep -q '^::error::' "$tmp/out" || fail "passsum then hang printed an error under '$sh'"
+  [ ! -f "$tmp/shutdown.log" ] || fail "passsum then hang shut the simulator down under '$sh'"
+  [ ! -f "$tmp/rt/video-prep-2.log" ] || fail "passsum then hang started attempt 2 under '$sh'"
 done
 
 # ---- 3 signature authority ---------------------------------------------------

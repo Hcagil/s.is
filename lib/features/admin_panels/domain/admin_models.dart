@@ -128,6 +128,7 @@ final class AdminConversation {
     required this.waiting,
     this.seen = 0,
     this.mat = 0,
+    this.pinnedAt = 0,
   });
 
   /// Parses values safely using `is` checks. Never throws.
@@ -146,6 +147,7 @@ final class AdminConversation {
       waiting: waiting,
       seen: f['seen'] is int ? f['seen'] as int : 0,
       mat: f['mat'] is int ? f['mat'] as int : 0,
+      pinnedAt: f['pinned_at'] is int ? f['pinned_at'] as int : 0,
     );
   }
 
@@ -169,6 +171,12 @@ final class AdminConversation {
 
   /// Seconds since the epoch of the newest manager message; 0 = none or unknown.
   final int mat;
+
+  /// Seconds since the epoch when the conversation was pinned (computer value); 0 = not pinned.
+  final int pinnedAt;
+
+  /// Whether the conversation is pinned.
+  bool get isPinned => pinnedAt > 0;
 
   /// Whether the conversation is unread, given what this phone read ([readUpto]). An old computer sends neither [seen] nor [mat]: then the old [unread] bool decides.
   bool isUnread(int readUpto) => seen == 0 && mat == 0

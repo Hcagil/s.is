@@ -33,7 +33,6 @@ final class DriftMessageStore
   final Future<String> Function() _key;
   final Future<void> Function() _deleteKey;
   final QueryInterceptor? interceptor;
-  _FirstBeginError _begin = _FirstBeginError();
   Future<StoreDatabase>? _db;
   bool _closed = false;
 
@@ -47,8 +46,6 @@ final class DriftMessageStore
   static String? _earlyPath;
   static String? _earlyKey;
   static int _earlyErasures = 0;
-  static _FirstBeginError?
-  _earlyBegin; // recorder of the early open, handed to the store that takes it
 
   /// Test seam: forgets the prefetched key and the "first open ran" flag.
   @visibleForTesting
@@ -82,16 +79,11 @@ final class DriftMessageStore
         return;
       }
       StartupMarks.mark('early-open-start');
-      final begin = _FirstBeginError();
       opening = _serial(f.path, () async {
         // An erase that began meanwhile wins: never create or re-create the file.
         if (erasuresAtStart != _erasures) throw const _ErasedWhileOpening();
         final db = StoreDatabase(
-          _wrap(
-            NativeDatabase.createInBackground(f, setup: _keyed(key)),
-            null,
-            begin,
-          ),
+          _wrap(NativeDatabase.createInBackground(f, setup: _keyed(key)), null),
         );
         var ok = false;
         try {
@@ -105,7 +97,6 @@ final class DriftMessageStore
         }
       });
       _early = opening;
-      _earlyBegin = begin;
       _earlyPath = f.path;
       _earlyKey = key;
       _earlyErasures = erasuresAtStart;
@@ -122,11 +113,7 @@ final class DriftMessageStore
   }
 
   /// The early open, if it is still valid for [path] and [key] (no erase since it began); otherwise it is closed and null is returned. Single use.
-  static Future<StoreDatabase?> _takeEarly(
-    String path,
-    String key,
-    DriftMessageStore store,
-  ) async {
+  static Future<StoreDatabase?> _takeEarly(String path, String key) async {
     final pending = _early;
     if (pending == null) return null;
     _early = null;
@@ -140,13 +127,10 @@ final class DriftMessageStore
         _earlyPath == path && _earlyKey == key && _earlyErasures == _erasures;
     _earlyPath = null;
     _earlyKey = null;
-    final begin = _earlyBegin;
-    _earlyBegin = null;
     if (!valid) {
       await db.close();
       return null;
     }
-    if (begin != null) store._begin = begin;
     return db;
   }
 
@@ -156,7 +140,6 @@ final class DriftMessageStore
     _early = null;
     _earlyKey = null;
     _earlyPath = null;
-    _earlyBegin = null;
     if (pending == null) return Future<void>.value();
     return pending.then<void>((db) => db.close(), onError: (Object _) {});
   }
@@ -226,6 +209,7 @@ final class DriftMessageStore
     bool write = false,
   }) async {
     if (_closed || ownerId.isEmpty) return fallback;
+    var record = _BeginRecord();
     final opened = _open();
     final done = Completer<void>();
     _inflight.add(done.future);
@@ -241,8 +225,11 @@ final class DriftMessageStore
       // A write racing another connection can fail busy; the bodies are idempotent, so retry before giving up.
       for (var n = 0; ; n++) {
         try {
-          _begin.last = null;
-          return await body(db);
+          record = _BeginRecord();
+          return await runZoned(
+            () => body(db),
+            zoneValues: {_beginKey: record},
+          );
         } catch (e) {
           if (n >= 9 ||
               !(e is DriftRemoteException ||
@@ -260,7 +247,7 @@ final class DriftMessageStore
     } catch (e, st) {
       // An erase that won against this write is on purpose, not a failure.
       if (write && e is! _ErasedWhileOpening) {
-        Error.throwWithStackTrace(StoreWriteException(_begin.last ?? e), st);
+        Error.throwWithStackTrace(StoreWriteException(record.first ?? e), st);
       }
       return fallback;
     } finally {
@@ -405,11 +392,8 @@ final class DriftMessageStore
   }
 
   /// The caller's interceptor (if any) first, then the recorder outside it, so the recorder sees the first error.
-  static QueryExecutor _wrap(
-    QueryExecutor e,
-    QueryInterceptor? i,
-    _FirstBeginError begin,
-  ) => (i == null ? e : e.interceptWith(i)).interceptWith(begin);
+  static QueryExecutor _wrap(QueryExecutor e, QueryInterceptor? i) =>
+      (i == null ? e : e.interceptWith(i)).interceptWith(_FirstBeginError());
 
   Future<StoreDatabase> _create() async {
     final seen = _seen ??= _erasures;
@@ -423,13 +407,13 @@ final class DriftMessageStore
 
     Future<StoreDatabase> attempt() async {
       StartupMarks.mark('store-spawn');
+      // A store with its own interceptor opens a fresh executor: the early open has none.
       final db =
-          await _takeEarly(file.path, key, this) ??
+          (interceptor == null ? await _takeEarly(file.path, key) : null) ??
           StoreDatabase(
             _wrap(
               NativeDatabase.createInBackground(file, setup: _keyed(key)),
               interceptor,
-              _begin,
             ),
           );
       var ok = false;
@@ -927,10 +911,16 @@ Future<void> _deleteFiles(File file) async {
   }
 }
 
-/// Remembers the error a failed transaction start threw, so a later rollback error cannot replace it in StoreWriteException.cause.
-final class _FirstBeginError extends QueryInterceptor {
-  Object? last;
+/// Zone key of the per-write [_BeginRecord] that [_run] sets around each body try.
+final _beginKey = Object();
 
+/// The first error a failed transaction start threw inside one write.
+final class _BeginRecord {
+  Object? first;
+}
+
+/// Records the first failed transaction start into the write's own [_BeginRecord] (found through the zone), so a later rollback error cannot replace it and concurrent writes cannot mix.
+final class _FirstBeginError extends QueryInterceptor {
   @override
   Future<bool> ensureOpen(
     QueryExecutor executor,
@@ -939,7 +929,10 @@ final class _FirstBeginError extends QueryInterceptor {
     try {
       return await super.ensureOpen(executor, user);
     } catch (e) {
-      if (executor is TransactionExecutor) last = e;
+      final record = Zone.current[_beginKey];
+      if (executor is TransactionExecutor && record is _BeginRecord) {
+        record.first ??= e;
+      }
       rethrow;
     }
   }

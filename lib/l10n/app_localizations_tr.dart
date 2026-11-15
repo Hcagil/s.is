@@ -2775,6 +2775,21 @@ class AppLocalizationsTr extends AppLocalizations {
       'Mesaj gönderilemedi. Yazdığınız metin duruyor. Tekrar deneyin.';
 
   @override
+  String get adminTalkPin => 'Sabitle';
+
+  @override
+  String get adminTalkUnpin => 'Sabitlemeyi kaldır';
+
+  @override
+  String get adminTalkPinned => 'Sabitlenmiş';
+
+  @override
+  String get adminTalkPinFailed => 'Sabitlenemedi. Tekrar deneyin.';
+
+  @override
+  String get adminTalkUnpinFailed => 'Sabitleme kaldırılamadı. Tekrar deneyin.';
+
+  @override
   String get adminRecommended => 'Önerilen';
 
   @override

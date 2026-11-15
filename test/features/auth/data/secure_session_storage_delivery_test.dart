@@ -124,4 +124,23 @@ void main() {
     expect(kc.get(null, _key), isNull);
     expect(kc.get(_crypto, _deliveryKey), isNull);
   });
+
+  test('removePersistedSession: main delete throwing still deletes the delivery item', () async {
+    kc.put(null, _key, _session);
+    kc.put(_crypto, _deliveryKey, '{"access_token":"tok-1"}');
+    kc.failDelete = (g, k) => k == _key;
+    await expectLater(
+      _s().removePersistedSession(),
+      throwsA(isA<PlatformException>()),
+    );
+    expect(kc.get(_crypto, _deliveryKey), isNull);
+  });
+
+  test('removePersistedSession: delivery delete throwing still deletes the main key', () async {
+    kc.put(null, _key, _session);
+    kc.put(_crypto, _deliveryKey, '{"access_token":"tok-1"}');
+    kc.failDelete = (g, k) => k == _deliveryKey;
+    await expectLater(_s().removePersistedSession(), completes);
+    expect(kc.get(null, _key), isNull);
+  });
 }

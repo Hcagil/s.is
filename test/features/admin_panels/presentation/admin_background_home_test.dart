@@ -77,7 +77,14 @@ final conv = AdminItem(
   kind: 'talk',
   seq: 1,
   removed: false,
-  fields: {'id': 'c1', 'conv': true, 'title': 'Chat', 'at': 1000},
+  fields: {
+    'id': 'c1',
+    'conv': true,
+    'title': 'Chat',
+    'at': 1000,
+    'seen': 0,
+    'mat': 5,
+  },
 );
 
 AdminItem talkMsg(String id) => AdminItem(

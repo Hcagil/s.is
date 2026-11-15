@@ -1381,6 +1381,96 @@ Deno.test({
   },
 });
 
+// Test that iPhone 1:1 plain pushes get mutable-content 1,
+// group pushes and Android pushes remain unchanged.
+// This test mirrors the existing encrypted test but focuses on
+// the mutable-content flag and apns payload structure.
+
+Deno.test({
+  name: 'delivered tick: an iPhone 1:1 plain push gets mutable-content 1; a group push and Android stay unchanged',
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const run = Date.now().toString(36);
+    const who = ['sender', 'droid', 'ios'];
+    const people = who.map((w) => ({
+      id: crypto.randomUUID(),
+      session: crypto.randomUUID(),
+      email: `dt${w}-${run}@edge.test`,
+      name: `${w[0].toUpperCase()}${w.slice(1)}`,
+      token: `edge-dt${w}-${run}`.padEnd(16, '0'),
+    }));
+    const [sender, droid, ios] = people;
+    const asP = <T>(x: typeof sender, body: (tx: postgres.TransactionSql) => Promise<T>) =>
+      as(x.id, x.email, x.session, body);
+    try {
+      for (const x of people) {
+        await sql`insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
+                  values (${x.id}, ${x.email}, now(), ${sql.json({ full_name: x.name })})`;
+        await sql`insert into app_private.allowlist(email) values (${x.email})`;
+        await sql`insert into auth.sessions (id, user_id, created_at, updated_at)
+                  values (${x.session}, ${x.id}, now(), now())`;
+        await asP(x, (tx) => tx`select public.activate_session()`);
+      }
+      await asP(droid, (tx) => tx`select public.register_device_token(${droid.token}, 'android', true)`);
+      await asP(ios, (tx) => tx`select public.register_device_token(${ios.token}, 'ios', true)`);
+      await sql`insert into app_private.tag_finds(finder, found_id) values (${sender.id}, ${droid.id}), (${sender.id}, ${ios.id})`;
+      const start = async (x: typeof sender) => {
+        const [{ id }] = await asP(sender, (tx) => tx`select public.start_direct_conversation(${x.id}) as id`);
+        return id as string;
+      };
+      const toDroid = await start(droid);
+      const toIos = await start(ios);
+      const grp = (await asP(sender, (tx) => tx`select public.start_group_conversation(${`edge-dt-${run}`}, ${[droid.id, ios.id]}::uuid[]) as id`))[0].id as string;
+      const send = async (conv: string, body: string) => {
+        const [{ id }] = await asP(sender, (tx) => tx`insert into public.messages(conversation_id, sender_id, body)
+          values (${conv}, ${sender.id}, ${body}) returning id`);
+        return id as string;
+      };
+      const apsOf = (m: Record<string, unknown>) => ((m.apns as { payload?: { aps?: Record<string, unknown> } } | undefined)?.payload?.aps ?? {});
+      const to = (x: typeof sender) => {
+        const mine = sent.filter((s) => s.message.token === x.token);
+        assertEquals(mine.length, 1, `exactly one send to ${x.name}: ${JSON.stringify(sent)}`);
+        return mine[0].message;
+      };
+      const baseKeys = ['badge', 'body', 'conversation_id', 'message_id', 'title', 'user_id'];
+
+      // iPhone 1:1 plain
+      const id1 = await send(toIos, 'dt plain words');
+      assertEquals(await deliver(id1), { status: 204, text: '' });
+      assertEquals(sent.length, 1);
+      const m = to(ios);
+      const raw = JSON.stringify(m);
+      assertEquals(apsOf(m), { 'thread-id': toIos, sound: 'default', badge: await unreadOf(ios.id), 'mutable-content': 1 }, `iPhone 1:1: mutable-content 1, nothing else new: ${raw}`);
+      assertEquals(Object.keys(m.data as Record<string, unknown>).sort(), baseKeys, `no new data keys: ${raw}`);
+      assert(!/content[-_]available/i.test(raw), `not a silent push: ${raw}`);
+      assert(!('android' in m), raw);
+
+      // Android 1:1 plain
+      const id2 = await send(toDroid, 'dt plain words');
+      assertEquals(await deliver(id2), { status: 204, text: '' });
+      const d = to(droid);
+      assertEquals(Object.keys(d.data as Record<string, unknown>).sort(), baseKeys);
+      assert(!('apns' in d), `Android: no apns: ${JSON.stringify(d)}`);
+      assertEquals(d.android, { priority: 'high' });
+
+      // Group plain
+      const id3 = await send(grp, 'dt group words');
+      assertEquals(await deliver(id3), { status: 204, text: '' });
+      assertEquals(sent.length, 2);
+      const g = to(ios);
+      assert(!('mutable-content' in apsOf(g)), `a group text: no mutable-content: ${JSON.stringify(g)}`);
+      assert(!('apns' in to(droid)), 'group Android: no apns');
+    } finally {
+      await sql.begin(async (tx) => {
+        await tx`delete from app_private.tag_finds where finder in ${sql(people.map((x) => x.id))}`;
+        await tx`delete from app_private.device_tokens where user_id in ${sql(people.map((x) => x.id))}`;
+        await tx`delete from app_private.allowlist where email in ${sql(people.map((x) => x.email))}`;
+      }).catch(() => {});
+    }
+  },
+});
+
 Deno.test({
   name: 'close the database connection',
   sanitizeOps: false,

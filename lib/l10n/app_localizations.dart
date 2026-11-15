@@ -5042,6 +5042,54 @@ abstract class AppLocalizations {
   /// **'Forbids'**
   String get adminCardForbids;
 
+  /// Dashboard, AI usage limits section: title
+  ///
+  /// In en, this message translates to:
+  /// **'AI usage limits'**
+  String get adminDashUsage;
+
+  /// Dashboard, AI usage limits section: title of the 5-hour row
+  ///
+  /// In en, this message translates to:
+  /// **'5-hour limit'**
+  String get adminDashUsageSession;
+
+  /// Dashboard, AI usage limits section: title of the weekly row
+  ///
+  /// In en, this message translates to:
+  /// **'Weekly limit'**
+  String get adminDashUsageWeek;
+
+  /// Dashboard, AI usage limits section: title of the spend row
+  ///
+  /// In en, this message translates to:
+  /// **'Spend limit'**
+  String get adminDashUsageSpend;
+
+  /// Dashboard, AI usage limits section: row subtitle with percent used and reset time
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% used · resets {time}'**
+  String adminDashUsageLine(int percent, String time);
+
+  /// Dashboard, AI usage limits section: screen-reader label of the 5-hour row
+  ///
+  /// In en, this message translates to:
+  /// **'5-hour limit: {percent}% used, resets {time}'**
+  String adminDashUsageSessionA11y(int percent, String time);
+
+  /// Dashboard, AI usage limits section: screen-reader label of the weekly row
+  ///
+  /// In en, this message translates to:
+  /// **'Weekly limit: {percent}% used, resets {time}'**
+  String adminDashUsageWeekA11y(int percent, String time);
+
+  /// Dashboard, AI usage limits section: screen-reader label of the spend row
+  ///
+  /// In en, this message translates to:
+  /// **'Spend limit: {percent}% used, resets {time}'**
+  String adminDashUsageSpendA11y(int percent, String time);
+
   /// Admin panels screen text
   ///
   /// In en, this message translates to:

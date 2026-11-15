@@ -47,15 +47,13 @@ PORT=$(docker port "$CTR" 5432/tcp | head -1 | sed 's/.*://')
 db() { docker exec -i "$CTR" psql -U postgres -v ON_ERROR_STOP=1 -qAt "$@"; }
 
 # readiness loop
+# The image's first start runs a socket-only temporary server, then restarts; only the final server listens on TCP, so wait for TCP.
 ok=0
-for i in $(seq 1 60); do
+for i in $(seq 1 180); do
   sleep 1
-  if db -c 'select 1' >/dev/null 2>&1; then
-    sleep 2
-    if db -c 'select 1' >/dev/null 2>&1; then
-      ok=1
-      break
-    fi
+  if docker exec "$CTR" pg_isready -q -h 127.0.0.1 -p 5432 && db -c 'select 1' >/dev/null 2>&1; then
+    ok=1
+    break
   fi
 done
 if [ "$ok" -ne 1 ]; then

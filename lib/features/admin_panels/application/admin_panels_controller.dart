@@ -557,6 +557,8 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
       return Future.value();
     }
     _pendingRead[conv.id] = upto;
+    // Read at once on screen; the pending mark is re-sent until it succeeds.
+    state = state.copyWith(readUpto: {...state.readUpto, conv.id: upto});
     return _sendRead(conv.id, upto);
   }
 

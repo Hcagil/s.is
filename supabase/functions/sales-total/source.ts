@@ -1,5 +1,5 @@
 export type SalesStep = 'page' | 'action' | 'report' | 'parse';
-export type SalesErrorCode = 'login' | 'timeout' | 'shape' | 'config';
+export type SalesErrorCode = 'login' | 'timeout' | 'shape' | 'config' | 'other';
 export class SalesError extends Error { constructor(readonly code: SalesErrorCode, readonly step?: SalesStep) { super(code); } }
 
 /**
@@ -80,6 +80,6 @@ export async function fetchSalesTotal(day: string, prev: boolean): Promise<strin
     if (e instanceof SalesError) throw e.step ? e : new SalesError(e.code, step);
     const n = (e as { name?: string }).name;
     if (n === 'TimeoutError' || n === 'AbortError') throw new SalesError('timeout', step);
-    throw e; // network error: index.ts counts it as 'other'
+    throw new SalesError('other', step); // a plain network error: its message is never read or logged
   }
 }

@@ -11,7 +11,7 @@
 // or { error: 'finish' } (500) if saving the result failed,
 // or { ok: true, ran: true, result: 'ok'|'failed' } (200) on success.
 // Never logs or returns the amount, the password or the source's reply.
-// A failed fetch logs one line: "sales: fetch failed code=<login|timeout|shape|other> step=<page|action|report|parse|amount|->" (codes only, no secret, URL or body).
+// A failed fetch logs one line: "sales: fetch failed code=<login|timeout|shape|config|other> step=<page|action|report|parse|amount|->" (codes only, no secret, URL or body).
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { fetchSalesTotal, SalesError } from './source.ts';
 

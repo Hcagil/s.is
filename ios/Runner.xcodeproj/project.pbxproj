@@ -36,6 +36,10 @@
 		B3000000000000000000B014 /* PeekNative.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3000000000000000000B006 /* PeekNative.swift */; };
 		B3000000000000000000B015 /* PushPeek.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3000000000000000000B007 /* PushPeek.swift */; };
 		B3000000000000000000B016 /* PeekStore.c in Sources */ = {isa = PBXBuildFile; fileRef = B3000000000000000000B008 /* PeekStore.c */; };
+		B3000000000000000000B017 /* PushDelivery.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3000000000000000000B00D /* PushDelivery.swift */; };
+		B3000000000000000000B018 /* PushDeliveryReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3000000000000000000B00E /* PushDeliveryReader.swift */; };
+		B3000000000000000000B019 /* PushDeliveryCall.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3000000000000000000B00F /* PushDeliveryCall.swift */; };
+		C4000000000000000000C007 /* PushDelivery.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3000000000000000000B00D /* PushDelivery.swift */; };
 		A10000000000000000000B01 /* KeychainMigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000B11 /* KeychainMigration.swift */; };
 		A10000000000000000000B02 /* SisKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000B12 /* SisKeychain.swift */; };
 /* End PBXBuildFile section */
@@ -129,6 +133,9 @@
 		B3000000000000000000B005 /* PushPeekCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushPeekCore.swift; sourceTree = "<group>"; };
 		B3000000000000000000B006 /* PeekNative.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeekNative.swift; sourceTree = "<group>"; };
 		B3000000000000000000B007 /* PushPeek.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushPeek.swift; sourceTree = "<group>"; };
+		B3000000000000000000B00D /* PushDelivery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushDelivery.swift; sourceTree = "<group>"; };
+		B3000000000000000000B00E /* PushDeliveryReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushDeliveryReader.swift; sourceTree = "<group>"; };
+		B3000000000000000000B00F /* PushDeliveryCall.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushDeliveryCall.swift; sourceTree = "<group>"; };
 		B3000000000000000000B008 /* PeekStore.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = PeekStore.c; sourceTree = "<group>"; };
 		B3000000000000000000B009 /* PeekStore.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PeekStore.h; sourceTree = "<group>"; };
 		B3000000000000000000B00A /* NotificationService-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NotificationService-Bridging-Header.h; sourceTree = "<group>"; };
@@ -259,6 +266,9 @@
 				B3000000000000000000B00A /* NotificationService-Bridging-Header.h */,
 				B3000000000000000000B00B /* NotificationService.entitlements */,
 				B3000000000000000000B00C /* build_native.sh */,
+				B3000000000000000000B00D /* PushDelivery.swift */,
+				B3000000000000000000B00E /* PushDeliveryReader.swift */,
+				B3000000000000000000B00F /* PushDeliveryCall.swift */,
 			);
 			path = NotificationService;
 			sourceTree = "<group>";
@@ -489,6 +499,7 @@
 				331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */,
 				C4000000000000000000C002 /* KeychainPeekTests.swift in Sources */,
 				C4000000000000000000C003 /* PushPeekCore.swift in Sources */,
+				C4000000000000000000C007 /* PushDelivery.swift in Sources */,
 				C4000000000000000000C004 /* ShareRules.swift in Sources */,
 				C4000000000000000000C006 /* ShareRulesTests.swift in Sources */,
 			);
@@ -529,6 +540,9 @@
 				B3000000000000000000B014 /* PeekNative.swift in Sources */,
 				B3000000000000000000B015 /* PushPeek.swift in Sources */,
 				B3000000000000000000B016 /* PeekStore.c in Sources */,
+				B3000000000000000000B017 /* PushDelivery.swift in Sources */,
+				B3000000000000000000B018 /* PushDeliveryReader.swift in Sources */,
+				B3000000000000000000B019 /* PushDeliveryCall.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

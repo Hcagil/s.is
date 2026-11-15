@@ -281,8 +281,8 @@ async function send(id: string): Promise<void> {
                         // SIS_MESSAGE_LOCKED has only a foreground Reply (AppDelegate.swift hands the text to the app, which locks and sends it); no Mark as read.
                         category: apnsCategory(!!t.encrypted, chatEncrypted),
                         sound: 'default',
-                        // Runs the iPhone's notification service extension: it fetches the picture, decrypts ct into the real text, or sets the one locked text of an encrypted chat.
-                        ...(thumbUrl || withCt || t.encrypted ? { 'mutable-content': 1 } : {}),
+                        // Runs the iPhone's notification service extension: it fetches the picture, decrypts ct into the real text, sets the one locked text of an encrypted chat, or marks a plain 1:1 message delivered (not a group: !group).
+                        ...(thumbUrl || withCt || t.encrypted || !group ? { 'mutable-content': 1 } : {}),
                         ...(badge != null ? { badge } : {}),
                       },
                     },

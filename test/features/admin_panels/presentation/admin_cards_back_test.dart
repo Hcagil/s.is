@@ -125,8 +125,16 @@ void main() {
   testWidgets('back keeps filters and query', (tester) async {
     await prepareCards(fixture());
     await _pump(tester, container);
+    await tester.tap(find.byKey(const ValueKey('admin-cards-filter-button')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('admin-cards-state-proposed')));
     await tester.tap(find.byKey(const ValueKey('admin-cards-type-app')));
+    await tester.pumpAndSettle();
+    await tester.drag(
+      find.byKey(const ValueKey('admin-cards-filter-sheet')),
+      const Offset(0, 600),
+    );
+    await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey('admin-cards-search')),
       'minimal',

@@ -329,6 +329,57 @@ Deno.test({ ...opts, name: 'a crafted ~64 KB login page (repeated token input ta
   assert(ms < 1000, `took ${ms} ms`);
 } });
 
+
+Deno.test({ ...opts, name: 'step: login page with no __RequestVerificationToken field', fn: async () => {
+  setup();
+  onLoginPage = () => new Response('<html>no token</html>');
+  const err = await fails('login') as SalesError;
+  assertEquals(err.step, 'page');
+} });
+
+Deno.test({ ...opts, name: 'step: login post refused', fn: async () => {
+  setup();
+  onLogin = () => new Response(null, { status: 401 });
+  const err = await fails('login') as SalesError;
+  assertEquals(err.step, 'action');
+} });
+
+Deno.test({ ...opts, name: 'step: summary page not 200', fn: async () => {
+  for (const status of [302, 500]) {
+    setup();
+    onList = () => new Response(null, { status });
+    const err = await fails('login') as SalesError;
+    assertEquals(err.step, 'report');
+  }
+} });
+
+Deno.test({ ...opts, name: 'step: total label missing', fn: async () => {
+  setup();
+  onList = () => new Response('<html><body>maintenance</body></html>');
+  const err = await fails('shape') as SalesError;
+  assertEquals(err.step, 'parse');
+} });
+
+Deno.test({ ...opts, name: 'step: slow login post times out', fn: async () => {
+  setup();
+  onLogin = async () => {
+    await new Promise(r => setTimeout(r, 16000));
+    return new Response(null, { status: 302, headers: loginCookies() });
+  };
+  const err = await fails('timeout') as SalesError;
+  assertEquals(err.step, 'action');
+} });
+
+Deno.test({ ...opts, name: 'step: slow summary page times out', fn: async () => {
+  setup();
+  onList = async () => {
+    await new Promise(r => setTimeout(r, 16000));
+    return new Response(page('1,00'));
+  };
+  const err = await fails('timeout') as SalesError;
+  assertEquals(err.step, 'report');
+} });
+
 Deno.test({ ...opts, name: 'teardown', fn: async () => {
   for (const k of ['SALES_SOURCE_URL', 'SALES_SOURCE_USER', 'SALES_SOURCE_PASSWORD']) Deno.env.delete(k);
   await server.shutdown();

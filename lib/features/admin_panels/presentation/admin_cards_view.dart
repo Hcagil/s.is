@@ -9,6 +9,7 @@ import '../../chat/presentation/conversation_tile.dart' show FadeDivider;
 import '../application/admin_panels_controller.dart';
 import '../domain/admin_card_filter.dart';
 import 'admin_card_detail.dart';
+import 'admin_cards_filter_sheet.dart';
 import 'admin_cards_filters.dart';
 
 class AdminCardsView extends ConsumerStatefulWidget {
@@ -80,17 +81,40 @@ class _AdminCardsViewState extends ConsumerState<AdminCardsView> {
       children: [
         AdminCardsFilters(
           controller: _controller,
-          state: _state,
-          type: _type,
-          value: _value,
-          values: _type == null ? const [] : adminCardValues(cards, _type!),
+          filterCount: adminCardsFilterCount(
+            state: _state,
+            type: _type,
+            value: _value,
+          ),
           onQuery: (v) => setState(() => _query = v),
-          onState: (v) => setState(() => _state = v),
-          onType: (v) => setState(() {
-            _type = v;
-            _value = null;
-          }),
-          onValue: (v) => setState(() => _value = v),
+          onOpenFilters: () => showAdminCardsFilterSheet(
+            context,
+            builder: (_) => StatefulBuilder(
+              builder: (_, setSheet) => AdminCardsFilterSheet(
+                state: _state,
+                type: _type,
+                value: _value,
+                values: _type == null
+                    ? const []
+                    : adminCardValues(cards, _type!),
+                onState: (v) {
+                  setState(() => _state = v);
+                  setSheet(() {});
+                },
+                onType: (v) {
+                  setState(() {
+                    _type = v;
+                    _value = null;
+                  });
+                  setSheet(() {});
+                },
+                onValue: (v) {
+                  setState(() => _value = v);
+                  setSheet(() {});
+                },
+              ),
+            ),
+          ),
         ),
         Expanded(
           child: shown.isEmpty

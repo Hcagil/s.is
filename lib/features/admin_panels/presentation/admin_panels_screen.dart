@@ -157,7 +157,10 @@ class _AdminPanelsScreenState extends ConsumerState<AdminPanelsScreen>
                     const Icon(Icons.help_outline_rounded),
                     panels.unansweredQuestions,
                   ),
-                  selectedIcon: const Icon(Icons.help_rounded),
+                  selectedIcon: _badged(
+                    const Icon(Icons.help_rounded),
+                    panels.unansweredQuestions,
+                  ),
                   label: l.adminQuestions,
                 ),
                 NavigationDestination(

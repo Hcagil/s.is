@@ -10,6 +10,7 @@ import '../domain/admin_item.dart';
 import '../domain/admin_marks.dart';
 import '../domain/admin_models.dart';
 import '../domain/admin_panels_repository.dart';
+import '../domain/admin_push.dart';
 import '../domain/admin_seen_store.dart';
 import '../domain/admin_snapshot.dart';
 import '../domain/admin_snapshot_store.dart';
@@ -20,6 +21,9 @@ import 'admin_panels_state.dart';
 final adminPanelsRepositoryProvider = Provider<AdminPanelsRepository>(
   (_) => throw UnimplementedError('override in main'),
 );
+
+/// The server's nudge that a new down row exists (set in main; never pushes until then). The poll stays as the fallback.
+final adminPushProvider = Provider<AdminPush>((_) => const NoAdminPush());
 
 /// The phone unlock asked before the panels open (set in main).
 final adminUnlockProvider = Provider<AdminUnlock>(
@@ -61,6 +65,8 @@ final adminPanelsProvider =
 /// Unlock, link and foreground-only refresh of the owner-only panels.
 class AdminPanelsController extends Notifier<AdminPanelsState> {
   Timer? _timer;
+  StreamSubscription<void>? _push;
+  bool _pushJoining = false;
   bool _foreground = false;
 
   /// The panels screen is open.
@@ -172,6 +178,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     } else {
       _timer?.cancel();
       _timer = null;
+      _syncPush();
     }
   }
 
@@ -191,6 +198,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     if (!_foreground) {
       _timer?.cancel();
       _timer = null;
+      _syncPush();
     }
   }
 
@@ -702,7 +710,41 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     }
   }
 
+  /// Listens to the server's push only while the screen is open in the foreground and the panels are ready; leaves it otherwise.
+  void _syncPush() {
+    final want = _foreground && state.gate == AdminGate.ready;
+    if (!want) {
+      unawaited(_push?.cancel());
+      _push = null;
+      return;
+    }
+    if (_push != null || _pushJoining) return;
+    _pushJoining = true;
+    unawaited(_joinPush(_lockCount));
+  }
+
+  Future<void> _joinPush(int lockedAt) async {
+    final r = await ref.read(adminPushProvider).listen();
+    _pushJoining = false;
+    switch (r) {
+      case Err():
+        return;
+      case Ok(value: final stream):
+        final s = stream.listen(null);
+        if (ref.mounted &&
+            _lockCount == lockedAt &&
+            _foreground &&
+            state.gate == AdminGate.ready) {
+          s.onData((_) => unawaited(refresh()));
+          _push = s;
+        } else {
+          unawaited(s.cancel());
+        }
+    }
+  }
+
   void _schedule() {
+    _syncPush();
     _timer?.cancel();
     if (!_foreground) return;
     if (state.gate != AdminGate.link &&
@@ -760,5 +802,6 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     _foreground = false;
     _screen = false;
     _bg = false;
+    _syncPush();
   }
 }

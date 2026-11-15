@@ -116,7 +116,8 @@ run() {
   rm -f "$FAKE/calls"; printf '%s' "$exits" >"$FAKE/exits"; printf '%s' "${ATT:-}" >"$FAKE/att_exits"
   RC=0
   (cd "$BOX" && umask 022 && SIS_BOT_CMD="$FAKE/sis_bot.sh" timeout "$secs" "$W" "$@") >"$BOX/out" 2>&1 || RC=$?
-  touch "$FAKE/calls"
+  # a child killed with the watcher may hold the lock for a moment: wait until it is free, so the next run is not refused
+  for _ in $(seq 100); do flock -n "$BOX/.private/bot-watch.lock" true 2>/dev/null && break || sleep 0.1; done; touch "$FAKE/calls"
 }
 calls_ok() { ! grep -vE '^[0-9.]+ (status|read --since [^ ]+|attachments [0-9a-f-]{36})$' "$FAKE/calls"; }
 att_calls() { grep ' attachments ' "$FAKE/calls" | cut -d' ' -f2-; }

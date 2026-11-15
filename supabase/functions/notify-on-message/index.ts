@@ -181,8 +181,10 @@ async function send(id: string): Promise<void> {
   const actionUrl = `${Deno.env.get('SUPABASE_URL')!}/functions/v1/notification-action`;
 
   // A chat that ever held a locked message (conversations.encrypted_at, kept after deletes) never gets a reply scope, whatever this message is: decided per chat, not per message. A failed lookup counts as encrypted.
-  const chatRow = await db.from('conversations').select('encrypted_at').eq('id', targets[0].conversation_id).maybeSingle();
+  const chatRow = await db.from('conversations').select('encrypted_at, direct_key').eq('id', targets[0].conversation_id).maybeSingle();
   const chatEncrypted = !!chatRow.error || chatRow.data?.encrypted_at != null || targets.some((t) => t.encrypted);
+  // A real 1:1 has a direct_key; a group's is null. A failed lookup is not a 1:1 (no delivered tick is better than a wrong one).
+  const oneToOne = !chatRow.error && typeof chatRow.data?.direct_key === 'string';
 
   // A short-lived link to the small picture of a photo/video message, one per path (several recipients share it). The service role signs it; the object is private, so only the recipients push_targets chose (not muted, not archived, preview 'full') ever get the link. A missing object (an old sender never made one) or any error gives null: the push then goes out as text. The link is never logged.
   const thumbLinks = new Map<string, Promise<string | null>>();
@@ -281,8 +283,8 @@ async function send(id: string): Promise<void> {
                         // SIS_MESSAGE_LOCKED has only a foreground Reply (AppDelegate.swift hands the text to the app, which locks and sends it); no Mark as read.
                         category: apnsCategory(!!t.encrypted, chatEncrypted),
                         sound: 'default',
-                        // Runs the iPhone's notification service extension: it fetches the picture, decrypts ct into the real text, or sets the one locked text of an encrypted chat.
-                        ...(thumbUrl || withCt || t.encrypted ? { 'mutable-content': 1 } : {}),
+                        // Runs the iPhone's notification service extension: it fetches the picture, decrypts ct into the real text, sets the one locked text of an encrypted chat, or marks a plain 1:1 message delivered (1:1 only, decided from conversations.direct_key).
+                        ...(thumbUrl || withCt || t.encrypted || oneToOne ? { 'mutable-content': 1 } : {}),
                         ...(badge != null ? { badge } : {}),
                       },
                     },

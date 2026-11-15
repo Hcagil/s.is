@@ -8,6 +8,8 @@ final class NotificationService: UNNotificationServiceExtension, URLSessionDownl
   private var content: UNMutableNotificationContent?
   private var task: URLSessionDownloadTask?
   private var video = false
+  private let caller = URLSessionDeliveryCaller()
+  private var pending = 2 // picture part and delivery call; guarded by lock
 
   override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
     guard let mutable = request.content.mutableCopy() as? UNMutableNotificationContent else {
@@ -32,9 +34,11 @@ final class NotificationService: UNNotificationServiceExtension, URLSessionDownl
       mutable.body = turkish ? "Yeni mesaj" : "New message"
     }
     }
+    // Marks the message delivered for the sender, before the content goes out; skips and errors just end it.
+    PushDelivery.run(userInfo: mutable.userInfo, reader: KeychainDeliveryReader(), caller: caller) { [weak self] in self?.partDone() }
     // Only our own Supabase host: the push's action link is built from the same SUPABASE_URL as the picture link.
     guard let link = mutable.userInfo["thumb_url"] as? String, let url = URL(string: link), url.scheme == "https", let actionLink = mutable.userInfo["action_url"] as? String, let actionHost = URL(string: actionLink)?.host, let host = url.host, host.lowercased() == actionHost.lowercased() else {
-      finish()
+      partDone()
       return
     }
     video = (mutable.userInfo["thumb_kind"] as? String) == "video"
@@ -49,7 +53,16 @@ final class NotificationService: UNNotificationServiceExtension, URLSessionDownl
 
   override func serviceExtensionTimeWillExpire() {
     task?.cancel()
+    caller.cancel()
     finish()
+  }
+
+  private func partDone() {
+    lock.lock()
+    pending -= 1
+    let ready = pending <= 0
+    lock.unlock()
+    if ready { finish() }
   }
 
   /// Hands the content (with the picture when there is one) to the system, once.
@@ -109,8 +122,8 @@ final class NotificationService: UNNotificationServiceExtension, URLSessionDownl
     lock.lock(); content?.attachments = [attachment]; lock.unlock()
   }
 
-  // Success, failure or cancel: the one place the content goes to the system.
+  // Picture part over: success, failure or cancel.
   func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-    finish()
+    partDone()
   }
 }

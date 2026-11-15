@@ -482,7 +482,16 @@ never logged, and no session id rides in the push. For a first (pre-key, `ot` 0)
 cannot open the text is one fallback text, identical on both platforms: "New
 message" (Turkish "Yeni mesaj"); Android takes it from `notification_fallback`,
 the iPhone extension sets it for every encrypted push (mutable-content is set for
-them all).
+them all; it is also set for every iPhone push of a 1:1 chat, so the extension can mark the message delivered, see "Extension delivery").
+
+### Extension delivery (iPhone delivered tick)
+
+When a push reaches an iPhone while the app is closed, the notification service extension tells the server the message was delivered (the sender's tick), as Android's background handler does. It calls the existing `mark_delivered` function, which already checks that the caller has app access and is a member of the chat and only writes the caller's own row.
+- Where the token lives: the app writes a small keychain item `sis.push.delivery` (crypto access group, accessibility `first_unlock_this_device`) each time the session is saved. It holds only access_token, expires_at, user_id, the Supabase URL and the publishable key (URL and key come from the app's build configuration, not from any push). It never holds the refresh token, the user object or the email. The main session stays where it was (default group, unlocked only). Sign-out deletes the small item with the session.
+- The extension only reads this item (never adds, updates or deletes it) and never refreshes the token, so the tick turns delivered only while the token is still valid (about an hour after the app last refreshed it; Android has the same limit).
+- Pinned host: the call goes only to the URL stored in the item and only over https. Nothing about the destination comes from the push (the push's action_url is never used for it), so a holder of the push key cannot steer the token elsewhere. Redirects are refused, the call is ephemeral with a 5 s timeout, and nothing is logged.
+- It is skipped for reactions, when the push's user_id is not the stored user, when the token is empty or expires within 30 s, or when the URL is not https or the key is empty. Every error is swallowed and the notification is delivered once regardless; the system's expiry cancels the call first.
+- Server side: `notify-on-message` sets mutable-content for 1:1 iPhone pushes too. No new payload fields.
 
 ### Notification buttons (Mark as read, Reply)
 

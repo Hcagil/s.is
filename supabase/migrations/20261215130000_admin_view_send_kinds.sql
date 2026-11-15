@@ -36,7 +36,7 @@ begin
   if not exists(select 1 from app_private.admin_view_keys k where k.phone_pub is not null and k.computer_pub is not null and k.epoch = p_epoch) then
     raise exception 'invalid request' using errcode = '22023';
   end if;
-  if p_seq <= (select k.last_up_seq from app_private.admin_view_keys k) or p_seq > (select k.last_up_seq from app_private.admin_view_keys k) + 1000 then
+  if p_seq <= (select k.last_up_seq from app_private.admin_view_keys k) or p_seq > (select k.last_up_seq from app_private.admin_view_keys k) + 1000000 then
     raise exception 'invalid request' using errcode = '22023';
   end if;
   if (select count(*) from app_private.admin_view_items i where i.dir = 'up') >= 200 then

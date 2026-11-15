@@ -272,6 +272,48 @@ stub flutter '
       echo "Xcode build done.   248.7s"
       exit 0
       ;;
+    grpok)
+      echo "Xcode build done.   248.7s"
+      echo "::group::✅ (a) one"
+      exec sleep 30
+      ;;
+    grpfail)
+      echo "Xcode build done.   248.7s"
+      echo "::group::❌ (b) two (failed)"
+      exec sleep 30
+      ;;
+    errsum)
+      echo "Xcode build done.   248.7s"
+      echo "::error::2 tests passed, 1 failed."
+      exec sleep 30
+      ;;
+    passsum)
+      echo "Xcode build done.   248.7s"
+      echo "::group::✅ x"
+      echo "🎉 3 tests passed."
+      exec sleep 30
+      ;;
+    cpass)
+      echo "Xcode build done.   248.7s"
+      echo "00:03 +1: x"
+      exec sleep 30
+      ;;
+    cfail)
+      echo "Xcode build done.   248.7s"
+      echo "00:03 +1 -2: x"
+      exec sleep 30
+      ;;
+    flaky)
+      echo "Xcode build done.   248.7s"
+      echo "::warning::3 tests passed, 1 flaky."
+      exec sleep 30
+      ;;
+    failpass)
+      echo "Xcode build done.   248.7s"
+      echo "::group::❌ y (failed)"
+      echo "🎉 2 tests passed."
+      exec sleep 30
+      ;;
     nobuild)
       exec sleep 4
       ;;
@@ -347,6 +389,23 @@ for sh in "${SHELLS[@]}"; do
   [ "$rc" -eq 0 ] || fail "nobuild flutter test failed the step under '$sh'"
   ! grep -q '::warning::' "$tmp/out" || fail "nobuild printed a warning under '$sh'"
   ! grep -q '::error::' "$tmp/out" || fail "nobuild printed an error under '$sh'"
+
+  # a printed reporter line makes the attempt final: no retry, no warning, no shutdown
+  for w in grpok grpfail errsum cpass cfail flaky failpass; do
+    rc=0; video "$sh" "$w pass" || rc=$?
+    [ "$rc" -eq 1 ] || fail "$w then hang ended with $rc, not 1, under '$sh': $(cat "$tmp/out")"
+    ! grep -q '^::warning::video prep test attempt ' "$tmp/out" || fail "$w then hang was retried under '$sh'"
+    grep -q '^::error::video prep test did not finish with a pass' "$tmp/out" || fail "$w then hang missing final error under '$sh'"
+    [ ! -f "$tmp/shutdown.log" ] || fail "$w then hang shut the simulator down under '$sh'"
+    [ ! -f "$tmp/rt/video-prep-2.log" ] || fail "$w then hang started attempt 2 under '$sh'"
+  done
+  # a pass summary then hang: exit 0, no retry
+  rc=0; video "$sh" "passsum pass" || rc=$?
+  [ "$rc" -eq 0 ] || fail "passsum then hang ended with $rc, not 0, under '$sh': $(cat "$tmp/out")"
+  ! grep -q '^::warning::video prep test attempt ' "$tmp/out" || fail "passsum then hang was retried under '$sh'"
+  ! grep -q '^::error::' "$tmp/out" || fail "passsum then hang printed an error under '$sh'"
+  [ ! -f "$tmp/shutdown.log" ] || fail "passsum then hang shut the simulator down under '$sh'"
+  [ ! -f "$tmp/rt/video-prep-2.log" ] || fail "passsum then hang started attempt 2 under '$sh'"
 done
 
 # ---- 3 signature authority ---------------------------------------------------

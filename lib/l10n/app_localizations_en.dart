@@ -2802,6 +2802,21 @@ class AppLocalizationsEn extends AppLocalizations {
       'Message not sent. Your text is still here. Try again.';
 
   @override
+  String get adminTalkPin => 'Pin';
+
+  @override
+  String get adminTalkUnpin => 'Unpin';
+
+  @override
+  String get adminTalkPinned => 'Pinned';
+
+  @override
+  String get adminTalkPinFailed => 'Could not pin. Try again.';
+
+  @override
+  String get adminTalkUnpinFailed => 'Could not unpin. Try again.';
+
+  @override
   String get adminRecommended => 'Recommended';
 
   @override

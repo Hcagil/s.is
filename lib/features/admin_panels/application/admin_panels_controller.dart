@@ -335,6 +335,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
       syncing: completed ? false : state.syncing,
       clearFailure: true,
     );
+    _dropConfirmedPins(snap);
 
     // A complete snapshot is the truth: drafts of items that are gone are dropped.
     // Only when unlocked: background count mode must not decrypt the drafts.
@@ -352,6 +353,19 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     await _ensureSeen();
     if (!ref.mounted || _lockCount != lockedAt) return;
     if (!has || gap) await _resync();
+  }
+
+  /// Drops the pin choices the snapshot [snap] now shows (or whose conversation is gone).
+  void _dropConfirmedPins(AdminSnapshot snap) {
+    if (state.pinOverride.isEmpty) return;
+    final left = {...state.pinOverride}
+      ..removeWhere((id, on) {
+        final c = snap.conversations.where((c) => c.id == id).firstOrNull;
+        return c == null || c.isPinned == on;
+      });
+    if (left.length != state.pinOverride.length) {
+      state = state.copyWith(pinOverride: left);
+    }
   }
 
   /// Applies the computer's results to the answers sent from this phone.
@@ -384,6 +398,11 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
           status: AdminAnswerStatus.notSent,
           code: result.code,
         );
+        if (answer.kind == 'pin' && answer.conv != null) {
+          state = state.copyWith(
+            pinOverride: {...state.pinOverride}..remove(answer.conv),
+          );
+        }
         if (target != null) {
           questions = {...questions}..remove(target);
           tasks = {...tasks}..remove(target);
@@ -576,6 +595,22 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
       state = state.copyWith(readUpto: {...state.readUpto, conv: upto});
     }
     return null;
+  }
+
+  /// Pins or unpins [conv] on the computer. The owner sees the new state at once (pinOverride); a failed send puts it back. Null = sent, else why not. The computer's answer (and the snapshot) confirm it later.
+  Future<Failure?> setConversationPinned(String conv, bool pinned) async {
+    final lockedAt = _lockCount;
+    state = state.copyWith(pinOverride: {...state.pinOverride, conv: pinned});
+    final f = await _send({
+      'answer_id': _newAnswerId(),
+      'kind': 'pin',
+      'conv': conv,
+      'pinned': pinned,
+    });
+    if (f != null && ref.mounted && _lockCount == lockedAt) {
+      state = state.copyWith(pinOverride: {...state.pinOverride}..remove(conv));
+    }
+    return f;
   }
 
   /// Sends the owner's answer to one question; the card then shows as waiting.

@@ -1,6 +1,7 @@
 import '../../../core/failure.dart';
 import '../domain/admin_answer.dart';
 import '../domain/admin_marks.dart';
+import '../domain/admin_models.dart';
 import '../domain/admin_panels_repository.dart';
 import '../domain/admin_snapshot.dart';
 
@@ -56,6 +57,7 @@ final class AdminPanelsState {
     this.seen,
     this.conn = AdminConn.connecting,
     this.readUpto = const {},
+    this.pinOverride = const {},
   });
 
   final AdminGate gate;
@@ -92,6 +94,12 @@ final class AdminPanelsState {
   /// Per conversation id: the newest message time (computer seconds) the owner read on this phone.
   final Map<String, int> readUpto;
 
+  /// Per conversation id: the pin state the owner just chose on this phone, until a snapshot confirms it.
+  final Map<String, bool> pinOverride;
+
+  /// Whether [c] shows as pinned: the owner's fresh choice first, else the computer's value.
+  bool isPinned(AdminConversation c) => pinOverride[c.id] ?? c.isPinned;
+
   /// The newest answer of [kind] for [id] (a question or task id; for talk the conversation id, null = no conversation).
   AdminAnswer? latestAnswer(String kind, {String? id}) {
     for (final a in answers.reversed) {
@@ -118,6 +126,7 @@ final class AdminPanelsState {
     Map<String, Set<String>>? seen,
     AdminConn? conn,
     Map<String, int>? readUpto,
+    Map<String, bool>? pinOverride,
     bool clearSeen = false,
     bool clearFailure = false,
   }) {
@@ -135,6 +144,7 @@ final class AdminPanelsState {
       seen: clearSeen ? null : (seen ?? this.seen),
       conn: conn ?? this.conn,
       readUpto: readUpto ?? this.readUpto,
+      pinOverride: pinOverride ?? this.pinOverride,
     );
   }
 }

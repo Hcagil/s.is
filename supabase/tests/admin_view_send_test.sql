@@ -104,9 +104,9 @@ delete from app_private.admin_view_calls;
 insert into app_private.admin_view_calls(user_id,kind,called_at)
 select '00000000-0000-0000-0000-0000000a1001','owner_send',now() from generate_series(1,239);
 select as_own();
--- 60th allowed
+-- 240th allowed
 select is(try_exec($$select public.admin_view_send(1,11,bytes(1073))$$), 'ok:1', '240th send in the hour is allowed');
--- 61st refused
+-- 241st refused
 select is(try_exec($$select public.admin_view_send(1,12,bytes(1073))$$), 'err:RLMT1', '241st send refused');
 reset role;
 -- old calls older than 2 hours
@@ -165,15 +165,15 @@ delete from app_private.admin_view_calls;
 select as_own();
 select is(try_exec($$select public.admin_view_send(1,5003,bytes(1073),'bogus')$$), 'err:22023', 'bogus kind refused');
 select is(try_exec($$select public.admin_view_send(1,5003,bytes(1073),null)$$), 'err:22023', 'null kind refused');
--- seq bound: +1001 refused, +1000 ok
-select is(try_exec($$select public.admin_view_send(1,6003,bytes(1073))$$), 'err:22023', '+1001 refused');
+-- seq bound: +1000001 refused, +1000000 ok
+select is(try_exec($$select public.admin_view_send(1,1005003,bytes(1073))$$), 'err:22023', '+1000001 refused');
 reset role;
 select is((select last_up_seq from app_private.admin_view_keys), 5002::bigint, 'refused call changed nothing');
 select is((select count(*)::int from app_private.admin_view_calls), 0, 'refused bound left no call row');
 select as_own();
-select is(try_exec($$select public.admin_view_send(1,6002,bytes(1073))$$), 'ok:1', '+1000 accepted');
+select is(try_exec($$select public.admin_view_send(1,1005002,bytes(1073))$$), 'ok:1', '+1000000 accepted');
 -- backward compat: 3 named args counted as owner_send
-select is(try_exec($$select public.admin_view_send(p_epoch => 1, p_seq => 6003, p_body => bytes(1073))$$), 'ok:1', 'named 3-arg call works');
+select is(try_exec($$select public.admin_view_send(p_epoch => 1, p_seq => 1005003, p_body => bytes(1073))$$), 'ok:1', 'named 3-arg call works');
 reset role;
 select is((select count(*)::int from app_private.admin_view_calls where kind='owner_send'), 2, 'default kind and named 3-arg both counted as owner_send');
 select is((select count(*)::int from app_private.admin_view_calls where kind='owner_read'), 0, 'no read rows from 3-arg calls');

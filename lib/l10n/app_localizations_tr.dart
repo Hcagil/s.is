@@ -2873,6 +2873,38 @@ class AppLocalizationsTr extends AppLocalizations {
   String get adminCardForbids => 'Yasaklananlar';
 
   @override
+  String get adminDashUsage => 'Yapay zekâ kullanım sınırları';
+
+  @override
+  String get adminDashUsageSession => '5 saatlik sınır';
+
+  @override
+  String get adminDashUsageWeek => 'Haftalık sınır';
+
+  @override
+  String get adminDashUsageSpend => 'Harcama sınırı';
+
+  @override
+  String adminDashUsageLine(int percent, String time) {
+    return '%$percent kullanıldı · sıfırlanacak: $time';
+  }
+
+  @override
+  String adminDashUsageSessionA11y(int percent, String time) {
+    return '5 saatlik sınır: %$percent kullanıldı, sıfırlanacak: $time';
+  }
+
+  @override
+  String adminDashUsageWeekA11y(int percent, String time) {
+    return 'Haftalık sınır: %$percent kullanıldı, sıfırlanacak: $time';
+  }
+
+  @override
+  String adminDashUsageSpendA11y(int percent, String time) {
+    return 'Harcama sınırı: %$percent kullanıldı, sıfırlanacak: $time';
+  }
+
+  @override
   String get adminDashContext => 'Bağlam boyutu';
 
   @override

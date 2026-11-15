@@ -73,7 +73,14 @@ final conv = AdminItem(
   kind: 'talk',
   seq: 1,
   removed: false,
-  fields: {'id': 'c1', 'conv': true, 'title': 'Chat', 'at': 1000},
+  fields: {
+    'id': 'c1',
+    'conv': true,
+    'title': 'Chat',
+    'at': 1000,
+    'seen': 0,
+    'mat': 5,
+  },
 );
 
 AdminItem talkMsg(String id) => AdminItem(
@@ -130,7 +137,12 @@ void main() {
       findsOneWidget,
     );
 
-    c.read(adminPanelsProvider.notifier).markSeen('talk');
+    await c
+        .read(adminPanelsProvider.notifier)
+        .markConversationRead(
+          c.read(adminPanelsProvider).snapshot.conversations.first,
+          5,
+        );
     await t.pump();
     expect(badgeFinder, findsNothing);
 

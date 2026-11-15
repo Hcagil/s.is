@@ -12,14 +12,17 @@ Map<String, Set<String>> adminTabIds(AdminSnapshot s) {
   };
 }
 
-/// How many items on each tab are not seen yet.
+/// How many items on each tab are not seen yet; talk counts conversations with unread manager messages (the computer's `seen`/`mat`, plus what this phone [readUpto]).
 Map<String, int> adminNewCounts(
   AdminSnapshot s,
-  Map<String, Set<String>>? seen,
-) {
+  Map<String, Set<String>>? seen, [
+  Map<String, int> readUpto = const {},
+]) {
   if (seen == null) return {};
   return {
     for (final e in adminTabIds(s).entries)
-      e.key: e.value.difference(seen[e.key] ?? const {}).length,
+      e.key: e.key == 'talk'
+          ? s.conversations.where((c) => c.isUnread(readUpto[c.id] ?? 0)).length
+          : e.value.difference(seen[e.key] ?? const {}).length,
   };
 }

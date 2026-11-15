@@ -2900,6 +2900,38 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminCardForbids => 'Forbids';
 
   @override
+  String get adminDashUsage => 'AI usage limits';
+
+  @override
+  String get adminDashUsageSession => '5-hour limit';
+
+  @override
+  String get adminDashUsageWeek => 'Weekly limit';
+
+  @override
+  String get adminDashUsageSpend => 'Spend limit';
+
+  @override
+  String adminDashUsageLine(int percent, String time) {
+    return '$percent% used · resets $time';
+  }
+
+  @override
+  String adminDashUsageSessionA11y(int percent, String time) {
+    return '5-hour limit: $percent% used, resets $time';
+  }
+
+  @override
+  String adminDashUsageWeekA11y(int percent, String time) {
+    return 'Weekly limit: $percent% used, resets $time';
+  }
+
+  @override
+  String adminDashUsageSpendA11y(int percent, String time) {
+    return 'Spend limit: $percent% used, resets $time';
+  }
+
+  @override
   String get adminDashContext => 'Context size';
 
   @override

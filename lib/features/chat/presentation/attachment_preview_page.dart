@@ -318,6 +318,7 @@ class _AttachmentPreviewPageState extends ConsumerState<AttachmentPreviewPage> {
                 minLines: 1,
                 maxLines: 4,
                 keyboardType: TextInputType.multiline,
+                textInputAction: TextInputAction.newline,
                 textCapitalization: TextCapitalization.sentences,
                 inputFormatters: [
                   LengthLimitingTextInputFormatter(maxMessageLength),

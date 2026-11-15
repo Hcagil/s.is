@@ -13,7 +13,7 @@ if ! command -v openssl >/dev/null 2>&1 || ! docker image inspect public.ecr.aws
 fi
 
 # S2: port, name, cleanup
-PORT=$((20000 + RANDOM % 20000))
+PORT=
 CTR=qa-pk-$$
 trap 'docker rm -f "$CTR" >/dev/null 2>&1 || true; rm -rf "$box"' EXIT
 
@@ -28,12 +28,9 @@ trap 'docker rm -f "$CTR" >/dev/null 2>&1 || true; rm -rf "$box"' EXIT
 )
 
 # S4: start DB
-P6543=(); ss -ltn 2>/dev/null | grep -q ':6543 ' || P6543=(-p 172.17.0.1:6543:5432)
-
 docker run -d --name "$CTR" --user root \
   -e POSTGRES_PASSWORD=pw1x \
-  -p 172.17.0.1:"$PORT":5432 \
-  "${P6543[@]}" \
+  -p 172.17.0.1::5432 \
   -v "$box/srv.crt:/ssl/srv.crt:ro" \
   -v "$box/srv.key:/ssl/srv.key:ro" \
   --entrypoint bash public.ecr.aws/supabase/postgres:17.6.1.167 \
@@ -41,6 +38,10 @@ docker run -d --name "$CTR" --user root \
       install -m 644 /ssl/srv.crt /tmp/k.crt; \
       printf "local all all trust\nhostssl all qa_trust all trust\nhostssl all all all scram-sha-256\n" > /tmp/hba.conf; chmod 644 /tmp/hba.conf; \
       exec docker-entrypoint.sh postgres -D /etc/postgresql -c hba_file=/tmp/hba.conf -c listen_addresses=* -c ssl=on -c ssl_cert_file=/tmp/k.crt -c ssl_key_file=/tmp/k.key' >/dev/null
+
+# Docker picks a free host port, so parallel runs never clash.
+PORT=$(docker port "$CTR" 5432/tcp | head -1 | sed 's/.*://')
+[ -n "$PORT" ] || { echo 'FAIL: no host port'; exit 1; }
 
 # S5: helper to run psql
 db() { docker exec -i "$CTR" psql -U postgres -v ON_ERROR_STOP=1 -qAt "$@"; }
@@ -290,6 +291,10 @@ chmod 700 "$box/pg6543"
 printf '172.17.0.1:6543:postgres:qa_trust:x\n' >"$box/pg6543/pgpass"
 chmod 600 "$box/pg6543/pgpass"
 run 'port 6543' "$box/pg6543/pgpass" "$CA" "$B64" "$V"
+case "$out" in
+  *'transaction pooler port 6543'*) ;;
+  *) fail "port 6543: wrong message: $out" ;;
+esac
 expect 'port 6543' 1 f "$OLDV"
 
 # pgpass missing
@@ -381,5 +386,4 @@ ln -s "$CA" "$box/ca-link.crt"
 run 'symlinked CA' "$PT" "$box/ca-link.crt" "$B64" "$V"
 expect 'symlinked CA' 0 t "$V"
 
-[ ${#P6543[@]} -gt 0 ] || echo 'note: host port 6543 was busy, the 6543 case only checks the refusal message'
 finish

@@ -74,7 +74,7 @@ class _AdminTalkViewState extends ConsumerState<AdminTalkView> {
               ? Center(child: Text(l.adminTalkEmpty))
               : ListView(
                   children: [
-                    for (final c in convs)
+                    for (final c in s.talkOrder)
                       Column(
                         key: ValueKey('admin-conv-tile-${c.id}'),
                         children: [

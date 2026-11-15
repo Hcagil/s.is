@@ -100,6 +100,26 @@ final class AdminPanelsState {
   /// Whether [c] shows as pinned: the owner's fresh choice first, else the computer's value.
   bool isPinned(AdminConversation c) => pinOverride[c.id] ?? c.isPinned;
 
+  /// The Talk list order: pinned block first, earliest pinned first (a pin with no time yet goes last in the block); the rest keep the snapshot order.
+  List<AdminConversation> get talkOrder {
+    final pinned = [
+      for (final c in snapshot.conversations)
+        if (isPinned(c)) c,
+    ];
+    // Stable: equal times (and the not-yet-timed ones, 0 -> last) keep snapshot order.
+    final idx = {for (final (i, c) in pinned.indexed) c.id: i};
+    pinned.sort((a, b) {
+      final ka = a.pinnedAt > 0 ? a.pinnedAt : 1 << 62;
+      final kb = b.pinnedAt > 0 ? b.pinnedAt : 1 << 62;
+      return ka != kb ? ka.compareTo(kb) : idx[a.id]!.compareTo(idx[b.id]!);
+    });
+    return [
+      ...pinned,
+      for (final c in snapshot.conversations)
+        if (!isPinned(c)) c,
+    ];
+  }
+
   /// The newest answer of [kind] for [id] (a question or task id; for talk the conversation id, null = no conversation).
   AdminAnswer? latestAnswer(String kind, {String? id}) {
     for (final a in answers.reversed) {

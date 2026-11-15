@@ -39,6 +39,10 @@ final adminSeenStoreProvider = Provider<AdminSeenStore>(
 /// How often the panels ask the server for news (light: one small call; runs only while the app is in the foreground).
 const adminPollEvery = Duration(seconds: 5);
 
+/// The faster rate for [adminFastPollFor] after any successful send, so the computer's answer shows quickly.
+const adminFastPollEvery = Duration(seconds: 1);
+const adminFastPollFor = Duration(seconds: 20);
+
 /// The same while the link screen waits for the computer's code.
 const adminLinkPollEvery = Duration(seconds: 8);
 
@@ -89,7 +93,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
   /// Read marks not sent yet (conversation id -> upto); re-sent one per poll tick, cleared on success.
   final Map<String, int> _pendingRead = {};
 
-  /// When the last up message went out (the server allows one per 5 s).
+  /// When the last up message went out (the server allows 60 sends per hour); a new send restarts the fast-poll window.
   DateTime? _lastSendAt;
 
   @override
@@ -535,6 +539,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
         if (ref.mounted) {
           _lastSendAt = ref.read(adminClockProvider)();
           _track(message, sent);
+          _schedule(); // switch to the fast rate now
         }
         return null;
     }
@@ -705,8 +710,14 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
         !(_bg && state.gate == AdminGate.checking)) {
       return;
     }
+    final at = _lastSendAt;
+    final fast =
+        at != null &&
+        ref.read(adminClockProvider)().difference(at) < adminFastPollFor;
     _timer = Timer(
-      state.gate == AdminGate.link ? adminLinkPollEvery : adminPollEvery,
+      state.gate == AdminGate.link
+          ? adminLinkPollEvery
+          : (fast ? adminFastPollEvery : adminPollEvery),
       _tick,
     );
   }

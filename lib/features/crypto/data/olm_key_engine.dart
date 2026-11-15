@@ -12,9 +12,9 @@ final class OlmKeyEngine implements KeyEngine, SessionKeyEngine {
   static Future<void> _init() async {
     try {
       await (_ready ??= RustLib.init());
-    } catch (_) {
+    } catch (e, st) {
       _ready = null;
-      throw const KeyEngineException();
+      throw KeyEngineException(cause: e, causeStackTrace: st);
     }
   }
 

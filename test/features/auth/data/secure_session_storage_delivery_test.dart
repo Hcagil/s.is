@@ -129,11 +129,10 @@ void main() {
     kc.put(null, _key, _session);
     kc.put(_crypto, _deliveryKey, '{"access_token":"tok-1"}');
     kc.failDelete = (g, k) => k == _key;
-    try {
-      await _s().removePersistedSession();
-    } catch (e) {
-      // ignore
-    }
+    await expectLater(
+      _s().removePersistedSession(),
+      throwsA(isA<PlatformException>()),
+    );
     expect(kc.get(_crypto, _deliveryKey), isNull);
   });
 
@@ -141,11 +140,7 @@ void main() {
     kc.put(null, _key, _session);
     kc.put(_crypto, _deliveryKey, '{"access_token":"tok-1"}');
     kc.failDelete = (g, k) => k == _deliveryKey;
-    try {
-      await _s().removePersistedSession();
-    } catch (e) {
-      // ignore
-    }
+    await expectLater(_s().removePersistedSession(), completes);
     expect(kc.get(null, _key), isNull);
   });
 }

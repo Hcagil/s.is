@@ -2858,6 +2858,17 @@ class AppLocalizationsTr extends AppLocalizations {
   String get adminCardsAll => 'Tümü';
 
   @override
+  String get adminCardsFilters => 'Filtreler';
+
+  @override
+  String adminCardsFiltersOn(int count) {
+    return 'Filtreler, $count açık';
+  }
+
+  @override
+  String get adminCardsFiltersTitle => 'Filtreler';
+
+  @override
   String get adminCardsActive => 'Etkin';
 
   @override

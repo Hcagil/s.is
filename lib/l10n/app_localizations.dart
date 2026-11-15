@@ -5012,6 +5012,24 @@ abstract class AppLocalizations {
   /// **'All'**
   String get adminCardsAll;
 
+  /// Admin panels, Cards tab: filter button label and tooltip
+  ///
+  /// In en, this message translates to:
+  /// **'Filters'**
+  String get adminCardsFilters;
+
+  /// Admin panels, Cards tab: filter button screen reader label when filters are on
+  ///
+  /// In en, this message translates to:
+  /// **'Filters, {count} on'**
+  String adminCardsFiltersOn(int count);
+
+  /// Admin panels, Cards tab: filter sheet title
+  ///
+  /// In en, this message translates to:
+  /// **'Filters'**
+  String get adminCardsFiltersTitle;
+
   /// Admin panels, Cards tab text
   ///
   /// In en, this message translates to:

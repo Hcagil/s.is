@@ -2885,6 +2885,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminCardsAll => 'All';
 
   @override
+  String get adminCardsFilters => 'Filters';
+
+  @override
+  String adminCardsFiltersOn(int count) {
+    return 'Filters, $count on';
+  }
+
+  @override
+  String get adminCardsFiltersTitle => 'Filters';
+
+  @override
   String get adminCardsActive => 'Active';
 
   @override

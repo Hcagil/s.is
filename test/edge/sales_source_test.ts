@@ -114,7 +114,7 @@ async function fails(code: SalesErrorCode | 'plain', prev = false): Promise<unkn
   }
   return err;
 }
-type SalesErrorCode = 'login' | 'timeout' | 'shape' | 'config';
+type SalesErrorCode = 'login' | 'timeout' | 'shape' | 'config' | 'other';
 
 const opts = { sanitizeOps: false, sanitizeResources: false };
 
@@ -258,12 +258,13 @@ Deno.test({ ...opts, name: 'a slow source => timeout; the 15 s budget covers bot
   assert(ms >= 14000 && ms < 16500, `timed out after ${ms} ms`);
 } });
 
-Deno.test({ ...opts, name: 'connection refused => a plain Error (index reports other); no secret in it', fn: async () => {
+Deno.test({ ...opts, name: 'connection refused => SalesError other at step page; no secret in it', fn: async () => {
   const l = Deno.listen({ hostname: '127.0.0.1', port: 0 });
   const port = (l.addr as Deno.NetAddr).port;
   l.close();
   setup({ SALES_SOURCE_URL: `http://127.0.0.1:${port}` });
-  await fails('plain');
+  const err = await fails('other') as SalesError;
+  assertEquals(err.step, 'page');
 } });
 
 Deno.test({ ...opts, name: 'a crafted page (label, then dash-stat-value x 69000, ~1 MB) => shape in under 1 s (no regex stall)', fn: async () => {

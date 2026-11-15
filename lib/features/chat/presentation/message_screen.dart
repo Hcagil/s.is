@@ -829,6 +829,9 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                   timeline.isNotEmpty =>
                             ListView.builder(
                               controller: _scroll,
+                              // Not null: a null padding adds the iPhone bottom
+                              // inset again, which the composer already adds.
+                              padding: EdgeInsets.zero,
                               // Newest at the bottom, which is where the composer is.
                               reverse: true,
                               // Generous on purpose: a jump-to-hit needs the target

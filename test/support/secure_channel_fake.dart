@@ -30,6 +30,10 @@ class SecureChannelFake {
   /// that call fails the way a broken Keystore entry does.
   bool Function(String? group, String? key) failRead = (_, _) => false;
 
+  /// When it returns true for a write, that call fails the way a locked or
+  /// full keychain does (nothing is stored).
+  bool Function(String? group, String? key) failWrite = (_, _) => false;
+
   void put(String? group, String key, String value) =>
       (items[group] ??= {})[key] = value;
   String? get(String? group, String key) => items[group]?[key];
@@ -69,6 +73,9 @@ class SecureChannelFake {
           }
           return Map.of(items[group] ?? const {});
         case 'write':
+          if (failWrite(group, key)) {
+            throw PlatformException(code: '-25308', message: 'write refused');
+          }
           (items[group] ??= {})[key!] = args['value'] as String;
           return null;
         case 'delete':

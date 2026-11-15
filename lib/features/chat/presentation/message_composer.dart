@@ -333,7 +333,12 @@ class _ComposerState extends ConsumerState<_Composer>
     switch (result) {
       case Ok():
         // Text typed while the photos upload must stay in the box.
-        if (_controller.text == textAtSend) _controller.clear();
+        if (_controller.text == textAtSend) {
+          _controller.clear();
+          // clear() skips onChanged: end the stored draft too.
+          final id = _conversationId;
+          if (id != null) ref.read(draftsProvider.notifier).setText(id, '');
+        }
         if (picked.dropped > 0) {
           showSisNotice(
             context,

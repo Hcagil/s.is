@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../../app/loading.dart';
 import '../../../app/settings_row.dart';
@@ -37,7 +38,8 @@ class AdminDashboardView extends ConsumerWidget {
         ),
       );
     }
-    if (d == null || (d.working.isEmpty && d.sessions.isEmpty)) {
+    if (d == null ||
+        (d.working.isEmpty && d.sessions.isEmpty && d.usage.isEmpty)) {
       return Center(child: Text(l.adminDashEmpty));
     }
 
@@ -59,6 +61,28 @@ class AdminDashboardView extends ConsumerWidget {
               entry: d.working[i],
               entries: d.working,
               family: families[i],
+            ),
+        ],
+        if (d.usage.any((u) => _usageKinds.contains(u.kind))) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(0, 16, 0, 4),
+            child: Text(
+              l.adminDashUsage,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+          for (final u in d.usage.where((u) => _usageKinds.contains(u.kind)))
+            Semantics(
+              label: _usageA11y(l, u),
+              excludeSemantics: true,
+              child: SisSettingsRow(
+                key: ValueKey('admin-dash-usage-${u.kind}'),
+                icon: Icons.speed_outlined,
+                title: _usageTitle(l, u.kind),
+                showArrow: false,
+                subtitle: _usageLine(l, u),
+                iconColor: u.percentUsed >= 90 ? t.danger : null,
+              ),
             ),
         ],
         if (d.sessions.isNotEmpty) ...[
@@ -98,6 +122,36 @@ class AdminDashboardView extends ConsumerWidget {
       ],
     );
   }
+}
+
+const _usageKinds = {'five_hour', 'seven_day', 'spend_limit'};
+
+String _usageTitle(AppLocalizations l, String kind) => switch (kind) {
+  'five_hour' => l.adminDashUsageSession,
+  'seven_day' => l.adminDashUsageWeek,
+  _ => l.adminDashUsageSpend,
+};
+
+String _usageTime(AppLocalizations l, AdminRateLimit u) {
+  final at = DateTime.tryParse(u.resetsAt ?? '')?.toLocal();
+  if (at == null) return '-';
+  return switch (u.kind) {
+    'five_hour' => DateFormat.Hm(l.localeName).format(at),
+    _ => DateFormat.MMMd(l.localeName).format(at),
+  };
+}
+
+String _usageLine(AppLocalizations l, AdminRateLimit u) =>
+    l.adminDashUsageLine(u.percentUsed, _usageTime(l, u));
+
+String _usageA11y(AppLocalizations l, AdminRateLimit u) {
+  final p = u.percentUsed;
+  final t = _usageTime(l, u);
+  return switch (u.kind) {
+    'five_hour' => l.adminDashUsageSessionA11y(p, t),
+    'seven_day' => l.adminDashUsageWeekA11y(p, t),
+    _ => l.adminDashUsageSpendA11y(p, t),
+  };
 }
 
 String _stateLabel(AppLocalizations l, String code, int count) =>

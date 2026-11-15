@@ -4862,6 +4862,36 @@ abstract class AppLocalizations {
   /// **'Message not sent. Your text is still here. Try again.'**
   String get adminSendFailed;
 
+  /// Admin panels Talk pin text
+  ///
+  /// In en, this message translates to:
+  /// **'Pin'**
+  String get adminTalkPin;
+
+  /// Admin panels Talk pin text
+  ///
+  /// In en, this message translates to:
+  /// **'Unpin'**
+  String get adminTalkUnpin;
+
+  /// Admin panels Talk pin text
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned'**
+  String get adminTalkPinned;
+
+  /// Admin panels Talk pin text
+  ///
+  /// In en, this message translates to:
+  /// **'Could not pin. Try again.'**
+  String get adminTalkPinFailed;
+
+  /// Admin panels Talk pin text
+  ///
+  /// In en, this message translates to:
+  /// **'Could not unpin. Try again.'**
+  String get adminTalkUnpinFailed;
+
   /// Admin panels screen text
   ///
   /// In en, this message translates to:
@@ -4981,6 +5011,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'All'**
   String get adminCardsAll;
+
+  /// Admin panels, Cards tab: filter button label and tooltip
+  ///
+  /// In en, this message translates to:
+  /// **'Filters'**
+  String get adminCardsFilters;
+
+  /// Admin panels, Cards tab: filter button screen reader label when filters are on
+  ///
+  /// In en, this message translates to:
+  /// **'Filters, {count} on'**
+  String adminCardsFiltersOn(int count);
+
+  /// Admin panels, Cards tab: filter sheet title
+  ///
+  /// In en, this message translates to:
+  /// **'Filters'**
+  String get adminCardsFiltersTitle;
 
   /// Admin panels, Cards tab text
   ///

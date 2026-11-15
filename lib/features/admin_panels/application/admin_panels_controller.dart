@@ -39,6 +39,10 @@ final adminSeenStoreProvider = Provider<AdminSeenStore>(
 /// How often the panels ask the server for news (light: one small call; runs only while the app is in the foreground).
 const adminPollEvery = Duration(seconds: 5);
 
+/// The faster rate for [adminFastPollFor] after any successful send, so the computer's answer shows quickly.
+const adminFastPollEvery = Duration(seconds: 1);
+const adminFastPollFor = Duration(seconds: 20);
+
 /// The same while the link screen waits for the computer's code.
 const adminLinkPollEvery = Duration(seconds: 8);
 
@@ -89,7 +93,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
   /// Read marks not sent yet (conversation id -> upto); re-sent one per poll tick, cleared on success.
   final Map<String, int> _pendingRead = {};
 
-  /// When the last up message went out (the server allows one per 5 s).
+  /// When the last up message went out (the server allows 60 sends per hour); a new send restarts the fast-poll window.
   DateTime? _lastSendAt;
 
   @override
@@ -335,6 +339,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
       syncing: completed ? false : state.syncing,
       clearFailure: true,
     );
+    _dropConfirmedPins(snap);
 
     // A complete snapshot is the truth: drafts of items that are gone are dropped.
     // Only when unlocked: background count mode must not decrypt the drafts.
@@ -352,6 +357,19 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
     await _ensureSeen();
     if (!ref.mounted || _lockCount != lockedAt) return;
     if (!has || gap) await _resync();
+  }
+
+  /// Drops the pin choices the snapshot [snap] now shows (or whose conversation is gone).
+  void _dropConfirmedPins(AdminSnapshot snap) {
+    if (state.pinOverride.isEmpty) return;
+    final left = {...state.pinOverride}
+      ..removeWhere((id, on) {
+        final c = snap.conversations.where((c) => c.id == id).firstOrNull;
+        return c == null || c.isPinned == on;
+      });
+    if (left.length != state.pinOverride.length) {
+      state = state.copyWith(pinOverride: left);
+    }
   }
 
   /// Applies the computer's results to the answers sent from this phone.
@@ -384,6 +402,11 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
           status: AdminAnswerStatus.notSent,
           code: result.code,
         );
+        if (answer.kind == 'pin' && answer.conv != null) {
+          state = state.copyWith(
+            pinOverride: {...state.pinOverride}..remove(answer.conv),
+          );
+        }
         if (target != null) {
           questions = {...questions}..remove(target);
           tasks = {...tasks}..remove(target);
@@ -516,6 +539,7 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
         if (ref.mounted) {
           _lastSendAt = ref.read(adminClockProvider)();
           _track(message, sent);
+          _schedule(); // switch to the fast rate now
         }
         return null;
     }
@@ -576,6 +600,22 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
       state = state.copyWith(readUpto: {...state.readUpto, conv: upto});
     }
     return null;
+  }
+
+  /// Pins or unpins [conv] on the computer. The owner sees the new state at once (pinOverride); a failed send puts it back. Null = sent, else why not. The computer's answer (and the snapshot) confirm it later.
+  Future<Failure?> setConversationPinned(String conv, bool pinned) async {
+    final lockedAt = _lockCount;
+    state = state.copyWith(pinOverride: {...state.pinOverride, conv: pinned});
+    final f = await _send({
+      'answer_id': _newAnswerId(),
+      'kind': 'pin',
+      'conv': conv,
+      'pinned': pinned,
+    });
+    if (f != null && ref.mounted && _lockCount == lockedAt) {
+      state = state.copyWith(pinOverride: {...state.pinOverride}..remove(conv));
+    }
+    return f;
   }
 
   /// Sends the owner's answer to one question; the card then shows as waiting.
@@ -670,8 +710,14 @@ class AdminPanelsController extends Notifier<AdminPanelsState> {
         !(_bg && state.gate == AdminGate.checking)) {
       return;
     }
+    final at = _lastSendAt;
+    final fast =
+        at != null &&
+        ref.read(adminClockProvider)().difference(at) < adminFastPollFor;
     _timer = Timer(
-      state.gate == AdminGate.link ? adminLinkPollEvery : adminPollEvery,
+      state.gate == AdminGate.link
+          ? adminLinkPollEvery
+          : (fast ? adminFastPollEvery : adminPollEvery),
       _tick,
     );
   }

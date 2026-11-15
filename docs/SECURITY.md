@@ -482,7 +482,7 @@ never logged, and no session id rides in the push. For a first (pre-key, `ot` 0)
 cannot open the text is one fallback text, identical on both platforms: "New
 message" (Turkish "Yeni mesaj"); Android takes it from `notification_fallback`,
 the iPhone extension sets it for every encrypted push (mutable-content is set for
-them all; it is also set for every iPhone push of a 1:1 chat, so the extension can mark the message delivered, see "Extension delivery").
+them all; it is also set for every iPhone push of a chat with a direct_key (1:1 chats, and also system, admin and staff chats), so the extension can mark the message delivered, see "Extension delivery").
 
 ### Extension delivery (iPhone delivered tick)
 

@@ -571,11 +571,10 @@ class _ComposerState extends ConsumerState<_Composer>
                                       // keyboard's own setting still decides (nothing is forced).
                                       textCapitalization:
                                           TextCapitalization.sentences,
-                                      textInputAction: TextInputAction.send,
-                                      // A non-null onEditingComplete replaces Flutter's default,
-                                      // which unfocuses the field on the send action and so
-                                      // closes the keyboard.
-                                      onEditingComplete: _send,
+                                      // The keyboard's action key is a new line; only the send
+                                      // button sends.
+                                      keyboardType: TextInputType.multiline,
+                                      textInputAction: TextInputAction.newline,
                                       // Throttled, and silent when the member does not share typing.
                                       onChanged: (text) {
                                         if (text.isNotEmpty) {

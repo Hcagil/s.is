@@ -69,6 +69,8 @@ class _AdminTalkComposerState extends ConsumerState<AdminTalkComposer> {
                   ],
                   minLines: 1,
                   maxLines: 5,
+                  keyboardType: TextInputType.multiline,
+                  textInputAction: TextInputAction.newline,
                   textCapitalization: TextCapitalization.sentences,
                   decoration: InputDecoration(
                     hintText: l.adminTalkHint,

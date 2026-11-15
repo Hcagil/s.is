@@ -1,4 +1,4 @@
--- bounds admin_view_bridge_put: p_seq must be above the stored last down sequence and at most 1000 above it, so one huge number cannot lock later sends; every other check unchanged
+-- bounds admin_view_bridge_put: p_seq must be above the stored last down sequence and at most 1000000 above it, so one huge number cannot lock later sends; every other check unchanged
 --
 -- 3. public.admin_view_bridge_put()
 -- Errors: 42501 not permitted, 22023 bad input, RLMT1 limit hit.
@@ -32,7 +32,7 @@ begin
   if v_keys_row.phone_pub is null or v_keys_row.computer_pub is null or v_keys_row.epoch <> p_epoch then
     raise exception 'invalid request' using errcode = '22023';
   end if;
-  if p_seq <= v_keys_row.last_down_seq or p_seq > v_keys_row.last_down_seq + 1000 then
+  if p_seq <= v_keys_row.last_down_seq or p_seq > v_keys_row.last_down_seq + 1000000 then
     raise exception 'invalid request' using errcode = '22023';
   end if;
   insert into app_private.admin_view_items(dir, epoch, seq, body) values ('down', p_epoch, p_seq, p_body) returning id into v_id;

@@ -1,7 +1,7 @@
-// The the sales source reader (supabase/functions/sales-total/source.ts) against a fake sales source HTTP
-// server on 127.0.0.1. Never calls the real the sales source address. No database needed.
+// The sales source reader (supabase/functions/sales-total/source.ts) against a fake sales source HTTP
+// server on 127.0.0.1. Never calls the real sales source address. No database needed.
 //
-// Contract: fetchSalesTotal(day, prev). Env SALES_SOURCE_URL (trailing slashes
+// Contract: fetchSalesTotal(day, prev). Step 0: GET {base}/Authentication/Login first; its token cookie and hidden __RequestVerificationToken field go with the login POST (the site answers 500 without them). Env SALES_SOURCE_URL (trailing slashes
 // stripped), SALES_SOURCE_USER, SALES_SOURCE_PASSWORD; any missing => SalesError('config')
 // before any request. 1) POST {base}/Authentication/LoginAction, form
 // UygulamaTipi=3, UserName, Password, redirect manual; cookie = every Set-Cookie
@@ -33,8 +33,27 @@ for (const k of ['log', 'info', 'warn', 'error', 'debug'] as const) {
 type Hit = { method: string; path: string; search: string; cookie: string | null; ctype: string | null; body: string };
 type Reply = (req: Request, hit: Hit) => Response | Promise<Response>;
 const hits: Hit[] = [];
-let onLogin: Reply = () => new Response(null, { status: 302, headers: loginCookies() });
-let onList: Reply = () => new Response(page('37.652,00'));
+let onLogin: Reply = (r, h) => defaultLogin(r, h);
+let onList: Reply = (r, h) => defaultList(r, h);
+const issued: { cookie: string; field: string }[] = [];
+let rejectedLogins = 0;
+const defaultLoginPage: Reply = () => {
+  const cookie = crypto.randomUUID(), field = crypto.randomUUID();
+  issued.push({ cookie, field });
+  return new Response(`<html><form><input name="__RequestVerificationToken" type="hidden" value="${field}" /></form></html>`, {
+    headers: { 'set-cookie': `__RequestVerificationToken=${cookie}; path=/; HttpOnly` },
+  });
+};
+let onLoginPage: Reply = defaultLoginPage;
+const defaultLogin: Reply = (_req, hit) => {
+  const form = new URLSearchParams(hit.body);
+  const ok = issued.some((t) => (hit.cookie ?? '').includes(`__RequestVerificationToken=${t.cookie}`) && form.get('__RequestVerificationToken') === t.field);
+  if (!ok) { rejectedLogins++; return new Response('error', { status: 500 }); }
+  if (form.get('Password') === password) return new Response(null, { status: 302, headers: loginCookies() });
+  return new Response(null, { status: 302, headers: { location: '/Authentication/Login', 'set-cookie': 'ASP.NET_SessionId=anon; path=/; HttpOnly' } });
+};
+const defaultList: Reply = (_req, hit) =>
+  (hit.cookie ?? '').includes('.AspNetCore.Auth=qa2') ? new Response(page('37.652,00')) : new Response(null, { status: 302, headers: { location: '/Authentication/Login' } });
 
 function loginCookies(): Headers {
   const h = new Headers({ location: '/' });
@@ -60,6 +79,7 @@ const server = Deno.serve({ hostname: '127.0.0.1', port: 0, onListen: () => {} }
     ctype: req.headers.get('content-type'), body: await req.text(),
   };
   hits.push(hit);
+  if (u.pathname === '/Authentication/Login') return onLoginPage(req, hit);
   if (u.pathname === '/Authentication/LoginAction') return onLogin(req, hit);
   if (u.pathname === '/OzetRaporlar/List') return onList(req, hit);
   return new Response('not found', { status: 404 });
@@ -71,8 +91,7 @@ function setup(over: Partial<Record<'SALES_SOURCE_URL' | 'SALES_SOURCE_USER' | '
   for (const [k, v] of Object.entries(env)) v === null ? Deno.env.delete(k) : Deno.env.set(k, v);
   hits.length = 0;
   logged.length = 0;
-  onLogin = () => new Response(null, { status: 302, headers: loginCookies() });
-  onList = () => new Response(page('37.652,00'));
+  issued.length = 0; rejectedLogins = 0; onLoginPage = defaultLoginPage; onLogin = defaultLogin; onList = defaultList;
 }
 
 // Every failure: the right kind, and nothing secret in the error or the log.
@@ -102,15 +121,17 @@ const opts = { sanitizeOps: false, sanitizeResources: false };
 Deno.test({ ...opts, name: 'today (prev=false): logs in with the form, sends the cookies, reads durum=bugun, returns the total as is', fn: async () => {
   setup();
   assertEquals(await fetchSalesTotal('2026-03-04', false), '37.652,00');
-  assertEquals(hits.length, 2);
-  const [login, list] = hits;
+  assertEquals(hits.length, 3);
+  const [, login, list] = hits;
   assertEquals([login.method, login.path, login.search], ['POST', '/Authentication/LoginAction', '']);
   assert(login.ctype?.startsWith('application/x-www-form-urlencoded'), `login content-type ${login.ctype}`);
   const form = new URLSearchParams(login.body);
   assertEquals([form.get('UygulamaTipi'), form.get('UserName'), form.get('Password')], ['3', 'qa-user', password]);
   assertEquals([list.method, list.path], ['GET', '/OzetRaporlar/List']);
   assertEquals(new URLSearchParams(list.search).get('durum'), 'bugun');
-  assertEquals(list.cookie, `ASP.NET_SessionId=${cookieVal}; .AspNetCore.Auth=qa2`, 'every Set-Cookie name=value, joined "; "');
+  assert(list.cookie?.includes(`ASP.NET_SessionId=${cookieVal}`), 'session cookie sent');
+  assert(list.cookie?.includes('.AspNetCore.Auth=qa2'), 'auth cookie sent');
+  assert(login.cookie?.includes(`__RequestVerificationToken=${issued[0].cookie}`) && form.get('__RequestVerificationToken') === issued[0].field, 'login carries the token cookie and the hidden field');
   assertEquals(logged, [], 'nothing is logged');
 } });
 
@@ -118,7 +139,7 @@ Deno.test({ ...opts, name: 'yesterday (prev=true): reads durum=dun; the day argu
   setup();
   onList = (_r, h) => new Response(page(new URLSearchParams(h.search).get('durum') === 'dun' ? '1.234.567,89' : '1,00'));
   assertEquals(await fetchSalesTotal('2026-03-04', true), '1.234.567,89');
-  assertEquals(new URLSearchParams(hits[1].search).get('durum'), 'dun');
+  assertEquals(new URLSearchParams(hits[2].search).get('durum'), 'dun');
   const first = hits.map((h) => h.path + h.search);
   hits.length = 0;
   assertEquals(await fetchSalesTotal('1999-01-01', true), '1.234.567,89');
@@ -128,7 +149,7 @@ Deno.test({ ...opts, name: 'yesterday (prev=true): reads durum=dun; the day argu
 Deno.test({ ...opts, name: 'trailing slashes on SALES_SOURCE_URL are stripped (no // in the paths)', fn: async () => {
   setup({ SALES_SOURCE_URL: base + '///' });
   assertEquals(await fetchSalesTotal('d', false), '37.652,00');
-  assertEquals(hits.map((h) => h.path), ['/Authentication/LoginAction', '/OzetRaporlar/List']);
+  assertEquals(hits.map((h) => h.path), ['/Authentication/Login', '/Authentication/LoginAction', '/OzetRaporlar/List']);
 } });
 
 Deno.test({ ...opts, name: 'missing config => config, before any request', fn: async () => {
@@ -152,7 +173,7 @@ Deno.test({ ...opts, name: 'login refused (200 without cookie, 401, 500 with coo
     setup();
     onLogin = r;
     await fails('login');
-    assertEquals(hits.map((h) => h.path), ['/Authentication/LoginAction']);
+    assertEquals(hits.map((h) => h.path), ['/Authentication/Login', '/Authentication/LoginAction']);
   }
 } });
 
@@ -161,7 +182,7 @@ Deno.test({ ...opts, name: 'the list redirects to login, or errors => login', fn
     setup();
     onList = () => new Response(null, { status, headers: status < 400 ? { location: '/Authentication/Login' } : {} });
     await fails('login');
-    assertEquals(hits.length, 2, `${status}: the redirect is not followed`);
+    assertEquals(hits.length, 3, `${status}: the redirect is not followed`);
   }
 } });
 
@@ -209,7 +230,7 @@ Deno.test({ ...opts, name: 'an endless reply is cut at the cap => shape, quickly
     cancel() { cancelled = true; },
   }));
   const t0 = Date.now();
-  let timer = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   await Promise.race([
     fails('shape'),
     new Promise((_, rej) => timer = setTimeout(() => rej(new Error('no answer in 20 s')), 20000)),
@@ -270,6 +291,42 @@ Deno.test({ ...opts, name: 'the total is read only within 512 bytes of the label
   setup();
   onList = () => new Response(body2);
   await fails('shape');
+} });
+
+Deno.test({ ...opts, name: 'the login page is loaded first and no login is rejected for a missing token', fn: async () => {
+  setup();
+  await fetchSalesTotal('d', false);
+  assertEquals(hits[0].method + ' ' + hits[0].path, 'GET /Authentication/Login');
+  assertEquals(rejectedLogins, 0);
+} });
+
+Deno.test({ ...opts, name: 'wrong login (302 with a session cookie, list not 200) => login, not a crash', fn: async () => {
+  setup({ SALES_SOURCE_PASSWORD: 'wrong-' + crypto.randomUUID() });
+  await fails('login');
+  assertEquals(hits.map((h) => h.method + ' ' + h.path), ['GET /Authentication/Login', 'POST /Authentication/LoginAction', 'GET /OzetRaporlar/List']);
+} });
+
+Deno.test({ ...opts, name: 'a login page without any token makes the site answer 500 => login', fn: async () => {
+  setup();
+  onLoginPage = () => new Response('<html>no token</html>');
+  await fails('login');
+} });
+
+Deno.test({ ...opts, name: 'a crafted ~64 KB login page (repeated token input tag, never closed) cannot stall the reader: login or shape in under 1 s', fn: async () => {
+  setup();
+  const body = '<input name="__RequestVerificationToken" '.repeat(Math.ceil(64 * 1024 / 41));
+  onLoginPage = () => new Response(body, {
+    headers: { 'set-cookie': '__RequestVerificationToken=qa-crafted; path=/; HttpOnly' },
+  });
+  const t0 = Date.now();
+  try {
+    await fetchSalesTotal('d', false);
+    throw new Error('expected a failure');
+  } catch (e) {
+    assert(e instanceof SalesError && (e.code === 'login' || e.code === 'shape'), `unexpected ${e}`);
+  }
+  const ms = Date.now() - t0;
+  assert(ms < 1000, `took ${ms} ms`);
 } });
 
 Deno.test({ ...opts, name: 'teardown', fn: async () => {

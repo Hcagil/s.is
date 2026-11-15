@@ -294,9 +294,22 @@ Deno.test({ ...opts, name: 'amount rule (<= 25 chars, strict number shape): acce
 // A fake the sales source on 127.0.0.1 for the real reader (index.ts + source.ts together).
 let sourceDurum: string[] = [];
 let sourceTotal = '8.642.097,31';
-const fakeSource = realServe({ hostname: '127.0.0.1', port: 0, onListen: () => {} }, (req) => {
+const issuedTokens: { cookie: string; field: string }[] = [];
+const fakeSource = realServe({ hostname: '127.0.0.1', port: 0, onListen: () => {} }, async (req) => {
   const u = new URL(req.url);
+  if (u.pathname === '/Authentication/Login') {
+    const cookie = crypto.randomUUID();
+    const field = crypto.randomUUID();
+    issuedTokens.push({ cookie, field });
+    return new Response(`<html><form><input name="__RequestVerificationToken" type="hidden" value="${field}" /></form></html>`, {
+      headers: { 'set-cookie': `__RequestVerificationToken=${cookie}; path=/; HttpOnly` },
+    });
+  }
   if (u.pathname === '/Authentication/LoginAction') {
+    const form = new URLSearchParams(await req.text());
+    const cookie = req.headers.get('cookie') ?? '';
+    const ok = issuedTokens.some((t) => cookie.includes(`__RequestVerificationToken=${t.cookie}`) && form.get('__RequestVerificationToken') === t.field);
+    if (!ok) return new Response('error', { status: 500 });
     return new Response(null, { status: 302, headers: { location: '/', 'set-cookie': 'ASP.NET_SessionId=qa; path=/' } });
   }
   sourceDurum.push(u.searchParams.get('durum') ?? '');

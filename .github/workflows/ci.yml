@@ -439,16 +439,16 @@ jobs:
               result=false
               result_fail=false
               result_pass=false
-              if grep -qE '^[0-9]{2}:[0-9]{2} \+[0-9]+[ :]' "$log"; then
+              if grep -qE '^::group::|^::error::|^::warning::[0-9]+ tests?|^[0-9]{2}:[0-9]{2} \+[0-9]+[ :]' "$log"; then
                 progress=true
               fi
-              if grep -qE 'Some tests failed|All tests passed|[0-9]+ tests? passed' "$log"; then
+              if grep -qE '^🎉 [0-9]+ tests? passed|^::error::[0-9]+ tests?|^::warning::[0-9]+ tests?|Some tests failed|All tests passed' "$log"; then
                 result=true
               fi
-              if grep -qE 'Some tests failed|^[0-9]{2}:[0-9]{2} \+[0-9]+ -[1-9][0-9]*[ :]' "$log"; then
+              if grep -qE '^::group::❌|^::error::|^::warning::[0-9]+ tests?|Some tests failed|^[0-9]{2}:[0-9]{2} \+[0-9]+ -[1-9][0-9]*[ :]' "$log"; then
                 result_fail=true
               fi
-              if grep -qE 'All tests passed|[0-9]+ tests? passed' "$log" && [ "$result_fail" = false ]; then
+              if grep -qE '^🎉 [0-9]+ tests? passed|All tests passed' "$log" && [ "$result_fail" = false ]; then
                 result_pass=true
               fi
               if [ "$progress" = true ] || [ "$result" = true ]; then
@@ -461,7 +461,7 @@ jobs:
                   echo "::notice::video prep test passed (the run hung after printing its result; stopped)"
                   exit 0
                 fi
-                echo "::error::video prep test did not finish with a pass (the run hung after printing: $(grep -E 'Some tests failed|[0-9]+ tests? passed|All tests passed|^[0-9]{2}:[0-9]{2} \+[0-9]+[ :]' "$log" | tail -1))"
+                echo "::error::video prep test did not finish with a pass (the run hung after printing: $(grep -E '^::group::|^::error::|^🎉|Some tests failed|All tests passed|^[0-9]{2}:[0-9]{2} \+[0-9]+[ :]' "$log" | tail -1))"
                 exit 1
               fi
               echo "::warning::video prep test attempt $attempt: no result ${limit}s after the Xcode build (stuck installing, launching or reaching the app); stopped"

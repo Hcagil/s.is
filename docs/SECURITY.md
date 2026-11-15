@@ -352,7 +352,10 @@ opens only these topics: `presence:members`, `typing:<conversation id>`,
 need the sharing switch), `chats:<own user id>` (that user), and `admin_view`
 (owner only: the policy `admin_view_receive` needs `has_app_access()` and
 `is_owner()`; the payload is the new row id only, never the body). Any other
-private topic is refused.
+private topic is refused. `presence:members` needs only app access, not
+conversation membership. Clients may send only on `presence:members` and
+`typing:<conversation id>`, and only with their own sharing switch on; every
+other topic is written by the database (`realtime.send`).
 
 Realtime publishes **inserts and updates** (updates carry edits and "deleted
 for everyone"), never deletes: `realtime.apply_rls` evaluates row-level

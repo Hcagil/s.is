@@ -82,15 +82,17 @@ final class SecureSessionStorage extends LocalStorage {
 
   @override
   Future<void> removePersistedSession() async {
-    await _storage.delete(key: _key);
     try {
-      final group = await _group();
-      if (group != null) {
-        await _deliveryStorage(group).delete(key: _deliveryKey);
+      await _storage.delete(key: _key);
+    } finally {
+      try {
+        final group = await _group();
+        if (group != null) {
+          await _deliveryStorage(group).delete(key: _deliveryKey);
+        }
+      } on Object {
+        // A failed delete of the small item never fails the sign-out.
       }
-    } on Object {
-      // A failed delete of the small item never fails the sign-out.
-      return;
     }
   }
 }

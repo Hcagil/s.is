@@ -26,11 +26,13 @@ final class DriftMessageStore
     required this._file,
     required this._key,
     required this._deleteKey,
+    this.interceptor,
   });
   final String ownerId;
   final Future<File> Function() _file;
   final Future<String> Function() _key;
   final Future<void> Function() _deleteKey;
+  final QueryInterceptor? interceptor;
   Future<StoreDatabase>? _db;
   bool _closed = false;
 
@@ -81,7 +83,7 @@ final class DriftMessageStore
         // An erase that began meanwhile wins: never create or re-create the file.
         if (erasuresAtStart != _erasures) throw const _ErasedWhileOpening();
         final db = StoreDatabase(
-          NativeDatabase.createInBackground(f, setup: _keyed(key)),
+          _wrap(NativeDatabase.createInBackground(f, setup: _keyed(key)), null),
         );
         var ok = false;
         try {
@@ -207,6 +209,7 @@ final class DriftMessageStore
     bool write = false,
   }) async {
     if (_closed || ownerId.isEmpty) return fallback;
+    var record = _BeginRecord();
     final opened = _open();
     final done = Completer<void>();
     _inflight.add(done.future);
@@ -222,7 +225,11 @@ final class DriftMessageStore
       // A write racing another connection can fail busy; the bodies are idempotent, so retry before giving up.
       for (var n = 0; ; n++) {
         try {
-          return await body(db);
+          record = _BeginRecord();
+          return await runZoned(
+            () => body(db),
+            zoneValues: {_beginKey: record},
+          );
         } catch (e) {
           if (n >= 9 ||
               !(e is DriftRemoteException ||
@@ -240,7 +247,7 @@ final class DriftMessageStore
     } catch (e, st) {
       // An erase that won against this write is on purpose, not a failure.
       if (write && e is! _ErasedWhileOpening) {
-        Error.throwWithStackTrace(const StoreWriteException(), st);
+        Error.throwWithStackTrace(StoreWriteException(record.first ?? e), st);
       }
       return fallback;
     } finally {
@@ -384,6 +391,10 @@ final class DriftMessageStore
     throw const _ErasedWhileOpening();
   }
 
+  /// The caller's interceptor (if any) first, then the recorder outside it, so the recorder sees the first error.
+  static QueryExecutor _wrap(QueryExecutor e, QueryInterceptor? i) =>
+      (i == null ? e : e.interceptWith(i)).interceptWith(_FirstBeginError());
+
   Future<StoreDatabase> _create() async {
     final seen = _seen ??= _erasures;
     final file = await _file();
@@ -396,10 +407,14 @@ final class DriftMessageStore
 
     Future<StoreDatabase> attempt() async {
       StartupMarks.mark('store-spawn');
+      // A store with its own interceptor opens a fresh executor: the early open has none.
       final db =
-          await _takeEarly(file.path, key) ??
+          (interceptor == null ? await _takeEarly(file.path, key) : null) ??
           StoreDatabase(
-            NativeDatabase.createInBackground(file, setup: _keyed(key)),
+            _wrap(
+              NativeDatabase.createInBackground(file, setup: _keyed(key)),
+              interceptor,
+            ),
           );
       var ok = false;
       try {
@@ -892,6 +907,33 @@ Future<void> _deleteFiles(File file) async {
       await File(path).delete();
     } catch (_) {
       // Already gone.
+    }
+  }
+}
+
+/// Zone key of the per-write [_BeginRecord] that [_run] sets around each body try.
+final _beginKey = Object();
+
+/// The first error a failed transaction start threw inside one write.
+final class _BeginRecord {
+  Object? first;
+}
+
+/// Records the first failed transaction start into the write's own [_BeginRecord] (found through the zone), so a later rollback error cannot replace it and concurrent writes cannot mix.
+final class _FirstBeginError extends QueryInterceptor {
+  @override
+  Future<bool> ensureOpen(
+    QueryExecutor executor,
+    QueryExecutorUser user,
+  ) async {
+    try {
+      return await super.ensureOpen(executor, user);
+    } catch (e) {
+      final record = Zone.current[_beginKey];
+      if (executor is TransactionExecutor && record is _BeginRecord) {
+        record.first ??= e;
+      }
+      rethrow;
     }
   }
 }

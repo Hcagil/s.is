@@ -34,6 +34,9 @@ class SecureChannelFake {
   /// full keychain does (nothing is stored).
   bool Function(String? group, String? key) failWrite = (_, _) => false;
 
+  /// When it returns true for a delete, that call fails (nothing is removed).
+  bool Function(String? group, String? key) failDelete = (_, _) => false;
+
   void put(String? group, String key, String value) =>
       (items[group] ??= {})[key] = value;
   String? get(String? group, String key) => items[group]?[key];
@@ -79,6 +82,9 @@ class SecureChannelFake {
           (items[group] ??= {})[key!] = args['value'] as String;
           return null;
         case 'delete':
+          if (failDelete(group, key)) {
+            throw PlatformException(code: '-25300', message: 'delete refused');
+          }
           items[group]?.remove(key);
           return null;
         case 'deleteAll':

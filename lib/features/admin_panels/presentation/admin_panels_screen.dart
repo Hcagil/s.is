@@ -155,7 +155,7 @@ class _AdminPanelsScreenState extends ConsumerState<AdminPanelsScreen>
                 NavigationDestination(
                   icon: _badged(
                     const Icon(Icons.help_outline_rounded),
-                    openTab == 'questions' ? 0 : counts['questions'] ?? 0,
+                    panels.unansweredQuestions,
                   ),
                   selectedIcon: const Icon(Icons.help_rounded),
                   label: l.adminQuestions,

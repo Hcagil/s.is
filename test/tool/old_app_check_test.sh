@@ -16,9 +16,10 @@ mkrepo() {
     for n in "$@"; do
       echo "$n" > f
       if [ "${WITH_INTEG:-}" = 1 ]; then mkdir -p test/integration; echo "void main(){}" > test/integration/a_test.dart; fi
+      if [ "${SEEDS:-}" = 1 ]; then echo "-- SEED-$n" > supabase/seed.sql; fi
       git add -A; git commit -qm "c$n"; git tag "v1.0.$n+$n"
     done
-    echo last > g; git add -A; git commit -qm last )
+    echo last > g; if [ "${SEEDS:-}" = 1 ]; then echo "-- SEED-NEW" > supabase/seed.sql; fi; git add -A; git commit -qm last )
   printf '#!/usr/bin/env bash\necho "$2" >> "%s/calls"\nrc=$(grep "^$2 " "%s/rc" 2>/dev/null | cut -d" " -f2 || true)\nexit ${rc:-0}\n' "$tmp" "$tmp" > "$tmp/stub.sh"
   chmod +x "$tmp/stub.sh"
   printf '#!/usr/bin/env bash\necho "$*" >> "%s/compose.log"\nexit 0\n' "$tmp" > "$tmp/compose.sh"
@@ -247,6 +248,107 @@ has c19-fail "FAIL v1.0.101+101"
 has c19-last "logline 30"
 has c19-first-of-tail "logline 11"
 [[ "$out" != *"logline 10"$'\n'* ]] || fail c19-tail-too-long
+
+
+# stubs for the seed cases
+cat >"$tmp/compose_ok.sh" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in *"supabase status"*) echo 'SECRET_KEY="k"' ;; esac
+exit 0
+EOF
+chmod +x "$tmp/compose_ok.sh"
+
+cat >"$tmp/reset.sh" <<'EOF'
+#!/usr/bin/env bash
+echo "$*" >> "$RESET_LOG"
+case " $* " in
+  *" --no-seed "*) [ -z "${RESET_FAIL_NOSEED:-}" ] || exit 1 ;;
+  *) [ -z "${RESET_FAIL_PLAIN:-}" ] || exit 1 ;;
+esac
+exit 0
+EOF
+chmod +x "$tmp/reset.sh"
+
+mkdir -p "$tmp/bin"
+cat >"$tmp/bin/docker" <<'EOF'
+#!/usr/bin/env bash
+echo "$*" >> "$DOCKER_LOG"
+if [ ! -t 0 ]; then cat >> "$DOCKER_IN"; fi
+exit ${DOCKER_RC:-0}
+EOF
+chmod +x "$tmp/bin/docker"
+
+seedrun() {
+  rm -f "$tmp/reset.log" "$tmp/docker.log" "$tmp/docker.in"
+  WITH_INTEG=1 SEEDS=1 mkrepo 101 120
+  runreal PATH="$tmp/bin:$PATH" \
+          RESET_LOG="$tmp/reset.log" \
+          DOCKER_LOG="$tmp/docker.log" \
+          DOCKER_IN="$tmp/docker.in" \
+          OLD_APP_COMPOSE="$tmp/compose_ok.sh" \
+          OLD_APP_RESET_CMD="$tmp/reset.sh" \
+          OLD_APP_MIN=1 \
+          OLD_APP_HEAD=v1.0.120+120 \
+          "$@"
+}
+
+# c20
+seedrun
+eqv c20-code "$code" 0
+has c20-pass "PASS v1.0.101+101"
+eqv c20-noseed "$(head -n1 "$tmp/reset.log" | grep -c -- '--no-seed')" 1
+
+# c21
+seedrun
+grep -qF -- "-- SEED-101" "$tmp/docker.in" || fail c21-own
+! grep -qF -- "-- SEED-NEW" "$tmp/docker.in" || fail c21-new
+
+# tag without seed.sql
+rm -f "$tmp/reset.log" "$tmp/docker.log" "$tmp/docker.in"
+WITH_INTEG=1 mkrepo 101 120  # no SEEDS
+runreal PATH="$tmp/bin:$PATH" \
+        RESET_LOG="$tmp/reset.log" \
+        DOCKER_LOG="$tmp/docker.log" \
+        DOCKER_IN="$tmp/docker.in" \
+        OLD_APP_COMPOSE="$tmp/compose_ok.sh" \
+        OLD_APP_RESET_CMD="$tmp/reset.sh" \
+        OLD_APP_MIN=1 \
+        OLD_APP_HEAD=v1.0.120+120
+! grep -qF -- "SEED" "$tmp/docker.in" 2>/dev/null || fail c21-noseed-file
+has c21-noseed-pass "PASS v1.0.101+101"
+
+# c22a
+seedrun RESET_FAIL_NOSEED=1
+has c22a "ERROR v1.0.101+101"
+eqv c22a-code "$code" 1
+
+# c22b
+seedrun DOCKER_RC=1
+has c22b "ERROR v1.0.101+101"
+eqv c22b-code "$code" 1
+
+# c23
+seedrun
+eqv c23-count "$(wc -l < "$tmp/reset.log" | tr -d ' ')" 2
+eqv c23-last "$(tail -n1 "$tmp/reset.log" | grep -c -- '--no-seed')" 0
+rm -f "$tmp/reset.log" "$tmp/docker.log" "$tmp/docker.in"
+mkrepo 101 120
+runreal PATH="$tmp/bin:$PATH" RESET_LOG="$tmp/reset.log" DOCKER_LOG="$tmp/docker.log" DOCKER_IN="$tmp/docker.in" OLD_APP_COMPOSE="$tmp/compose_ok.sh" OLD_APP_RESET_CMD="$tmp/reset.sh" OLD_APP_MIN=1 OLD_APP_HEAD=v1.0.120+120
+[ ! -e "$tmp/reset.log" ] || fail c23-reset-without-replay
+has c23-unchecked "UNCHECKED"
+eqv c23-code2 "$code" 0
+# c24
+seedrun RESET_FAIL_PLAIN=1
+has c24-restore "ERROR: could not restore the current seed"
+has c24-pass "PASS v1.0.101+101"
+eqv c24-code "$code" 1
+# c25
+rm -f "$tmp/reset.log" "$tmp/docker.log" "$tmp/docker.in"
+WITH_INTEG=1 SEEDS=1 mkrepo 101 120
+runreal PATH="$tmp/bin:$PATH" RESET_LOG="$tmp/reset.log" DOCKER_LOG="$tmp/docker.log" DOCKER_IN="$tmp/docker.in" OLD_APP_COMPOSE="$tmp/compose_ok.sh" OLD_APP_MIN=1 OLD_APP_HEAD=v1.0.120+120
+has c25-pass "PASS v1.0.101+101"
+[ ! -e "$tmp/reset.log" ] || fail c25-reset
+! grep -qF -- "SEED" "$tmp/docker.in" 2>/dev/null || fail c25-seed
 
 [ "$fails" -eq 0 ] || { echo "old_app_check_test: $fails failed"; exit 1; }
 echo "old_app_check_test: OK"

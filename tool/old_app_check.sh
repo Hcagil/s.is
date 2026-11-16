@@ -87,8 +87,12 @@ replay_tag() {
     return 2
   fi
 
-  # Print test errors
-  grep -E ' \[E\]$' "$log_file" | head -40
+  # Print test errors; a failure with no [E] line (e.g. the runner died) shows the end of the log instead.
+  if grep -qE ' \[E\]$' "$log_file"; then
+    grep -E ' \[E\]$' "$log_file" | head -40
+  else
+    tail -n 20 "$log_file"
+  fi
   rm -f "$log_file"
   return 1
 }
@@ -150,6 +154,10 @@ fi
 
 if [ "$oldest_tag" = "$newest_tag" ]; then
   say "old app check: newest and oldest are the same build $newest_tag"
+fi
+
+if [ -z "$oldest_tag" ]; then
+  say "WARN: no build at or above the oldest allowed build $OLD_APP_MIN; only the newest is checked"
 fi
 
 # Check if newest is the tested commit

@@ -168,7 +168,7 @@ select ok(not has_column_privilege('anon', 'public.profiles', 'share_typing', 'U
           'anon may not update share_typing');
 
 -- 2 nothing else was opened on realtime.messages -------------------------------
-select policies_are('realtime', 'messages', array['realtime_receive', 'realtime_send'],
+select policies_are('realtime', 'messages', array['admin_view_receive', 'realtime_receive', 'realtime_send'],
                     'realtime.messages has exactly the receive and send policies');
 select policy_cmd_is('realtime', 'messages', 'realtime_receive', 'select', 'receive is select');
 select policy_cmd_is('realtime', 'messages', 'realtime_send', 'insert', 'send is insert');

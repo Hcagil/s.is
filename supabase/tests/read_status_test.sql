@@ -215,7 +215,7 @@ select throws_ok($$select last_read_at from public.conversation_members$$,
 reset role;
 
 -- 2 nothing else was opened on realtime.messages -----------------------------
-select policies_are('realtime', 'messages', array['realtime_receive', 'realtime_send'],
+select policies_are('realtime', 'messages', array['admin_view_receive', 'realtime_receive', 'realtime_send'],
                     'realtime.messages still has exactly the receive and send policies');
 select policy_cmd_is('realtime', 'messages', 'realtime_receive', 'select', 'receive is select');
 select policy_cmd_is('realtime', 'messages', 'realtime_send', 'insert', 'send is insert');

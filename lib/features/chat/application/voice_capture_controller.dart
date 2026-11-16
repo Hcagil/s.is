@@ -116,6 +116,7 @@ class VoiceCapture extends Notifier<VoiceCaptureState> {
   String? _conversationId;
   String _localeTag = 'en_US';
   String _base = '';
+  String _prefix = '';
   String? _messageId;
   String? _fileName;
   Future<void>? _starting;
@@ -164,6 +165,7 @@ class VoiceCapture extends Notifier<VoiceCaptureState> {
       result = await ref.read(voiceRecorderProvider).start(path);
     } else {
       _base = ref.read(draftsProvider.notifier).draftFor(_conversationId!).text;
+      _prefix = _base;
       result = await ref
           .read(dictationProvider)
           .start(
@@ -199,6 +201,17 @@ class VoiceCapture extends Notifier<VoiceCaptureState> {
   /// Holds a locked voice recording: the clock stops and the recorder pauses.
   /// A recorder that cannot pause shows the mic-failed notice and carries on.
   Future<void> pause() async {
+    if (state.phase == VoicePhase.locked &&
+        state.mode == VoiceMode.dictation &&
+        !state.paused) {
+      _clock.stop();
+      state = state.copyWith(
+        paused: true,
+        elapsedMs: _clock.elapsedMilliseconds,
+      );
+      await ref.read(dictationProvider).stop();
+      return;
+    }
     final rec = ref.read(voiceRecorderProvider);
     if (state.phase != VoicePhase.locked ||
         state.mode != VoiceMode.voice ||
@@ -216,6 +229,33 @@ class VoiceCapture extends Notifier<VoiceCaptureState> {
   /// Carries on a held recording; the clock continues from where it stopped.
   /// A failed resume stays paused and shows the mic-failed notice.
   Future<void> resume() async {
+    if (state.phase == VoicePhase.locked &&
+        state.mode == VoiceMode.dictation &&
+        state.paused) {
+      _prefix = ref
+          .read(draftsProvider.notifier)
+          .draftFor(_conversationId!)
+          .text;
+      _clock.start();
+      state = state.copyWith(paused: false);
+      final r = await ref
+          .read(dictationProvider)
+          .start(
+            localeTag: _localeTag,
+            onText: _onDictated,
+            onEnd: _onDictationEnd,
+            onError: _onDictationError,
+          );
+      if (!ref.mounted) return;
+      if (r != VoiceStart.started) {
+        _clock.stop();
+        state = state.copyWith(
+          paused: true,
+          notice: VoiceNotice.dictationUnavailable,
+        );
+      }
+      return;
+    }
     final rec = ref.read(voiceRecorderProvider);
     if (state.phase != VoicePhase.locked ||
         !state.paused ||
@@ -333,10 +373,11 @@ class VoiceCapture extends Notifier<VoiceCaptureState> {
   void _onDictated(String text) {
     final id = _conversationId;
     if (!ref.mounted || id == null) return;
-    final sep = (_base.isEmpty || _base.endsWith(' ') || _base.endsWith('\n'))
+    final sep =
+        (_prefix.isEmpty || _prefix.endsWith(' ') || _prefix.endsWith('\n'))
         ? ''
         : ' ';
-    var all = '$_base$sep$text';
+    var all = '$_prefix$sep$text';
     if (all.length > maxMessageLength) {
       all = all.substring(0, maxMessageLength);
     }
@@ -350,6 +391,7 @@ class VoiceCapture extends Notifier<VoiceCaptureState> {
 
   void _onDictationEnd() {
     if (!ref.mounted) return;
+    if (state.paused) return;
     if (state.mode == VoiceMode.dictation && state.phase != VoicePhase.idle) {
       _stopTicker();
       state = state.copyWith(

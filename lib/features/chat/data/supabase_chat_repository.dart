@@ -948,6 +948,17 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
     final me = _uid;
     if (me == null) return const Err(DeniedFailure());
     try {
+      // A retried send finds its stored row first, so no orphan upload is made (a client may not delete storage objects).
+      if (image.id != null) {
+        final known = await _storedPhoto(
+          me,
+          conversationId,
+          image,
+          body,
+          replyTo,
+        );
+        if (known != null) return known;
+      }
       // The conversation id is the FIRST path segment on purpose: the storage
       // policy reads it back and asks the same membership question the table
       // policies ask, instead of inventing a second rule that could drift.
@@ -982,28 +993,17 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
             .select(_messageColumns)
             .single();
       } on PostgrestException catch (e) {
-        // The same id was stored by an earlier try whose answer was lost.
+        // The same id was stored by a try running at the same moment.
         if (e.code != '23505' || image.id == null) rethrow;
-        // Accept it as ours only if it truly is (same sender, conversation,
-        // caption, reply and album); the path is not compared, a retry uploads
-        // anew.
-        final stored = await _client
-            .from('messages')
-            .select(_messageColumns)
-            .eq('id', image.id!)
-            .maybeSingle()
-            .retriedOnce();
-        if (stored == null ||
-            stored['sender_id'] != me ||
-            stored['conversation_id'] != conversationId ||
-            stored['body'] != body.trim() ||
-            stored['reply_to'] != replyTo ||
-            stored['photo_group'] != image.photoGroup) {
-          return const Err(DeniedFailure());
-        }
-        row = stored;
-        // The first try already stored the photo: this try's upload is an orphan.
-        await _removeUploaded(path);
+        final known = await _storedPhoto(
+          me,
+          conversationId,
+          image,
+          body,
+          replyTo,
+        );
+        // No row visible although the id is taken: RLS hides it, not yours.
+        return known ?? const Err(DeniedFailure());
       }
       // The sender already has the photo: never download it back. Kept under
       // the stored path (a retried send's row names its first upload).
@@ -1017,21 +1017,31 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
     }
   }
 
-  /// Best effort: removes the photo this try uploaded and its small companions (`<path>.t`, `<path>.s`) when the first try's row turned out to be stored already. A failed delete is only logged, never an error.
-  Future<void> _removeUploaded(String path) async {
-    try {
-      await _client.storage.from('attachments').remove([
-        path,
-        '$path.t',
-        '$path.s',
-      ]);
-    } catch (e) {
-      log(
-        'sendImage: orphan upload not removed: ${e.runtimeType}',
-        name: 'sis.data',
-        level: 900,
-      );
+  /// The message already stored under the photo's own id, as a result: Ok when it is ours (same sender, conversation, caption, reply and album; the path is not compared), Err(DeniedFailure) when the id belongs to something else, null when nothing is stored yet. The sender already has the photo, so its bytes are cached under the stored path.
+  Future<Result<Message>?> _storedPhoto(
+    String me,
+    String conversationId,
+    PickedImage image,
+    String body,
+    String? replyTo,
+  ) async {
+    final stored = await _client
+        .from('messages')
+        .select(_messageColumns)
+        .eq('id', image.id!)
+        .maybeSingle()
+        .retriedOnce();
+    if (stored == null) return null;
+    if (stored['sender_id'] != me ||
+        stored['conversation_id'] != conversationId ||
+        stored['body'] != body.trim() ||
+        stored['reply_to'] != replyTo ||
+        stored['photo_group'] != image.photoGroup) {
+      return const Err(DeniedFailure());
     }
+    final path = stored['attachment_path'] as String?;
+    if (path != null) await _cache.write(path, image.bytes);
+    return Ok((await _open([_toMessage(stored)])).first);
   }
 
   /// The small picture a notification shows for this photo, stored next to it as `<path>.t` (the name a video's thumbnail has) BEFORE the message row exists, so the push the insert triggers can find it. Best effort: a photo without one is simply announced as text.

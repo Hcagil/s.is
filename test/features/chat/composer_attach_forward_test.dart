@@ -653,8 +653,8 @@ void main() {
       await drainNotice(t);
     });
 
-    testWidgets('New chat with the source chat\'s person ticks nothing; '
-        'Send stays off', (t) async {
+    testWidgets('New chat with the source chat\'s person chooses that chat; '
+        'Send is on', (t) async {
       final chat = world();
       await openForward(t, chat);
       await t.tap(byKey('forward-new-chat'));
@@ -662,13 +662,8 @@ void main() {
       await t.tap(byKey('member-u2'));
       await t.pumpAndSettle();
       expect(byKey('forward-page'), findsOneWidget);
-      expect(byKey('forward-chosen'), findsNothing, reason: 'c1 was ticked');
-      expect(find.textContaining('Send ('), findsNothing);
-      await t.tap(byKey('forward-send'), warnIfMissed: false);
-      await t.pumpAndSettle();
-      expect(byKey('forward-page'), findsOneWidget);
-      expect(chat.forwarded, isEmpty, reason: 'forwarded into its own chat');
-      expect(chat.started, isEmpty);
+      expect(byKey('forward-chosen'), findsOneWidget);
+      expect(find.text('Send (1)'), findsOneWidget);
     });
 
     testWidgets('backing out of New chat ticks nothing', (t) async {

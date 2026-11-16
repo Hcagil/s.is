@@ -348,7 +348,7 @@ void main() {
         msg('m1', from: bob.userId, body: 'look at this'),
       ]);
 
-    testWidgets('the picker excludes the open conversation', (tester) async {
+    testWidgets('the picker lists the open conversation too', (tester) async {
       final chat = chatWithConversations();
       await pump(tester, chat);
 
@@ -357,7 +357,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('menu-forward')));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('forward-c1')), findsNothing);
+      expect(find.byKey(const ValueKey('forward-c1')), findsOneWidget);
       expect(find.byKey(const ValueKey('forward-c2')), findsOneWidget);
       expect(find.byKey(const ValueKey('forward-c3')), findsOneWidget);
     });
@@ -462,6 +462,29 @@ void main() {
       expect(find.byKey(const ValueKey('forwarded-m1')), findsOneWidget);
       expect(find.text('Forwarded'), findsOneWidget);
     });
+
+    testWidgets(
+      'forwarding into the open chat sends the message to that same chat',
+      (tester) async {
+        final chat = chatWithConversations();
+        await pump(tester, chat);
+        await tester.longPress(find.byKey(const ValueKey('message-m1')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('menu-forward')));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const ValueKey('forward-c1')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('forward-send')));
+        await tester.pumpAndSettle();
+
+        expect([for (final f in chat.forwarded) ...f.conversationIds], ['c1']);
+        expect(chat.forwarded.single.messageId, 'm1');
+        // Two: the snackbar, plus the label on the forwarded copy in this open chat.
+        expect(find.text('Forwarded'), findsNWidgets(2));
+        await drainNotice(tester);
+      },
+    );
   });
 
   // 0.30.10: forwarding is a full page (forward-page), not a sheet. It names

@@ -34,7 +34,6 @@ Future<void> showSharePage(
       .push<({List<String> chatIds, List<String> personIds})>(
         MaterialPageRoute(
           builder: (_) => ForwardPage(
-            exclude: null,
             title: l.shareTitle,
             stripText: stripText,
             stripLeading: _StripThumb(content: content),

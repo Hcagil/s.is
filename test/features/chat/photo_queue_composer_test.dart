@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sis/app/delivery_tick.dart';
 import 'package:sis/app/notice.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
@@ -11,6 +12,7 @@ import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/domain/attachment.dart';
+import 'package:sis/features/chat/domain/delivery.dart';
 import 'package:sis/features/chat/domain/gallery.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
@@ -255,5 +257,35 @@ void main() {
         expect(composerText(tester), '');
       },
     );
+
+    for (final caption in ['album cap', '']) {
+      testWidgets(
+        'an album waiting offline shows exactly one pending clock (caption: "$caption"); once sent it is not pending',
+        (tester) async {
+          final chat = _FlakyChat(); // offline by default
+          final picker = ExternalPickerFake()..offered = [shot(1), shot(2)];
+          await pump(tester, chat, galleryAt(GalleryAccess.full), picker);
+          if (caption.isNotEmpty) await type(tester, caption);
+          await openSheet(tester);
+          await fromApp(tester);
+          await steps(tester, 10);
+          final pendingTick = find.byWidgetPredicate(
+            (w) => w is DeliveryTick && w.delivery == Delivery.pending,
+          );
+          expect(chat.sentImages, isEmpty);
+          expect(
+            pendingTick,
+            findsOneWidget,
+            reason: 'one clock per album row',
+          );
+          chat.online = true;
+          await tester.pump(const Duration(seconds: 6));
+          await steps(tester, 20);
+          await drain(tester);
+          expect(chat.sentImages.length, 2);
+          expect(pendingTick, findsNothing);
+        },
+      );
+    }
   });
 }

@@ -54,8 +54,10 @@ class _DeleteChatsDialogState extends State<_DeleteChatsDialog> {
               const SizedBox(height: 16),
               bodyWidget,
               const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+              // Wrap, not Row: long labels or big text drop to a second line.
+              Wrap(
+                alignment: WrapAlignment.end,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   TextButton(
                     key: const ValueKey('delete-chat-cancel'),

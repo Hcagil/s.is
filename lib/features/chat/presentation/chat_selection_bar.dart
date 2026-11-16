@@ -122,7 +122,7 @@ class ChatSelectionBar extends ConsumerWidget implements PreferredSizeWidget {
             icon: const Icon(Icons.delete_outline),
             onPressed: () async {
               final ok = await showDeleteChatsDialog(context, chats);
-              if (ok == null) return;
+              if (ok == null || !context.mounted) return;
               ref.read(chatDeleteProvider.notifier).start(chats);
             },
           ),

@@ -332,7 +332,11 @@ void main() {
             .ancestor(of: anyTarget.first, matching: find.byType(Scrollable))
             .first,
       );
-      expect(find.byKey(ValueKey('forward-$c1')), findsNothing);
+      expect(
+        find.byKey(ValueKey('forward-$c1'), skipOffstage: false),
+        findsOneWidget,
+        reason: 'the open chat is a target too',
+      );
       // scrollUntilVisible returns with the lazily built list one frame
       // stale (rows of different heights): the row can still sit under the
       // Send bar. Reid taps what he sees once it has landed.

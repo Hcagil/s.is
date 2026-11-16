@@ -239,4 +239,31 @@ void main() {
       expect(kept(files).isEmpty, true);
     },
   );
+
+  testWidgets(
+    'a photo the server denies (a taken id) is a refusal: stops the queue, deletes the kept files, is never retried or sent',
+    (WidgetTester t) async {
+      final c = await start(t, chat, files);
+      final controller = c.read(sendQueueProvider.notifier);
+
+      controller.enqueuePhotos(
+        'c1',
+        [img('p1'), img('p2')],
+        body: 'trip',
+        replyTo: replyMsg('m9'),
+      );
+      await hop(t);
+
+      expect(chat.asked.length, 1);
+      chat.fail(0, const DeniedFailure());
+      await hop(t);
+
+      await t.pump(const Duration(seconds: 30));
+      await hop(t);
+
+      expect(chat.asked.length, 1, reason: 'no retry and no second photo');
+      expect(c.read(sendQueueProvider)['c1'] ?? const <Message>[], isEmpty);
+      expect(kept(files).isEmpty, true);
+    },
+  );
 }

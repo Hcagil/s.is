@@ -49,12 +49,30 @@ final _png = base64Decode(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
 );
 
+PickedImage _img(String id) => PickedImage(
+  bytes: _png,
+  contentType: 'image/png',
+  extension: 'png',
+  id: id,
+);
+
+Future<void> expectDenied(Result<Message> r, String why) async {
+  expect(r, isA<Err<Message>>(), reason: why);
+  final f = (r as Err<Message>).failure;
+  expect(f, isA<DeniedFailure>(), reason: 'got ${f.runtimeType}: $f');
+  expect(
+    f is NetworkFailure && f.retryable,
+    isFalse,
+    reason: 'a taken id is not "no connection": retrying cannot help',
+  );
+}
+
 void main() {
   HttpOverrides.global = null;
 
-  late SupabaseClient umutClient, zaneClient;
+  late SupabaseClient umutClient, zaneClient, vedatClient;
   late SupabaseChatRepository umut, zane;
-  late String umutZane;
+  late String umutZane, umutVedat, zaneVedat;
 
   Future<String> direct(SupabaseChatRepository a, SupabaseClient b) async {
     final r = await a.startDirectConversation(b.auth.currentUser!.id);
@@ -64,16 +82,21 @@ void main() {
   setUpAll(() async {
     umutClient = await _signedIn('umut@integration.test');
     zaneClient = await _signedIn('zane@integration.test');
+    vedatClient = await _signedIn('vedat@integration.test');
     umut = SupabaseChatRepository(umutClient);
     zane = SupabaseChatRepository(zaneClient);
-    await findByTag(umutClient, [zaneClient]);
-    await findByTag(zaneClient, []);
+    await findByTag(umutClient, [zaneClient, vedatClient]);
+    await findByTag(zaneClient, [vedatClient]);
+    await findByTag(vedatClient, []);
     umutZane = await direct(umut, zaneClient);
+    umutVedat = await direct(umut, vedatClient);
+    zaneVedat = await direct(zane, vedatClient);
   });
 
   tearDownAll(() async {
     await umutClient.dispose();
     await zaneClient.dispose();
+    await vedatClient.dispose();
   });
 
   Future<List<Map<String, dynamic>>> rows(SupabaseClient as, String id) async =>
@@ -90,12 +113,7 @@ void main() {
     final stored = _ok(
       await umut.sendImage(
         conversationId: umutZane,
-        image: PickedImage(
-          bytes: _png,
-          contentType: 'image/png',
-          extension: 'png',
-          id: id,
-        ),
+        image: _img(id),
         body: body,
       ),
       'send',
@@ -114,12 +132,7 @@ void main() {
     final first = _ok(
       await umut.sendImage(
         conversationId: umutZane,
-        image: PickedImage(
-          bytes: _png,
-          contentType: 'image/png',
-          extension: 'png',
-          id: id,
-        ),
+        image: _img(id),
         body: body,
       ),
       'first',
@@ -127,12 +140,7 @@ void main() {
     final again = _ok(
       await umut.sendImage(
         conversationId: umutZane,
-        image: PickedImage(
-          bytes: _png,
-          contentType: 'image/png',
-          extension: 'png',
-          id: id,
-        ),
+        image: _img(id),
         body: body,
       ),
       'retry',
@@ -148,36 +156,123 @@ void main() {
     () async {
       final id = randomMessageId();
       final body = _stamp('zane wrote it');
-      await zane.sendImage(
-        conversationId: umutZane,
-        image: PickedImage(
-          bytes: _png,
-          contentType: 'image/png',
-          extension: 'png',
-          id: id,
+      _ok(
+        await zane.sendImage(
+          conversationId: umutZane,
+          image: _img(id),
+          body: body,
         ),
-        body: body,
+        'zane first',
       );
+      final before = await rows(zaneClient, id);
       final r = await umut.sendImage(
         conversationId: umutZane,
-        image: PickedImage(
-          bytes: _png,
-          contentType: 'image/png',
-          extension: 'png',
-          id: id,
-        ),
+        image: _img(id),
         body: body,
       );
-      expect(r, isA<Err<Message>>());
-      final f = (r as Err<Message>).failure;
-      expect(
-        f is NetworkFailure && f.retryable,
-        isFalse,
-        reason: 'a taken id is not "no connection": retrying cannot help',
-      );
-      expect(f, isA<DeniedFailure>(), reason: 'got ${f.runtimeType}: $f');
+      await expectDenied(r, 'retry of someone else');
       final after = await rows(zaneClient, id);
-      expect(after, hasLength(1));
+      expect(after, before);
     },
   );
+
+  test('own id from chat A into chat B is refused', () async {
+    final id = randomMessageId();
+    final body = _stamp('own id');
+    _ok(
+      await umut.sendImage(
+        conversationId: umutZane,
+        image: _img(id),
+        body: body,
+      ),
+      'first',
+    );
+    final r = await umut.sendImage(
+      conversationId: umutVedat,
+      image: _img(id),
+      body: body,
+    );
+    await expectDenied(r, 'own id into another chat');
+    final after = await rows(umutClient, id);
+    expect(after, hasLength(1));
+  });
+
+  test('id from unreadable chat is refused', () async {
+    final id = randomMessageId();
+    final body = _stamp('unreadable');
+    _ok(
+      await zane.sendImage(
+        conversationId: zaneVedat,
+        image: _img(id),
+        body: body,
+      ),
+      'zane first',
+    );
+    final before = await rows(zaneClient, id);
+    final r = await umut.sendImage(
+      conversationId: umutZane,
+      image: _img(id),
+      body: body,
+    );
+    await expectDenied(r, 'unreadable chat id');
+    final after = await rows(zaneClient, id);
+    expect(after, before);
+  });
+
+  test('reply retry keeps the stored row', () async {
+    final quoted = _ok(
+      await zane.send(
+        id: randomMessageId(),
+        conversationId: umutZane,
+        body: _stamp('quoted'),
+      ),
+      'quoted',
+    );
+    final id = randomMessageId();
+    final body = _stamp('reply');
+    _ok(
+      await umut.sendImage(
+        conversationId: umutZane,
+        image: _img(id),
+        body: body,
+        replyTo: quoted.id,
+      ),
+      'first',
+    );
+    final second = _ok(
+      await umut.sendImage(
+        conversationId: umutZane,
+        image: _img(id),
+        body: body,
+        replyTo: quoted.id,
+      ),
+      'second',
+    );
+    expect(second.id, id);
+    expect(second.replyTo, quoted.id);
+    expect(await rows(umutClient, id), hasLength(1));
+  });
+
+  test('retry with a different caption is refused', () async {
+    final id = randomMessageId();
+    final bodyA = _stamp('caption A');
+    final bodyB = _stamp('caption B');
+    _ok(
+      await umut.sendImage(
+        conversationId: umutZane,
+        image: _img(id),
+        body: bodyA,
+      ),
+      'first',
+    );
+    final r = await umut.sendImage(
+      conversationId: umutZane,
+      image: _img(id),
+      body: bodyB,
+    );
+    await expectDenied(r, 'different caption');
+    final after = await rows(umutClient, id);
+    expect(after, hasLength(1));
+    expect(after.single['body'], bodyA);
+  });
 }

@@ -60,6 +60,9 @@ final class PushDeliveryTests: XCTestCase {
     }
   }
 
+  /// Wall-clock wait for an async completion. It only runs out when a test fails, so it is set to the extension's real budget (about 30 s), not to how fast the stub answers: on CI the simulator stalls for seconds (trivial tests took 3-6 s).
+  static let asyncWait: TimeInterval = 30
+
   // MARK: - Fakes: StubProtocol
 
   final class StubProtocol: URLProtocol {
@@ -207,7 +210,7 @@ final class PushDeliveryTests: XCTestCase {
     e.expectedFulfillmentCount = 1
     e.assertForOverFulfill = true
     PushDelivery.run(userInfo: push, now: now, reader: reader, caller: caller) { e.fulfill() }
-    wait(for: [e], timeout: 1)
+    wait(for: [e], timeout: Self.asyncWait)
     XCTAssertTrue(caller.sent.isEmpty)
   }
 
@@ -218,7 +221,7 @@ final class PushDeliveryTests: XCTestCase {
     let e = expectation(description: "completion")
     e.assertForOverFulfill = true
     caller.send(req) { e.fulfill() }
-    wait(for: [e], timeout: 2)
+    wait(for: [e], timeout: Self.asyncWait)
     XCTAssertEqual(StubProtocol.starts, 1, "the request must reach the stub, never the network")
   }
 
@@ -229,7 +232,7 @@ final class PushDeliveryTests: XCTestCase {
     let e = expectation(description: "completion")
     e.assertForOverFulfill = true
     caller.send(req) { e.fulfill() }
-    wait(for: [e], timeout: 2)
+    wait(for: [e], timeout: Self.asyncWait)
     XCTAssertEqual(StubProtocol.starts, 1, "the request must reach the stub, never the network")
   }
 
@@ -242,7 +245,7 @@ final class PushDeliveryTests: XCTestCase {
     caller.send(req) { e.fulfill() }
     caller.cancel()
     caller.cancel()
-    wait(for: [e], timeout: 2)
+    wait(for: [e], timeout: Self.asyncWait)
   }
 
   func testRedirectRefused() {

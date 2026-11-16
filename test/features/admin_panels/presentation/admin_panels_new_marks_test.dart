@@ -163,20 +163,21 @@ void main() {
     expect(navBar.selectedIndex, 0);
   });
 
-  scene('a new question while on Dashboard shows 1 on Questions', (
-    tester,
-  ) async {
-    await prepareInitial([qItem('q1'), conv]);
-    await _pump(tester, container);
-    repo.fetchQueue.add([
-      deltaRow(2, 2, cursor: 6, items: [qItem('q2')]),
-    ]);
-    await tester.pump(adminPollEvery);
-    await tester.pumpAndSettle();
-    expect(badge('Questions', '1'), findsOneWidget);
-    expectNoBadge('Talk');
-    expectNoBadge('Tasks');
-  });
+  scene(
+    'a new question while on Dashboard shows 2 on Questions (1 unanswered plus the new one)',
+    (tester) async {
+      await prepareInitial([qItem('q1'), conv]);
+      await _pump(tester, container);
+      repo.fetchQueue.add([
+        deltaRow(2, 2, cursor: 6, items: [qItem('q2')]),
+      ]);
+      await tester.pump(adminPollEvery);
+      await tester.pumpAndSettle();
+      expect(badge('Questions', '2'), findsOneWidget);
+      expectNoBadge('Talk');
+      expectNoBadge('Tasks');
+    },
+  );
 
   scene('two conversations with new messages show 2 on Talk', (tester) async {
     await prepareInitial([conv]);
@@ -269,7 +270,7 @@ void main() {
     expectNoBadge('Questions');
   });
 
-  scene('opening Questions clears its badge', (tester) async {
+  scene('opening Questions keeps its badge', (tester) async {
     await prepareInitial([qItem('q1'), conv]);
     await _pump(tester, container);
     repo.fetchQueue.add([
@@ -277,7 +278,7 @@ void main() {
     ]);
     await tester.pump(adminPollEvery);
     await tester.pumpAndSettle();
-    expect(badge('Questions', '1'), findsOneWidget);
+    expect(badge('Questions', '2'), findsOneWidget);
     await tester.tap(
       find.descendant(
         of: find.byKey(const ValueKey('admin-bottom-bar')),
@@ -285,7 +286,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expectNoBadge('Questions');
+    expect(badge('Questions', '2'), findsOneWidget);
   });
 
   scene('zero new items shows no badge anywhere', (tester) async {
@@ -320,45 +321,47 @@ void main() {
     ]);
     await tester.pump(adminPollEvery);
     await tester.pumpAndSettle();
-    expect(badge('Questions', '1'), findsOneWidget);
+    expect(badge('Questions', '2'), findsOneWidget);
     repo.fetchQueue.add([
       deltaRow(3, 3, cursor: 7, items: [qItem('q2')]),
     ]);
     await tester.pump(adminPollEvery);
     await tester.pumpAndSettle();
-    expect(badge('Questions', '1'), findsOneWidget);
-  });
-
-  scene('badge only grows on tabs not currently open', (tester) async {
-    await prepareInitial([qItem('q1'), conv]);
-    await _pump(tester, container);
-    // open Questions first
-    await tester.tap(
-      find.descendant(
-        of: find.byKey(const ValueKey('admin-bottom-bar')),
-        matching: find.text('Questions'),
-      ),
-    );
-    await tester.pumpAndSettle();
-    repo.fetchQueue.add([
-      deltaRow(2, 2, cursor: 6, items: [qItem('q2')]),
-    ]);
-    await tester.pump(adminPollEvery);
-    await tester.pumpAndSettle();
-    expectNoBadge('Questions');
-    // leaving the tab must not reveal a number: what arrived while it was open is seen
-    await tester.tap(
-      find.descendant(
-        of: find.byKey(const ValueKey('admin-bottom-bar')),
-        matching: find.text('Dashboard'),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expectNoBadge('Questions');
+    expect(badge('Questions', '2'), findsOneWidget);
   });
 
   scene(
-    'after a restart the seen counts stay: no badge on Questions, new items still count',
+    'Questions badge counts unanswered questions while the tab is open and after leaving it',
+    (tester) async {
+      await prepareInitial([qItem('q1'), conv]);
+      await _pump(tester, container);
+      // open Questions first
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const ValueKey('admin-bottom-bar')),
+          matching: find.text('Questions'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      repo.fetchQueue.add([
+        deltaRow(2, 2, cursor: 6, items: [qItem('q2')]),
+      ]);
+      await tester.pump(adminPollEvery);
+      await tester.pumpAndSettle();
+      expect(badge('Questions', '2'), findsOneWidget);
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const ValueKey('admin-bottom-bar')),
+          matching: find.text('Dashboard'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(badge('Questions', '2'), findsOneWidget);
+    },
+  );
+
+  scene(
+    'after a restart the Questions badge still counts unanswered questions',
     (tester) async {
       final seen = MemoryAdminSeenStore();
       final snaps = FakeAdminSnapshotStore();
@@ -379,7 +382,7 @@ void main() {
       ]);
       await tester.pump(adminPollEvery);
       await tester.pumpAndSettle();
-      expect(badge('Questions', '1'), findsOneWidget);
+      expect(badge('Questions', '2'), findsOneWidget);
       await tester.tap(
         find.descendant(
           of: find.byKey(const ValueKey('admin-bottom-bar')),
@@ -387,7 +390,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expectNoBadge('Questions');
+      expect(badge('Questions', '2'), findsOneWidget);
       // restart: same seen store and fakes, new container
       await tester.pumpWidget(const SizedBox());
       first.dispose();
@@ -398,13 +401,13 @@ void main() {
         ],
       ];
       await _pump(tester, second);
-      expectNoBadge('Questions');
+      expect(badge('Questions', '2'), findsOneWidget);
       repo.fetchQueue.add([
         deltaRow(3, 3, cursor: 8, items: [qItem('q3')]),
       ]);
       await tester.pump(adminPollEvery);
       await tester.pumpAndSettle();
-      expect(badge('Questions', '1'), findsOneWidget);
+      expect(badge('Questions', '3'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
       second.dispose();
     },

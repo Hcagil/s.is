@@ -1,6 +1,7 @@
 import XCTest
 @testable import Runner
 import Foundation
+import ObjectiveC
 
 // Runs ONLY on macOS (GitHub CI job `ios`, step "Native iOS tests (simulator)").
 //
@@ -57,6 +58,52 @@ final class PushDeliveryTests: XCTestCase {
       pending = []
       p.forEach { $0() }
     }
+  }
+
+  /// Wall-clock wait for an async completion. It only runs out when a test fails, so it is set to the extension's real budget (about 30 s), not to how fast the stub answers: on CI the simulator stalls for seconds (trivial tests took 3-6 s).
+  static let asyncWait: TimeInterval = 30
+
+  // MARK: - Fakes: StubProtocol
+
+  final class StubProtocol: URLProtocol {
+    enum Mode { case fail, answer500, hang }
+    static var mode: Mode = .fail
+    static var starts = 0
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+      StubProtocol.starts += 1
+      switch StubProtocol.mode {
+      case .fail:
+        client?.urlProtocol(self, didFailWithError: URLError(.cannotConnectToHost))
+      case .answer500:
+        let r = HTTPURLResponse(url: request.url!,
+                                statusCode: 500,
+                                httpVersion: "HTTP/1.1",
+                                headerFields: nil)!
+        client?.urlProtocol(self, didReceive: r, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data("{}".utf8))
+        client?.urlProtocolDidFinishLoading(self)
+      case .hang:
+        break
+      }
+    }
+
+    override func stopLoading() {}
+  }
+
+  // MARK: - Fakes: Stub helper
+
+  func stub(_ mode: StubProtocol.Mode) {
+    StubProtocol.mode = mode
+    StubProtocol.starts = 0
+    let cls: AnyClass = URLSessionConfiguration.self
+    let real = class_getClassMethod(cls, NSSelectorFromString("ephemeralSessionConfiguration"))!
+    let fake = class_getClassMethod(cls, #selector(URLSessionConfiguration.sis_stubbedEphemeral))!
+    method_exchangeImplementations(real, fake)
+    addTeardownBlock { method_exchangeImplementations(real, fake) }
   }
 
   // MARK: - Tests
@@ -163,28 +210,42 @@ final class PushDeliveryTests: XCTestCase {
     e.expectedFulfillmentCount = 1
     e.assertForOverFulfill = true
     PushDelivery.run(userInfo: push, now: now, reader: reader, caller: caller) { e.fulfill() }
-    wait(for: [e], timeout: 1)
+    wait(for: [e], timeout: Self.asyncWait)
     XCTAssertTrue(caller.sent.isEmpty)
   }
 
   func testURLSessionDeliveryCallerErrorSwallowed() {
+    stub(.fail)
     let caller = URLSessionDeliveryCaller()
-    let req = URLRequest(url: URL(string: "https://127.0.0.1:9/rest/v1/rpc/mark_delivered")!)
+    let req = URLRequest(url: URL(string: "https://ref.sis.test/rest/v1/rpc/mark_delivered")!)
     let e = expectation(description: "completion")
     e.assertForOverFulfill = true
     caller.send(req) { e.fulfill() }
-    wait(for: [e], timeout: 10)
+    wait(for: [e], timeout: Self.asyncWait)
+    XCTAssertEqual(StubProtocol.starts, 1, "the request must reach the stub, never the network")
+  }
+
+  func testURLSessionDeliveryCallerAnswerSwallowed() {
+    stub(.answer500)
+    let caller = URLSessionDeliveryCaller()
+    let req = URLRequest(url: URL(string: "https://ref.sis.test/rest/v1/rpc/mark_delivered")!)
+    let e = expectation(description: "completion")
+    e.assertForOverFulfill = true
+    caller.send(req) { e.fulfill() }
+    wait(for: [e], timeout: Self.asyncWait)
+    XCTAssertEqual(StubProtocol.starts, 1, "the request must reach the stub, never the network")
   }
 
   func testURLSessionDeliveryCallerCancelCompletesOnce() {
+    stub(.hang)
     let caller = URLSessionDeliveryCaller()
-    let req = URLRequest(url: URL(string: "https://10.255.255.1/rest/v1/rpc/mark_delivered")!)
+    let req = URLRequest(url: URL(string: "https://ref.sis.test/rest/v1/rpc/mark_delivered")!)
     let e = expectation(description: "completion")
     e.assertForOverFulfill = true
     caller.send(req) { e.fulfill() }
     caller.cancel()
     caller.cancel()
-    wait(for: [e], timeout: 5)
+    wait(for: [e], timeout: Self.asyncWait)
   }
 
   func testRedirectRefused() {
@@ -211,4 +272,15 @@ final class PushDeliveryTests: XCTestCase {
     XCTAssertNil(PushDelivery.request(userInfo: push, now: now, item: p))
   }
 
+}
+
+// MARK: - URLSessionConfiguration stub
+
+extension URLSessionConfiguration {
+  /// After the swap in PushDeliveryTests.stub(_:), this calls the real `ephemeral` and routes the session through StubProtocol only. `dynamic` keeps the inner call going through the Objective-C runtime, so it reaches the swapped (real) method instead of recursing.
+  @objc dynamic class func sis_stubbedEphemeral() -> URLSessionConfiguration {
+    let c = sis_stubbedEphemeral()
+    c.protocolClasses = [PushDeliveryTests.StubProtocol.self]
+    return c
+  }
 }

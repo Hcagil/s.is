@@ -97,7 +97,10 @@ Postgres Row Level Security is the only authority. The client is untrusted.
   - Accepted leftovers (v0.23): a private Realtime channel joined before
     leaving keeps receiving typing and read broadcasts until it is rejoined
     (authorisation is checked at join; the same holds for a revoked session;
-    the app leaves those channels as soon as it sees it has left); a message
+    the app leaves those channels as soon as it sees it has left; a joined
+    `admin_view` channel likewise keeps getting id-only nudges after its
+    session is revoked until it rejoins, and the app leaves it on lock and
+    background); a message
     edited within its 6-hour window after someone left shows the edit to
     them; a departed member still sees later leaves, removals and role
     changes of members whose time in the group overlapped hers.
@@ -342,11 +345,17 @@ Closing it would need a trigram index per conversation, which changing
 membership rules out. The fix ladder reached rung 3 on this twice
 (2026-09-27).
 
-Presence and typing use **private** Realtime channels. RLS on
-`realtime.messages` opens exactly two topics — `presence:members` and
-`typing:<conversation id>` — to active members (and conversation members for
-typing), and the send side also requires the member's own sharing switch to be
-on. Any other private topic is refused.
+Presence, typing, read and delivery marks, per-user chat nudges and the
+Admin Panels push use **private** Realtime channels. RLS on `realtime.messages`
+opens only these topics: `presence:members`, `typing:<conversation id>`,
+`reads:<conversation id>`, `delivered:<conversation id>` (members; reads also
+need the sharing switch), `chats:<own user id>` (that user), and `admin_view`
+(owner only: the policy `admin_view_receive` needs `has_app_access()` and
+`is_owner()`; the payload is the new row id only, never the body). Any other
+private topic is refused. `presence:members` needs only app access, not
+conversation membership. Clients may send only on `presence:members` and
+`typing:<conversation id>`, and only with their own sharing switch on; every
+other topic is written by the database (`realtime.send`).
 
 Realtime publishes **inserts and updates** (updates carry edits and "deleted
 for everyone"), never deletes: `realtime.apply_rls` evaluates row-level

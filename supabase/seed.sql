@@ -357,3 +357,10 @@ insert into app_private.allowlist(email) values
   ('bd-cy@mail.test'),
   ('sis-destek-bot@example.com')
 on conflict do nothing;
+
+-- test/integration/file_retry_edge_test.dart: own-chat file retries (one pair plus a third member).
+insert into app_private.allowlist(email) values
+  ('fre-ann@sis.test'),
+  ('fre-bob@sis.test'),
+  ('fre-cy@sis.test')
+on conflict do nothing;

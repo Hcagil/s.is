@@ -374,8 +374,14 @@ void main() {
       await tapWhenShown(t, 'sheet-from-app');
       await until(
         t,
-        () => shows(byKey('attachment-local')),
-        'a pending photo bubble',
+        () => shows(
+          find.byWidgetPredicate(
+            (w) =>
+                w.key is ValueKey<String> &&
+                (w.key! as ValueKey<String>).value.startsWith('album-'),
+          ),
+        ),
+        'a pending album bubble',
       );
       expect(
         t.widgetList<SisNotice>(find.byType(SisNotice)).where((n) => n.isError),
@@ -411,6 +417,11 @@ void main() {
         t.widgetList<SisNotice>(find.byType(SisNotice)).where((n) => n.isError),
         isEmpty,
       );
+      // This test's own client (the one mounted) also holds a realtime socket;
+      // close it like unmount does for the shared client, else its rejoin timer
+      // is still pending when the test ends.
+      await t.runAsync(() => offline.removeAllChannels());
+      await t.runAsync(() => offline.realtime.disconnect());
       await unmount(t);
     }, timeout: const Timeout(Duration(seconds: 120)));
   });

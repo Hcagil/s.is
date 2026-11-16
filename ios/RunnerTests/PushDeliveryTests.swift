@@ -68,13 +68,19 @@ final class PushDeliveryTests: XCTestCase {
   final class StubProtocol: URLProtocol {
     enum Mode { case fail, answer500, hang }
     static var mode: Mode = .fail
-    static var starts = 0
+    /// URLs whose loading started. Each test sends a unique URL and counts only its own, so a late start from an earlier test's cancelled task cannot change the count.
+    static let lock = NSLock()
+    static var started: [URL] = []
+    static func starts(of url: URL?) -> Int {
+      lock.lock(); defer { lock.unlock() }
+      return started.filter { $0 == url }.count
+    }
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
-      StubProtocol.starts += 1
+      if let u = request.url { StubProtocol.lock.lock(); StubProtocol.started.append(u); StubProtocol.lock.unlock() }
       switch StubProtocol.mode {
       case .fail:
         client?.urlProtocol(self, didFailWithError: URLError(.cannotConnectToHost))
@@ -98,7 +104,7 @@ final class PushDeliveryTests: XCTestCase {
 
   func stub(_ mode: StubProtocol.Mode) {
     StubProtocol.mode = mode
-    StubProtocol.starts = 0
+    StubProtocol.lock.lock(); StubProtocol.started = []; StubProtocol.lock.unlock()
     let cls: AnyClass = URLSessionConfiguration.self
     let real = class_getClassMethod(cls, NSSelectorFromString("ephemeralSessionConfiguration"))!
     let fake = class_getClassMethod(cls, #selector(URLSessionConfiguration.sis_stubbedEphemeral))!
@@ -217,29 +223,29 @@ final class PushDeliveryTests: XCTestCase {
   func testURLSessionDeliveryCallerErrorSwallowed() {
     stub(.fail)
     let caller = URLSessionDeliveryCaller()
-    let req = URLRequest(url: URL(string: "https://ref.sis.test/rest/v1/rpc/mark_delivered")!)
+    let req = URLRequest(url: URL(string: "https://ref.sis.test/rest/v1/rpc/mark_delivered?test=\(UUID().uuidString)")!)
     let e = expectation(description: "completion")
     e.assertForOverFulfill = true
     caller.send(req) { e.fulfill() }
     wait(for: [e], timeout: Self.asyncWait)
-    XCTAssertEqual(StubProtocol.starts, 1, "the request must reach the stub, never the network")
+    XCTAssertEqual(StubProtocol.starts(of: req.url), 1, "this test's request must reach the stub exactly once, never the network")
   }
 
   func testURLSessionDeliveryCallerAnswerSwallowed() {
     stub(.answer500)
     let caller = URLSessionDeliveryCaller()
-    let req = URLRequest(url: URL(string: "https://ref.sis.test/rest/v1/rpc/mark_delivered")!)
+    let req = URLRequest(url: URL(string: "https://ref.sis.test/rest/v1/rpc/mark_delivered?test=\(UUID().uuidString)")!)
     let e = expectation(description: "completion")
     e.assertForOverFulfill = true
     caller.send(req) { e.fulfill() }
     wait(for: [e], timeout: Self.asyncWait)
-    XCTAssertEqual(StubProtocol.starts, 1, "the request must reach the stub, never the network")
+    XCTAssertEqual(StubProtocol.starts(of: req.url), 1, "this test's request must reach the stub exactly once, never the network")
   }
 
   func testURLSessionDeliveryCallerCancelCompletesOnce() {
     stub(.hang)
     let caller = URLSessionDeliveryCaller()
-    let req = URLRequest(url: URL(string: "https://ref.sis.test/rest/v1/rpc/mark_delivered")!)
+    let req = URLRequest(url: URL(string: "https://ref.sis.test/rest/v1/rpc/mark_delivered?test=\(UUID().uuidString)")!)
     let e = expectation(description: "completion")
     e.assertForOverFulfill = true
     caller.send(req) { e.fulfill() }

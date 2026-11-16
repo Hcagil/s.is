@@ -9,7 +9,7 @@ import '../application/admin_panels_state.dart';
 import 'admin_panels_screen.dart';
 
 /// Home top-bar icon into Admin Panels; shown only to the owner account.
-/// Its number is the total of the tab numbers inside Admin Panels.
+/// Its number is the total of the tab numbers inside Admin Panels (Questions counts unanswered).
 class AdminEntryButton extends ConsumerStatefulWidget {
   const AdminEntryButton({super.key});
 
@@ -78,7 +78,11 @@ class _AdminEntryButtonState extends ConsumerState<AdminEntryButton>
     }
     final total = ref.watch(
       adminPanelsProvider.select(
-        (s) => s.newCounts.values.fold<int>(0, (a, b) => a + b),
+        (s) =>
+            s.newCounts.entries
+                .where((e) => e.key != 'questions')
+                .fold<int>(0, (a, e) => a + e.value) +
+            s.unansweredQuestions,
       ),
     );
     const icon = Icon(Icons.dashboard_outlined);

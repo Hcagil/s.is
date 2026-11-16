@@ -208,7 +208,7 @@ select set_eq($$select schemaname || '.' || tablename from pg_publication_tables
               array['public.messages', 'public.message_reactions',
                     'public.polls', 'public.poll_options'],
               'no table was added to the Realtime publication');
-select policies_are('realtime', 'messages', array['realtime_receive', 'realtime_send'],
+select policies_are('realtime', 'messages', array['admin_view_receive', 'realtime_receive', 'realtime_send'],
                     'realtime.messages still has exactly the receive and send policies');
 select as_('01');
 select throws_ok($$select delivered_at from public.conversation_members$$, '42501', null,

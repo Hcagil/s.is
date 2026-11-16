@@ -22,6 +22,7 @@ jobs:
     outputs:
       app: ${{ steps.filter.outputs.app }}
       database: ${{ steps.filter.outputs.database }}
+      supabase: ${{ steps.filter.outputs.supabase }}
     steps:
       - name: Check out source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -68,6 +69,9 @@ jobs:
               - 'supabase/**'
               - '.github/compose.ci.yaml'
               - '.github/workflows/**'
+            # Only the server: the old app check replays old builds against it.
+            supabase:
+              - 'supabase/**'
 
   base-images:
     name: Base images
@@ -202,6 +206,9 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          # Full history and every tag: the old app check extracts old builds (tags v<name>+<build>).
+          fetch-depth: 0
       - name: Log in to the base image registry
         run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
         env:
@@ -336,6 +343,15 @@ jobs:
         run: |
           export LOCAL_UID=$(id -u) LOCAL_GID=$(id -g)
           SIS_BOT_TEST_COMPOSE="docker compose -f compose.yaml -f .github/compose.ci.yaml" test/tool/sis_test_account_admin_test.sh
+      # Replays the newest and the oldest allowed old app build's integration tests against this stack's new server copy
+      # (tool/old_app_check.sh); only when supabase/ changed. It runs last because it resets the database before each build
+      # (the old suites expect a clean one) and leaves it dirty. The service key comes from the stack, never the repository.
+      - name: Old app builds still work
+        if: needs.changes.outputs.supabase == 'true'
+        run: |
+          export LOCAL_UID=$(id -u) LOCAL_GID=$(id -g)
+          compose="docker compose -f compose.yaml -f .github/compose.ci.yaml"
+          OLD_APP_COMPOSE="$compose" OLD_APP_DB_CONTAINER=supabase_db_s.is OLD_APP_RESET_CMD="$compose run --rm -T supabase db reset" tool/old_app_check.sh
 
   # Proves the iOS project compiles (unsigned). Signing is proved by ios-signed below.
   ios:

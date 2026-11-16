@@ -112,6 +112,11 @@ integration() {
   return "$rc"
 }
 
+# Replays the newest and the oldest allowed old app build's integration tests against this stack (tool/old_app_check.sh); it skips itself when supabase/ is unchanged against origin/main.
+old_app() {
+  OLD_APP_BASE=origin/main OLD_APP_COMPOSE="${CI[*]}" OLD_APP_DB_CONTAINER="$SIS_DB_CONTAINER" OLD_APP_RESET_CMD="${CI[*]} run --rm -T supabase db reset" tool/old_app_check.sh
+}
+
 # The private functions and their tests live outside git, in the main checkout's .private/ops (found through the git common dir, so a worktree sees them).
 # No private-sql folder: skipped, unless the marker file EXPECT_PRIVATE says this machine must have them; then it FAILS.
 private_scripts() {
@@ -291,7 +296,9 @@ job_database() {
   # The integration tests run before the private pack: the registry fixture adds a stand-in panel only when none exists.
   step "Private functions and tests" private_scripts || return 1
   step "SIS Bot tool test" env SIS_BOT_TEST_COMPOSE="${CI[*]}" test/tool/sis_bot_tool_test.sh || return 1
-  step "Test sender admin tool test" env SIS_BOT_TEST_COMPOSE="${CI[*]}" test/tool/sis_test_account_admin_test.sh
+  step "Test sender admin tool test" env SIS_BOT_TEST_COMPOSE="${CI[*]}" test/tool/sis_test_account_admin_test.sh || return 1
+  # Last: the replay resets the database first (old suites expect a clean one) and leaves it dirty.
+  step "Old app builds still work" old_app
 }
 
 status=0

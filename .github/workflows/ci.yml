@@ -22,6 +22,7 @@ jobs:
     outputs:
       app: ${{ steps.filter.outputs.app }}
       database: ${{ steps.filter.outputs.database }}
+      supabase: ${{ steps.filter.outputs.supabase }}
     steps:
       - name: Check out source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -68,6 +69,9 @@ jobs:
               - 'supabase/**'
               - '.github/compose.ci.yaml'
               - '.github/workflows/**'
+            # Only the server: the old app check replays old builds against it.
+            supabase:
+              - 'supabase/**'
 
   base-images:
     name: Base images
@@ -140,7 +144,7 @@ jobs:
       - name: Resolve dependencies
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter flutter pub get
       - name: Layer rules
-        run: tool/check_pattern.sh && tool/check_release_clean.sh && test/tool/check_pattern_test.sh && test/tool/whats_new_note_test.sh && test/tool/ios_release_test.sh && test/tool/workflow_pipes_test.sh && test/tool/asc_signing_test.py && test/tool/ios_signing_bootstrap_test.py && test/tool/asc_tester_test.py && test/tool/vault_names_test.py && test/tool/admin_apple_workflow_test.sh && test/tool/sis_bot_watch_test.sh && test/tool/sis_bot_length_test.sh && test/tool/check_pr_body_test.py && test/tool/release_scope_test.sh && test/tool/release_kind_test.sh && test/tool/release_kind_l10n_test.sh && test/tool/workflow_quiet_test.sh && test/tool/check_release_clean_test.sh && test/tool/sis_test_send_test.sh && test/tool/private_install_db_test.sh && test/tool/ci_local_cache_test.sh && test/tool/ci_local_isolation_test.sh && test/tool/ci_local_gradle_test.sh && test/tool/check_migration_versions_test.sh && test/tool/ci_test_lists_test.sh
+        run: tool/check_pattern.sh && tool/check_release_clean.sh && test/tool/check_pattern_test.sh && test/tool/whats_new_note_test.sh && test/tool/ios_release_test.sh && test/tool/workflow_pipes_test.sh && test/tool/asc_signing_test.py && test/tool/ios_signing_bootstrap_test.py && test/tool/asc_tester_test.py && test/tool/vault_names_test.py && test/tool/admin_apple_workflow_test.sh && test/tool/sis_bot_watch_test.sh && test/tool/sis_bot_length_test.sh && test/tool/check_pr_body_test.py && test/tool/release_scope_test.sh && test/tool/release_kind_test.sh && test/tool/release_kind_l10n_test.sh && test/tool/workflow_quiet_test.sh && test/tool/check_release_clean_test.sh && test/tool/sis_test_send_test.sh && test/tool/private_install_db_test.sh && test/tool/ci_local_cache_test.sh && test/tool/ci_local_isolation_test.sh && test/tool/ci_local_gradle_test.sh && test/tool/check_migration_versions_test.sh && test/tool/old_app_check_test.sh && test/tool/ci_test_lists_test.sh
 
       - name: Check formatting
         run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter dart format --output=none --set-exit-if-changed lib test
@@ -196,12 +200,16 @@ jobs:
     needs: [changes, base-images]
     if: needs.changes.outputs.database == 'true'
     runs-on: ubuntu-24.04
+    timeout-minutes: 120
     permissions:
       contents: read
       packages: read
     steps:
       - name: Check out source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          # Full history and every tag: the old app check extracts old builds (tags v<name>+<build>).
+          fetch-depth: 0
       - name: Log in to the base image registry
         run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
         env:
@@ -336,6 +344,15 @@ jobs:
         run: |
           export LOCAL_UID=$(id -u) LOCAL_GID=$(id -g)
           SIS_BOT_TEST_COMPOSE="docker compose -f compose.yaml -f .github/compose.ci.yaml" test/tool/sis_test_account_admin_test.sh
+      # Replays the newest and the oldest allowed old app build's integration tests against this stack's new server copy
+      # (tool/old_app_check.sh); only when supabase/ changed. It runs last because it resets the database before each build
+      # (the old suites expect a clean one) and leaves it dirty. The service key comes from the stack, never the repository.
+      - name: Old app builds still work
+        if: needs.changes.outputs.supabase == 'true'
+        run: |
+          export LOCAL_UID=$(id -u) LOCAL_GID=$(id -g)
+          compose="docker compose -f compose.yaml -f .github/compose.ci.yaml"
+          OLD_APP_COMPOSE="$compose" OLD_APP_DB_CONTAINER=supabase_db_s.is OLD_APP_RESET_CMD="$compose run --rm -T supabase db reset" tool/old_app_check.sh
 
   # Proves the iOS project compiles (unsigned). Signing is proved by ios-signed below.
   ios:

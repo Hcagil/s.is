@@ -8,6 +8,7 @@ final class PickedImage {
     required this.extension,
     this.preview,
     this.photoGroup,
+    this.id,
   });
 
   final Uint8List bytes;
@@ -23,6 +24,9 @@ final class PickedImage {
   /// Shared by the photos picked together and sent as one album (see Message.photoGroup); null for a single photo.
   final String? photoGroup;
 
+  /// The id of the message that will carry this photo, made by the sender so a retried send stores one message, never two; null = the server makes one.
+  final String? id;
+
   /// A copy of this image tied to the album [group].
   PickedImage inGroup(String group) => PickedImage(
     bytes: bytes,
@@ -30,6 +34,7 @@ final class PickedImage {
     extension: extension,
     preview: preview,
     photoGroup: group,
+    id: id,
   );
 }
 

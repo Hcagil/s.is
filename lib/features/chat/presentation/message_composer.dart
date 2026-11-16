@@ -298,8 +298,9 @@ class _ComposerState extends ConsumerState<_Composer>
 
   /// Picks one or more images (the paperclip's photo grid: recent photos,
   /// the camera tile, or "Gallery"), previews them with a caption box, and
-  /// sends them -- the caption goes with the first one, the rest with none,
-  /// one message per photo. Backing out of either step sends nothing.
+  /// queues them like files -- the caption goes with the first one, the rest
+  /// with none. The pending bubbles show at once and the photos go out by
+  /// themselves, waiting while offline. Backing out of either step sends nothing.
   Future<void> _attach() async {
     if (_sending) return;
     final box = _attachKey.currentContext?.findRenderObject() as RenderBox?;
@@ -325,9 +326,29 @@ class _ComposerState extends ConsumerState<_Composer>
     }
     setState(() => _sending = true);
     final textAtSend = _controller.text;
-    final result = await ref
-        .read(messagesProvider.notifier)
-        .sendImages(picked.images, body: picked.caption);
+    final id = _conversationId;
+    final Result<void> result = id == null
+        ? const Err(DeniedFailure())
+        : await ref
+              .read(sendQueueProvider.notifier)
+              .enqueuePhotos(
+                id,
+                picked.images,
+                body: picked.caption,
+                replyTo: ref.read(replyingToProvider),
+                // The cap notice says "were sent": it comes after the last one is.
+                onAllSent: picked.dropped > 0
+                    ? () {
+                        if (mounted) {
+                          showSisNotice(
+                            context,
+                            AppLocalizations.of(context).composerPhotoLimit,
+                            isError: false,
+                          );
+                        }
+                      }
+                    : null,
+              );
     if (!mounted) return;
     setState(() => _sending = false);
     switch (result) {
@@ -336,15 +357,7 @@ class _ComposerState extends ConsumerState<_Composer>
         if (_controller.text == textAtSend) {
           _controller.clear();
           // clear() skips onChanged: end the stored draft too.
-          final id = _conversationId;
           if (id != null) ref.read(draftsProvider.notifier).setText(id, '');
-        }
-        if (picked.dropped > 0) {
-          showSisNotice(
-            context,
-            AppLocalizations.of(context).composerPhotoLimit,
-            isError: false,
-          );
         }
       case Err(:final failure):
         showSisNotice(context, failure.message, isError: true);

@@ -16,6 +16,7 @@ import 'package:sis/features/presence/application/presence_controllers.dart';
 import '../../support/attach_flow.dart';
 import '../../support/fakes.dart';
 import '../../support/video_fakes.dart';
+import '../../support/temp_device_files.dart';
 
 import 'package:sis/l10n/app_localizations.dart';
 
@@ -53,6 +54,7 @@ Future<void> pump(
       overrides: [
         ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(chat),
+        deviceFilesProvider.overrideWithValue(tempDeviceFiles()),
         presenceRepositoryProvider.overrideWithValue(PresenceFake()),
         galleryProvider.overrideWithValue(gallery),
         externalPickerProvider.overrideWithValue(picker),

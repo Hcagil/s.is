@@ -18,7 +18,8 @@ class MemorySendQueueStore implements SendQueueStore, QueuedCiphertexts {
     return [
       for (final r in saved[userId] ?? const <QueuedRecord>[])
         if ((r.file == null || File(r.file!.path).existsSync()) &&
-            (r.video == null || File(r.video!.path).existsSync()))
+            (r.video == null || File(r.video!.path).existsSync()) &&
+            (r.photo == null || File(r.photo!.file.path).existsSync()))
           r,
     ];
   }

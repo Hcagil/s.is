@@ -30,6 +30,7 @@ import '../../support/fakes.dart';
 import 'package:sis/l10n/app_localizations.dart';
 
 import '../../support/video_fakes.dart';
+import '../../support/temp_device_files.dart';
 import '../../support/l10n.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
@@ -123,6 +124,7 @@ Future<void> pump(
       overrides: [
         ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(chat),
+        deviceFilesProvider.overrideWithValue(tempDeviceFiles()),
         presenceRepositoryProvider.overrideWithValue(PresenceFake()),
         galleryProvider.overrideWithValue(gallery),
         externalPickerProvider.overrideWithValue(picker),
@@ -285,7 +287,11 @@ void main() {
 
       await fromApp(tester);
       expect(chat.sentImages, hasLength(2), reason: 'the third is in flight');
-      expect(composerText(tester), 'hold on');
+      expect(
+        composerText(tester),
+        isEmpty,
+        reason: 'the box clears once the photos are queued (photos wait in the send queue)',
+      );
 
       chat.gate.complete();
       await steps(tester);
@@ -377,8 +383,8 @@ void main() {
       expect(find.text(capNotice), findsNothing);
       expect(
         composerText(tester),
-        'part way',
-        reason: 'a failed batch leaves the composer untouched',
+        isEmpty,
+        reason: 'the caption went with photo one, which was sent; it never comes back',
       );
       await drain(tester);
       expect(find.text(capNotice), findsNothing);

@@ -43,6 +43,8 @@ final class DriftSendQueueStore implements SendQueueStore, QueuedCiphertexts {
     if (f != null) return File(f.path).existsSync();
     final v = r.video;
     if (v != null) return File(v.path).existsSync();
+    final p = r.photo;
+    if (p != null) return File(p.file.path).existsSync();
     return r.body.isNotEmpty || r.stickerId != null || r.albumId != null;
   }
 
@@ -94,7 +96,12 @@ final class DriftSendQueueStore implements SendQueueStore, QueuedCiphertexts {
       final own = await _ownFolders();
       for (final row in await db.select(db.sendQueueRows).get()) {
         for (final r in decodeQueue(row.record)) {
-          for (final p in [r.file?.path, r.file?.thumbPath, r.video?.path]) {
+          for (final p in [
+            r.file?.path,
+            r.file?.thumbPath,
+            r.video?.path,
+            r.photo?.file.path,
+          ]) {
             if (p == null) continue;
             // Normalised, and a real folder boundary: neither "<app>/../DCIM/x" nor "<app>-gallery/x" counts as inside the app's folders.
             final clean = path.normalize(p);

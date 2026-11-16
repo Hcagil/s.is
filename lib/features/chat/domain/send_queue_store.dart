@@ -1,10 +1,26 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'file_attachment.dart';
 import 'shared_location.dart';
 import 'video.dart';
 
-/// One queued send, as saved: a text, a file, a video not yet shrunk, or a place.
+/// A photo waiting to be sent: its bytes were copied into the app's own folder ([file], id = the message id, mime = the photo's content type, name = `photo.<extension>`), so it survives the app being killed.
+final class QueuedPhoto {
+  /// Creates a queued photo.
+  const QueuedPhoto({required this.file, this.preview, this.group});
+
+  /// The kept copy of the photo.
+  final PickedFile file;
+
+  /// The tiny blurred preview sent with the message, or null.
+  final Uint8List? preview;
+
+  /// The album id shared by photos picked together, or null for a lone photo.
+  final String? group;
+}
+
+/// One queued send, as saved: a text, a photo, a file, a video not yet shrunk, or a place.
 final class QueuedRecord {
   /// Creates a queued record with the given properties.
   const QueuedRecord({
@@ -19,10 +35,14 @@ final class QueuedRecord {
     this.stickerId,
     this.albumId,
     this.albumName,
+    this.photo,
   });
 
   /// The ID of the message that will be sent (also file.id / video.id).
   final String id;
+
+  /// A photo to send (its caption is [body]), or null.
+  final QueuedPhoto? photo;
 
   /// The conversation ID.
   final String conversationId;
@@ -116,6 +136,19 @@ String encodeQueue(List<QueuedRecord> records) {
     if (record.stickerId != null) {
       map['stickerId'] = record.stickerId!;
     }
+    final photo = record.photo;
+    if (photo != null) {
+      final f = photo.file;
+      map['photo'] = <String, Object?>{
+        'id': f.id,
+        'path': f.path,
+        'name': f.name,
+        'mime': f.mime,
+        'size': f.size,
+        if (photo.preview != null) 'preview': base64Encode(photo.preview!),
+        if (photo.group != null) 'group': photo.group!,
+      };
+    }
     if (record.albumId != null) {
       map['albumId'] = record.albumId!;
       map['albumName'] = record.albumName ?? '';
@@ -181,6 +214,22 @@ List<QueuedRecord> decodeQueue(String? json) {
             address: l['address'] as String? ?? '',
           );
         }
+        QueuedPhoto? photo;
+        if (item.containsKey('photo')) {
+          final p = item['photo'] as Map<String, dynamic>;
+          final preview = p['preview'] as String?;
+          photo = QueuedPhoto(
+            file: PickedFile(
+              id: p['id'] as String,
+              path: p['path'] as String,
+              name: p['name'] as String,
+              mime: p['mime'] as String,
+              size: p['size'] as int,
+            ),
+            preview: preview == null ? null : base64Decode(preview),
+            group: p['group'] as String?,
+          );
+        }
         result.add(
           QueuedRecord(
             id: id,
@@ -194,6 +243,7 @@ List<QueuedRecord> decodeQueue(String? json) {
             stickerId: item['stickerId'] as String?,
             albumId: item['albumId'] as String?,
             albumName: item['albumName'] as String?,
+            photo: photo,
           ),
         );
       } catch (_) {

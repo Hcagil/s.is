@@ -353,8 +353,19 @@ void main() {
       final picker = ExternalPickerFake()..offered = [_photo(4), _photo(5)];
       await mount(t, offline, picker);
       // The chat must have loaded while online; only then go offline.
-      await t.runAsync(() => Future<void>.delayed(const Duration(seconds: 2)));
-      await t.pump(const Duration(milliseconds: 200));
+      await until(
+        t,
+        () =>
+            shows(find.text('No messages yet')) ||
+            shows(
+              find.byWidgetPredicate(
+                (w) =>
+                    w.key is ValueKey<String> &&
+                    (w.key! as ValueKey<String>).value.startsWith('message-'),
+              ),
+            ),
+        'the chat loaded while online',
+      );
       host.online = false;
       await t.enterText(byKey('composer-field'), caption);
       await t.pump();

@@ -98,56 +98,62 @@ AdminItem talkMsg(String id) => AdminItem(
 );
 
 void main() {
-  testWidgets('badge is the sum of the tab numbers and hidden at 0', (t) async {
-    final seen = FakeAdminSeenStore()
-      ..saved = {
-        'talk': <String>{},
-        'questions': <String>{},
-        'tasks': <String>{},
-      };
-    final repo = FakeAdminRepository()
-      ..fetchQueue = [
-        [
-          snapRow(
-            1,
-            1,
-            items: [conv, talkMsg('m1'), qItem('Q-1'), qItem('Q-2')],
-          ),
-        ],
-      ];
-    await pumpApp(t, repo, seen: seen);
+  testWidgets(
+    'badge is the sum of the tab numbers; unanswered questions stay counted after the tab is seen',
+    (t) async {
+      final seen = FakeAdminSeenStore()
+        ..saved = {
+          'talk': <String>{},
+          'questions': <String>{},
+          'tasks': <String>{},
+        };
+      final repo = FakeAdminRepository()
+        ..fetchQueue = [
+          [
+            snapRow(
+              1,
+              1,
+              items: [conv, talkMsg('m1'), qItem('Q-1'), qItem('Q-2')],
+            ),
+          ],
+        ];
+      await pumpApp(t, repo, seen: seen);
 
-    final badgeFinder = find.descendant(
-      of: find.byKey(const ValueKey('home-admin')),
-      matching: find.byType(Badge),
-    );
-    await t.pump(const Duration(milliseconds: 100));
-    expect(
-      find.descendant(of: badgeFinder, matching: find.text('3')),
-      findsOneWidget,
-    );
+      final badgeFinder = find.descendant(
+        of: find.byKey(const ValueKey('home-admin')),
+        matching: find.byType(Badge),
+      );
+      await t.pump(const Duration(milliseconds: 100));
+      expect(
+        find.descendant(of: badgeFinder, matching: find.text('3')),
+        findsOneWidget,
+      );
 
-    final c = ProviderScope.containerOf(
-      t.element(find.byType(AdminEntryButton)),
-    );
-    c.read(adminPanelsProvider.notifier).markSeen('questions');
-    await t.pump();
-    expect(
-      find.descendant(of: badgeFinder, matching: find.text('1')),
-      findsOneWidget,
-    );
+      final c = ProviderScope.containerOf(
+        t.element(find.byType(AdminEntryButton)),
+      );
+      c.read(adminPanelsProvider.notifier).markSeen('questions');
+      await t.pump();
+      expect(
+        find.descendant(of: badgeFinder, matching: find.text('3')),
+        findsOneWidget,
+      );
 
-    await c
-        .read(adminPanelsProvider.notifier)
-        .markConversationRead(
-          c.read(adminPanelsProvider).snapshot.conversations.first,
-          5,
-        );
-    await t.pump();
-    expect(badgeFinder, findsNothing);
+      await c
+          .read(adminPanelsProvider.notifier)
+          .markConversationRead(
+            c.read(adminPanelsProvider).snapshot.conversations.first,
+            5,
+          );
+      await t.pump();
+      expect(
+        find.descendant(of: badgeFinder, matching: find.text('2')),
+        findsOneWidget,
+      );
 
-    await t.pumpWidget(const SizedBox());
-  });
+      await t.pumpWidget(const SizedBox());
+    },
+  );
 
   testWidgets('leaving Admin Panels keeps the 5 s home poll', (t) async {
     final repo = FakeAdminRepository();

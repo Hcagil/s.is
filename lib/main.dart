@@ -32,6 +32,7 @@ import 'features/admin_panels/data/drift_admin_snapshot_store.dart';
 import 'features/admin_panels/data/local_auth_unlock.dart';
 import 'features/admin_panels/data/secure_admin_draft_store.dart';
 import 'features/admin_panels/data/supabase_admin_panels_repository.dart';
+import 'features/admin_panels/data/supabase_admin_push.dart';
 import 'features/auth/application/session_controller.dart';
 import 'features/auth/data/file_last_session_store.dart';
 import 'features/auth/data/secure_session_storage.dart';
@@ -357,6 +358,7 @@ Future<void> main() async {
           adminPanelsRepositoryProvider.overrideWithValue(
             SupabaseAdminPanelsRepository(client, adminKeyStore),
           ),
+          adminPushProvider.overrideWithValue(SupabaseAdminPush(client)),
           adminUnlockProvider.overrideWithValue(LocalAuthUnlock()),
           adminChatRepositoryProvider.overrideWithValue(
             SupabaseAdminChatRepository(client),

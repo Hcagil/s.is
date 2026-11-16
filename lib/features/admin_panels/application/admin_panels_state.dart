@@ -129,6 +129,11 @@ final class AdminPanelsState {
     return null;
   }
 
+  /// Questions the owner has not answered yet (same test as the Questions tab: not waiting, not sent from this phone).
+  int get unansweredQuestions => snapshot.questions
+      .where((q) => !q.waiting && !sentQuestions.contains(q.id))
+      .length;
+
   /// How many items are new on each tab (keys talk, questions, tasks).
   Map<String, int> get newCounts => adminNewCounts(snapshot, seen, readUpto);
 

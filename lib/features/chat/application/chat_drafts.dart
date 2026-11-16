@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/failure.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
+import '../domain/attachment.dart';
 import '../domain/file_attachment.dart';
 import '../domain/link_preview.dart';
 import '../domain/message.dart';
@@ -129,15 +131,18 @@ class DraftsController extends Notifier<Map<String, Draft>> {
 /// hand back to the draft). A file send carries the picked [file] and an empty
 /// body; a video send carries the [video] still to be shrunk, which the drain
 /// replaces by the shrunk [file]; a location send carries the [location] and
-/// an empty body. A send brought back after the app was killed has no
+/// an empty body. A photo send carries the [photo] (its bytes kept in a file)
+/// and the caption as body. A send brought back after the app was killed has no
 /// [replyTo] message, only the id inside [message].
 class _QueuedSend {
   _QueuedSend({
     required this.message,
     required this.body,
     required this.replyTo,
+    this.onSent,
     this.file,
     this.video,
+    this.photo,
     this.location,
     this.stickerId,
     this.albumId,
@@ -147,8 +152,10 @@ class _QueuedSend {
   final Message message;
   final String body;
   final Message? replyTo;
+  final void Function()? onSent;
   PickedFile? file;
   VideoSource? video;
+  final QueuedPhoto? photo;
   final SharedLocation? location;
 
   /// A sticker send: the sticker's id.
@@ -475,6 +482,85 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
     return message;
   }
 
+  /// Queues [images] (picked together) for [conversationId] like [enqueueFile] and shows every pending bubble at once. Each photo is first copied into the app's own folder (so it survives the app being killed and is sent when the network is back); when any copy fails nothing is queued and the Err says so. The caption [body] goes with the first photo only; only the first answers [replyTo]. Photos picked together become albums of at most 10 sharing one group id (a lone leftover photo stays a plain photo). When given, [onAllSent] runs once after the last of these photos was stored (not after a refusal, not after an app restart).
+  Future<Result<void>> enqueuePhotos(
+    String conversationId,
+    List<PickedImage> images, {
+    String body = '',
+    Message? replyTo,
+    void Function()? onAllSent,
+  }) async {
+    if (images.isEmpty) return const Ok(null);
+    final files = ref.read(deviceFilesProvider);
+    final items = <_QueuedSend>[];
+    final created = DateTime.now();
+    String? writing; // a copy that may be left half written
+    try {
+      for (var start = 0; start < images.length; start += 10) {
+        final end = start + 10 < images.length ? start + 10 : images.length;
+        final group = end - start > 1 ? randomMessageId() : null;
+        for (var i = start; i < end; i++) {
+          final image = images[i];
+          final id = randomMessageId();
+          final name = 'photo.${image.extension}';
+          final path = await files.pathFor(id, name);
+          writing = path;
+          // shortcut: sync write on the UI isolate, a photo is at most a few MB; upgrade to async if a slow phone shows jank.
+          File(path).writeAsBytesSync(image.bytes, flush: true);
+          writing = null;
+          final caption = i == 0 ? body : '';
+          final reply = i == 0 ? replyTo : null;
+          items.add(
+            _QueuedSend(
+              message: Message(
+                id: id,
+                conversationId: conversationId,
+                senderId: _me ?? '',
+                body: caption.trim(),
+                createdAt: created.add(Duration(microseconds: i)),
+                sending: true,
+                replyTo: reply?.id,
+                localImage: image.bytes,
+                attachmentPreview: image.preview,
+                photoGroup: group,
+              ),
+              body: caption,
+              replyTo: reply,
+              onSent: i == images.length - 1 ? onAllSent : null,
+              photo: QueuedPhoto(
+                file: PickedFile(
+                  id: id,
+                  path: path,
+                  name: name,
+                  mime: image.contentType,
+                  size: image.bytes.length,
+                ),
+                preview: image.preview,
+                group: group,
+              ),
+            ),
+          );
+        }
+      }
+    } catch (_) {
+      if (writing != null) _deleteKept(writing);
+      for (final i in items) {
+        _deleteKept(i.photo!.file.path);
+      }
+      return Err(
+        NetworkFailure.localized((s) => s.failMessageSave, retryable: true),
+      );
+    }
+    if (!ref.mounted) return const Err(DeniedFailure());
+    _queues.putIfAbsent(conversationId, () => []).addAll(items);
+    _publish(conversationId);
+    _persist();
+    ref.read(replyingToProvider.notifier).clear();
+    ref.read(draftsProvider.notifier).setReply(conversationId, null);
+    unawaited(_drain(conversationId));
+    return const Ok(null);
+  }
+
   /// Cancels a video still waiting to be shrunk or being shrunk (nothing is
   /// sent, its files go). A video already uploading cannot be cancelled.
   /// Returns whether it was cancelled.
@@ -493,12 +579,15 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
     return true;
   }
 
+  // Also removes a queued photo's kept file.
   void _forgetVideo(_QueuedSend item) {
     ref.read(videoProgressProvider.notifier).clear(item.message.id);
     final video = item.video;
     if (video != null) {
       unawaited(ref.read(deviceVideosProvider).discard(video));
     }
+    final photo = item.photo;
+    if (photo != null) _deleteKept(photo.file.path);
   }
 
   /// Saves everything still queued so the app being killed loses nothing.
@@ -523,6 +612,7 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
             stickerId: i.stickerId,
             albumId: i.albumId,
             albumName: i.albumId == null ? null : i.message.body,
+            photo: i.photo,
           ),
     ]..sort((a, b) => a.createdAt.compareTo(b.createdAt));
     await ref.read(sendQueueStoreProvider).save(me, records);
@@ -557,11 +647,17 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
                 albumCard: r.albumId != null,
                 albumId: r.albumId,
                 file: r.file?.attached ?? r.video?.attached,
+                localImage: r.photo == null
+                    ? null
+                    : _readKept(r.photo!.file.path),
+                attachmentPreview: r.photo?.preview,
+                photoGroup: r.photo?.group,
               ),
               body: r.body,
               replyTo: null,
               file: r.file,
               video: r.video,
+              photo: r.photo,
               location: r.location,
               stickerId: r.stickerId,
               albumId: r.albumId,
@@ -664,6 +760,8 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
           ? await _sendStickerAlbum(conversationId, item)
           : location != null
           ? await _sendLocation(conversationId, item.message, location)
+          : item.photo != null
+          ? await _sendPhoto(conversationId, item)
           : file != null
           ? await ref
                 .read(chatFileRepositoryProvider)
@@ -688,6 +786,9 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
         case Ok(:final value):
           _retries.remove(conversationId);
           items.removeAt(0);
+          final kept = item.photo;
+          if (kept != null) _deleteKept(kept.file.path);
+          item.onSent?.call();
           progress.clear(item.message.id);
           // Published once with the stored row in place of the pending
           // bubble, so a listening MessagesController can upsert it by id
@@ -801,6 +902,35 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
     };
   }
 
+  /// Sends a queued photo through the chat repository under its own message id (a retried send stores one message, never two). The stored copy keeps the phone's own bytes so the bubble does not flicker. A kept file that is gone cannot be sent: refused.
+  Future<Result<Message>> _sendPhoto(
+    String conversationId,
+    _QueuedSend item,
+  ) async {
+    final photo = item.photo!;
+    final bytes = item.message.localImage ?? _readKept(photo.file.path);
+    if (bytes == null) return const Err(DeniedFailure());
+    final sent = await ref
+        .read(chatRepositoryProvider)
+        .sendImage(
+          conversationId: conversationId,
+          image: PickedImage(
+            bytes: bytes,
+            contentType: photo.file.mime,
+            extension: photo.file.name.split('.').last,
+            preview: photo.preview,
+            photoGroup: photo.group,
+            id: item.message.id,
+          ),
+          body: item.body,
+          replyTo: item.message.replyTo,
+        );
+    return switch (sent) {
+      Ok(:final value) => Ok(value.withLocalImage(bytes)),
+      Err(:final failure) => Err(failure),
+    };
+  }
+
   /// Sends a text. A direct human chat whose partner has verified keys gets the text locked on this phone (ciphertext only goes to the server); any other chat gets it plain. When locking fails the text is NOT sent at all (never plain): the Err is handled like any send failure.
   Future<Result<Message>> _sendText(
     String conversationId,
@@ -884,5 +1014,20 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
         ? attempt - 1
         : _backoffSteps.length - 1;
     return Duration(seconds: _backoffSteps[step]);
+  }
+
+  // shortcut: sync file IO on the UI isolate, a photo is at most a few MB; upgrade to async if a slow phone shows jank.
+  static Uint8List? _readKept(String path) {
+    try {
+      return File(path).readAsBytesSync();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static void _deleteKept(String path) {
+    try {
+      File(path).deleteSync();
+    } catch (_) {}
   }
 }

@@ -281,24 +281,26 @@ class _VoiceRecordBarState extends ConsumerState<VoiceRecordBar>
               right: 146,
               top: 0,
               bottom: 0,
-              child: Align(
-                key: const ValueKey('voice-dictation-preview'),
-                alignment: Alignment.centerLeft,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 36),
-                  child: SingleChildScrollView(
-                    reverse: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    child: Text(
-                      ref.watch(
-                        draftsProvider.select(
-                          (m) => m[widget.conversationId]?.text ?? '',
+              child: IgnorePointer(
+                child: Align(
+                  key: const ValueKey('voice-dictation-preview'),
+                  alignment: Alignment.centerLeft,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 36),
+                    child: SingleChildScrollView(
+                      reverse: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      child: Text(
+                        ref.watch(
+                          draftsProvider.select(
+                            (m) => m[widget.conversationId]?.text ?? '',
+                          ),
                         ),
-                      ),
-                      style: TextStyle(
-                        fontSize: 13,
-                        height: 1.35,
-                        color: theme.text,
+                        style: TextStyle(
+                          fontSize: 13,
+                          height: 1.35,
+                          color: theme.text,
+                        ),
                       ),
                     ),
                   ),

@@ -25,12 +25,7 @@ Future<void> showForwardPage(
 }) async {
   final chosen = await Navigator.of(context)
       .push<({List<String> chatIds, List<String> personIds})>(
-        MaterialPageRoute(
-          builder: (_) => ForwardPage(
-            message: message,
-            exclude: ref.read(openConversationProvider),
-          ),
-        ),
+        MaterialPageRoute(builder: (_) => ForwardPage(message: message)),
       );
   if (chosen == null ||
       (chosen.chatIds.isEmpty && chosen.personIds.isEmpty) ||
@@ -99,11 +94,10 @@ class _ChosenStack extends StatelessWidget {
 /// people with no chat yet, multi-tick, one full-width Send button. Pops
 /// `(chatIds, personIds)`, or null on back.
 class ForwardPage extends ConsumerStatefulWidget {
-  /// Creates the page for [message]; [exclude] is the open chat, left out.
+  /// Creates the page for [message].
   const ForwardPage({
     super.key,
     this.message,
-    required this.exclude,
     this.title,
     this.stripText,
     this.stripLeading,
@@ -112,9 +106,6 @@ class ForwardPage extends ConsumerStatefulWidget {
 
   /// The message being forwarded; null when sharing from another app.
   final Message? message;
-
-  /// The conversation currently open, which is not offered as a target.
-  final String? exclude;
 
   /// Replaces the forward title.
   final String? title;
@@ -154,8 +145,7 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
         .firstOrNull;
     setState(() {
       if (chat != null) {
-        // The source chat is never a target; the picker stays as it was.
-        if (chat.id != widget.exclude) _chats.add(chat.id);
+        _chats.add(chat.id);
       } else {
         _people.add(m.userId);
       }
@@ -179,7 +169,6 @@ class _ForwardPageState extends ConsumerState<ForwardPage> {
       for (final c in all)
         if (!c.isSystem &&
             !c.hasLeft &&
-            c.id != widget.exclude &&
             (query.isEmpty ||
                 conversationLabel(l, c).toLowerCase().contains(query)))
           c,

@@ -51,20 +51,20 @@ globalThis.fetch = (input: Request | URL | string, init?: RequestInit) => {
 };
 
 // The fake reader, driven by globalThis.__source.
-type Script = { amount: string } | { code: string } | { plain: string };
+type Script = { amount: string } | { code: string; step?: string } | { plain: string };
 const source: { script: Script; calls: { day: string; prev: boolean }[] } = { script: { amount: '1' }, calls: [] };
 (globalThis as Record<string, unknown>).__source = source;
 const dir = await Deno.makeTempDir({ prefix: 'sales-qa-' });
 await Deno.copyFile(new URL('../../supabase/functions/sales-total/index.ts', import.meta.url), `${dir}/index.ts`);
 await Deno.writeTextFile(`${dir}/source.ts`, `
 export type SalesErrorCode = 'login' | 'timeout' | 'shape' | 'config';
-export class SalesError extends Error { constructor(readonly code: SalesErrorCode) { super(code); } }
+export class SalesError extends Error { constructor(readonly code: SalesErrorCode, readonly step?: string) { super(code); } }
 export async function fetchSalesTotal(day: string, prev: boolean): Promise<string> {
   const v = (globalThis as any).__source;
   v.calls.push({ day, prev });
   await new Promise((r) => setTimeout(r, 20));
   if ('amount' in v.script) return v.script.amount;
-  if ('code' in v.script) throw new SalesError(v.script.code);
+  if ('code' in v.script) throw new SalesError(v.script.code, v.script.step);
   throw new Error(v.script.plain);
 }
 `);
@@ -405,6 +405,115 @@ Deno.test({ ...opts, name: 'the real reader: a whole-number total ("7", "12345")
     clearsourceEnv();
   }
 } });
+
+Deno.test({ ...opts, name: 'log line: fake with {code:"login", step:"action"}', fn: async () => {
+  async function logLine(h, script) {
+    await resetState();
+    reset(script);
+    logged.length = 0;
+    const r = await post(h, await job());
+    assertEquals(r.status, 200, r.text);
+    return logged.filter(l => l.startsWith('sales: fetch failed'));
+  }
+  const lines = await logLine(fake, { code: 'login', step: 'action' });
+  assertEquals(lines, ['sales: fetch failed code=login step=action']);
+}});
+
+Deno.test({ ...opts, name: 'log line: fake with {code:"shape", step:"parse"}', fn: async () => {
+  async function logLine(h, script) {
+    await resetState();
+    reset(script);
+    logged.length = 0;
+    const r = await post(h, await job());
+    assertEquals(r.status, 200, r.text);
+    return logged.filter(l => l.startsWith('sales: fetch failed'));
+  }
+  const lines = await logLine(fake, { code: 'shape', step: 'parse' });
+  assertEquals(lines, ['sales: fetch failed code=shape step=parse']);
+}});
+
+Deno.test({ ...opts, name: 'log line: fake with {code:"timeout"}', fn: async () => {
+  async function logLine(h, script) {
+    await resetState();
+    reset(script);
+    logged.length = 0;
+    const r = await post(h, await job());
+    assertEquals(r.status, 200, r.text);
+    return logged.filter(l => l.startsWith('sales: fetch failed'));
+  }
+  const lines = await logLine(fake, { code: 'timeout' });
+  assertEquals(lines, ['sales: fetch failed code=timeout step=-']);
+}});
+
+Deno.test({ ...opts, name: 'log line: fake with {amount:"abc"}', fn: async () => {
+  async function logLine(h, script) {
+    await resetState();
+    reset(script);
+    logged.length = 0;
+    const r = await post(h, await job());
+    assertEquals(r.status, 200, r.text);
+    return logged.filter(l => l.startsWith('sales: fetch failed'));
+  }
+  const lines = await logLine(fake, { amount: 'abc' });
+  assertEquals(lines, ['sales: fetch failed code=shape step=amount']);
+}});
+
+Deno.test({ ...opts, name: 'log line: fake with {plain:"boom"}', fn: async () => {
+  async function logLine(h, script) {
+    await resetState();
+    reset(script);
+    logged.length = 0;
+    const r = await post(h, await job());
+    assertEquals(r.status, 200, r.text);
+    return logged.filter(l => l.startsWith('sales: fetch failed'));
+  }
+  const lines = await logLine(fake, { plain: 'boom' });
+  assertEquals(lines, ['sales: fetch failed code=other step=-']);
+}});
+
+Deno.test({ ...opts, name: 'log line: no secret: scripts do not leak secrets', fn: async () => {
+  async function logLine(h, script) {
+    await resetState();
+    reset(script);
+    logged.length = 0;
+    const r = await post(h, await job());
+    assertEquals(r.status, 200, r.text);
+    return logged;
+  }
+  const scripts = [
+    { plain: `boom ${sourcePassword} http://source.qa.test:9698/Authentication cookie=ASP.NET_SessionId=abc ${secret}` },
+    { amount: 'SECRET-AMOUNT-9081726354' },
+  ];
+  for (const s of scripts) {
+    const logs = await logLine(fake, s);
+    const joined = logs.join('\n');
+    assert(!joined.includes(sourcePassword), 'sourcePassword leaked');
+    assert(!joined.includes(secret), 'secret leaked');
+    assert(!joined.includes('source.qa.test'), 'source URL leaked');
+    assert(!joined.includes('cookie'), 'cookie leaked');
+    assert(!joined.includes('SECRET-AMOUNT'), 'amount leaked');
+    assert(!joined.includes('9081726354'), 'amount digits leaked');
+  }
+}});
+
+Deno.test({ ...opts, name: 'log line: a plain network error logs the step reached (code=other step=page)', fn: async () => {
+  async function logLine(h, script) {
+    await resetState();
+    reset(script);
+    logged.length = 0;
+    const r = await post(h, await job());
+    assertEquals(r.status, 200, r.text);
+    return logged.filter(l => l.startsWith('sales: fetch failed'));
+  }
+  await resetState();
+  sourceEnv('http://source.qa.test:9698');
+  try {
+    const lines = await logLine(real, { amount: '1' });
+    assertEquals(lines, ['sales: fetch failed code=other step=page']);
+  } finally {
+    clearsourceEnv();
+  }
+}});
 
 Deno.test({ ...opts, name: 'teardown', fn: async () => {
   try {

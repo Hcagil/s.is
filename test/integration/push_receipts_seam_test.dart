@@ -50,8 +50,8 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
-const _email = 'pax@integration.test';
+const _password = 'int-pw';
+const _email = 'pax@sis.test';
 
 /// Every answer report_push_receipts gave, as sent over the wire.
 class _Wire extends http.BaseClient {

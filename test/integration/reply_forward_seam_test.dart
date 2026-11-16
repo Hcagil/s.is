@@ -48,7 +48,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 /// A real 1x1 PNG: the bucket checks the mime type against real bytes.
 final _png = base64Decode(
@@ -102,9 +102,9 @@ void main() {
   late String c2; // reid+cora: the forward target
 
   setUpAll(() async {
-    reidClient = await _signedIn('reid@integration.test');
-    bethClient = await _signedIn('beth@integration.test');
-    coraClient = await _signedIn('cora@integration.test');
+    reidClient = await _signedIn('reid@sis.test');
+    bethClient = await _signedIn('beth@sis.test');
+    coraClient = await _signedIn('cora@sis.test');
     reid = SupabaseChatRepository(reidClient!);
     reidMember = Member(
       userId: reidClient!.auth.currentUser!.id,

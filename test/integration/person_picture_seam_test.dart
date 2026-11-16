@@ -55,7 +55,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 /// A real, decodable 4x4 JPEG: the avatars bucket takes image/jpeg only, and
 /// the page decodes what it shows.
@@ -146,8 +146,8 @@ void main() {
   late SupabaseClient denizClient, eceClient;
 
   setUpAll(() async {
-    denizClient = await _signedIn('deniz@integration.test');
-    eceClient = await _signedIn('ece@integration.test');
+    denizClient = await _signedIn('deniz@sis.test');
+    eceClient = await _signedIn('ece@sis.test');
     // Past onboarding, so her app opens on the list.
     await eceClient
         .from('profiles')

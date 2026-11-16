@@ -33,7 +33,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 final _png = base64Decode(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
@@ -75,9 +75,9 @@ void main() {
   late String fitzGale;
 
   setUpAll(() async {
-    edieClient = await _signedIn('edie@integration.test');
-    fitzClient = await _signedIn('fitz@integration.test');
-    galeClient = await _signedIn('gale@integration.test');
+    edieClient = await _signedIn('edie@sis.test');
+    fitzClient = await _signedIn('fitz@sis.test');
+    galeClient = await _signedIn('gale@sis.test');
     service = _client(serviceKey());
     edie = SupabaseChatRepository(edieClient!);
     fitz = SupabaseChatRepository(fitzClient!);

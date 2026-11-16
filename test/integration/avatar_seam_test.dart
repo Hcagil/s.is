@@ -45,7 +45,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 final _jpegHead = base64Decode(
   '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////'
@@ -165,8 +165,8 @@ void main() {
   late SupabaseClient denizClient, eceClient, deadClient;
 
   setUpAll(() async {
-    denizClient = await _signedIn('deniz@integration.test');
-    eceClient = await _signedIn('ece@integration.test');
+    denizClient = await _signedIn('deniz@sis.test');
+    eceClient = await _signedIn('ece@sis.test');
     deadClient = await deadButSignedIn(denizClient);
     // Since v0.22.0 a profile is open only to people who share a chat (or
     // saved it): ece finds deniz and starts their 1:1, which also lets deniz

@@ -34,7 +34,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 /// Passes everything through; the first history read of [chat] can be held
 /// [before] it is sent and [after] its answer arrived.
@@ -126,8 +126,8 @@ void main() {
   late String kipId;
 
   setUpAll(() async {
-    lyleClient = await _signedIn('lyle@integration.test');
-    final kip = await _signedIn('kip@integration.test');
+    lyleClient = await _signedIn('lyle@sis.test');
+    final kip = await _signedIn('kip@sis.test');
     kipId = kip.auth.currentUser!.id;
     lyle = SupabaseChatRepository(lyleClient);
     await findByTag(lyleClient, [kip]);
@@ -150,7 +150,7 @@ void main() {
     Future<void> Function(SupabaseClient client)? after,
   }) async {
     final wire = _Wire(chat);
-    final client = await _signedIn('kip@integration.test', wire);
+    final client = await _signedIn('kip@sis.test', wire);
     if (before != null) wire.before = () => before(client);
     if (after != null) wire.after = () => after(client);
     final c = ProviderContainer.test(

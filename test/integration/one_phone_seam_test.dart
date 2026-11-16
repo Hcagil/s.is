@@ -45,8 +45,8 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _member = 'one-phone@integration.test';
-const _friend = 'one-phone-friend@integration.test';
+const _member = 'one-phone@sis.test';
+const _friend = 'one-phone-friend@sis.test';
 
 /// A new client signed in to [email]: a new auth.sessions row, i.e. a phone.
 Future<SupabaseClient> _phone(String email, {bool activate = true}) async {

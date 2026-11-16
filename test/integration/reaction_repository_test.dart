@@ -112,9 +112,9 @@ void main() {
   }
 
   setUpAll(() async {
-    priyaClient = await _signedIn('priya@integration.test');
-    quinlanClient = await _signedIn('quinlan@integration.test');
-    remyClient = await _signedIn('remy@integration.test');
+    priyaClient = await _signedIn('priya@sis.test');
+    quinlanClient = await _signedIn('quinlan@sis.test');
+    remyClient = await _signedIn('remy@sis.test');
     priyaChat = SupabaseChatRepository(priyaClient);
     priya = SupabaseReactionRepository(priyaClient);
     quinlan = SupabaseReactionRepository(quinlanClient);

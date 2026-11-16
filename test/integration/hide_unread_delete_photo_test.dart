@@ -32,7 +32,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 final _png = base64Decode(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
@@ -69,9 +69,9 @@ void main() {
   late String chat;
 
   setUpAll(() async {
-    giaC = await _signedIn('gia@integration.test');
-    holC = await _signedIn('hol@integration.test');
-    ikeC = await _signedIn('ike@integration.test');
+    giaC = await _signedIn('gia@sis.test');
+    holC = await _signedIn('hol@sis.test');
+    ikeC = await _signedIn('ike@sis.test');
     gia = SupabaseChatRepository(giaC);
     hol = SupabaseChatRepository(holC);
     ike = SupabaseChatRepository(ikeC);

@@ -50,7 +50,7 @@ const _key = String.fromEnvironment(
 // The service_role key: the only way from a Dart client to backdate
 // created_at, which every insert grant withholds from a member on purpose.
 // Equivalent to updating the row "as postgres" the way the pgTAP suite does.
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 SupabaseClient _client(String key) => SupabaseClient(
   _url,
@@ -97,8 +97,8 @@ void main() {
   late String conversationId;
 
   setUpAll(() async {
-    opalClient = await _signedIn('opal@integration.test');
-    russClient = await _signedIn('russ@integration.test');
+    opalClient = await _signedIn('opal@sis.test');
+    russClient = await _signedIn('russ@sis.test');
     opal = SupabaseChatRepository(opalClient!);
     opalMember = Member(
       userId: opalClient!.auth.currentUser!.id,

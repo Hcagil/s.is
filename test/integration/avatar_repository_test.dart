@@ -34,7 +34,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 /// A real JPEG header; [tag] makes each picture's bytes distinct so a read
 /// can tell which one it got.
@@ -183,19 +183,12 @@ void main() {
   late String aviId, beaId;
 
   setUpAll(() async {
-    avi = await _signedIn('avi@integration.test');
-    bea = await _signedIn('bea@integration.test');
-    cem = await _signedIn('cem@integration.test', over: _Faulty()) as _Faulty;
+    avi = await _signedIn('avi@sis.test');
+    bea = await _signedIn('bea@sis.test');
+    cem = await _signedIn('cem@sis.test', over: _Faulty()) as _Faulty;
     // Signs in with Google-like ease but is on no allowlist.
-    await ensureUninvitedUser(
-      _url,
-      'stranger-avatars@integration.test',
-      _password,
-    );
-    stranger = await _signedIn(
-      'stranger-avatars@integration.test',
-      activate: false,
-    );
+    await ensureUninvitedUser(_url, 'stranger-avatars@sis.test', _password);
+    stranger = await _signedIn('stranger-avatars@sis.test', activate: false);
     anon = _client();
     aviId = avi.auth.currentUser!.id;
     beaId = bea.auth.currentUser!.id;

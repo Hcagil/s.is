@@ -171,9 +171,9 @@ void main() {
   }
 
   setUpAll(() async {
-    priyaClient = await _signedIn('priya@integration.test');
-    quinlanClient = await _signedIn('quinlan@integration.test');
-    remyClient = await _signedIn('remy@integration.test');
+    priyaClient = await _signedIn('priya@sis.test');
+    quinlanClient = await _signedIn('quinlan@sis.test');
+    remyClient = await _signedIn('remy@sis.test');
     priya = SupabaseChatRepository(priyaClient);
     quinlan = SupabaseChatRepository(quinlanClient);
     remy = SupabaseChatRepository(remyClient);
@@ -531,10 +531,10 @@ void main() {
     test('a stranger is refused mark_read, and learns nothing', () async {
       await ensureUninvitedUser(
         _url,
-        'stranger-reads@integration.test',
+        'stranger-reads@sis.test',
         localTestPassword,
       );
-      final stranger = await _signIn('stranger-reads@integration.test');
+      final stranger = await _signIn('stranger-reads@sis.test');
       extra.add(stranger);
       expect(
         await stranger.rpc('activate_session'),

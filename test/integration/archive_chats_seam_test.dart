@@ -37,7 +37,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 Future<SupabaseClient> _signedIn(String email) async {
   final client = SupabaseClient(
@@ -73,8 +73,8 @@ void main() {
       cleo.from('chat_archives').delete().eq('conversation_id', convId);
 
   setUpAll(() async {
-    cleo = await _signedIn('cleo@integration.test');
-    ann = await _signedIn('ann@integration.test');
+    cleo = await _signedIn('cleo@sis.test');
+    ann = await _signedIn('ann@sis.test');
     await cleo
         .from('profiles')
         .update({'onboarding_done': true})

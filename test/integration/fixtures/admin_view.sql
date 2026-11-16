@@ -11,7 +11,7 @@ values ('avowner@sis.test'), ('avbridge@sis.test')
 on conflict do nothing;
 
 -- 2. Insert both users into auth.users and auth.identities exactly like the template
---    (password 'integration-password' via extensions.crypt).
+--    (password 'int-pw' via extensions.crypt).
 insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
                         raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
                         confirmation_token, recovery_token, email_change_token_new, email_change)
@@ -20,7 +20,7 @@ select '00000000-0000-0000-0000-000000000000',
        'authenticated',
        'authenticated',
        u.email,
-       extensions.crypt('integration-password', extensions.gen_salt('bf')),
+       extensions.crypt('int-pw', extensions.gen_salt('bf')),
        now(),
        '{"provider":"email","providers":["email"]}',
        jsonb_build_object('full_name', u.name),

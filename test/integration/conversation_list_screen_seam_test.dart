@@ -56,7 +56,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 SupabaseClient _client(String url) => SupabaseClient(
   url,
@@ -92,9 +92,7 @@ void main() {
     'a member with no connection sees the offline message, never raw SDK '
     'text, on the real conversation list',
     (t) async {
-      final live = (await t.runAsync(
-        () => _signedIn('cleo@integration.test'),
-      ))!;
+      final live = (await t.runAsync(() => _signedIn('cleo@sis.test')))!;
       addTearDown(() => live.dispose());
       // The screen must reach home: onboarding is done for this member.
       await t.runAsync(
@@ -208,7 +206,7 @@ void main() {
       WidgetTester t,
       Future<SupabaseClient> Function(SupabaseClient live) chatClient,
     ) async {
-      live = (await t.runAsync(() => _signedIn('cleo@integration.test')))!;
+      live = (await t.runAsync(() => _signedIn('cleo@sis.test')))!;
       addTearDown(() => live.dispose());
       cleoId = live.auth.currentUser!.id;
       await t.runAsync(

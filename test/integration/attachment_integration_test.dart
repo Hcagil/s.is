@@ -53,7 +53,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 // The service_role key: bypasses RLS, the only way left to create a message
 // pointing at a photo that was never uploaded (messages_send now requires the
@@ -165,9 +165,9 @@ void main() {
   late String conversationId;
 
   setUpAll(() async {
-    noahClient = await _signedIn('noah@integration.test');
-    miaClient = await _signedIn('mia@integration.test');
-    liamClient = await _signedIn('liam@integration.test');
+    noahClient = await _signedIn('noah@sis.test');
+    miaClient = await _signedIn('mia@sis.test');
+    liamClient = await _signedIn('liam@sis.test');
     deadClient = deadHostClient();
     liam = SupabaseChatRepository(liamClient!);
     mia = SupabaseChatRepository(miaClient!);

@@ -63,7 +63,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 class _Req {
   _Req(this.method, this.uri, this.start);
@@ -240,10 +240,10 @@ void main() {
   late String withDora, withEli, groupId, groupTitle, doraLast, bramLast;
 
   setUpAll(() async {
-    bram = await _signedIn('bram@integration.test', wire);
-    dora = await _signedIn('dora@integration.test');
-    eli = await _signedIn('eli@integration.test');
-    finn = await _signedIn('finn@integration.test', finnWire);
+    bram = await _signedIn('bram@sis.test', wire);
+    dora = await _signedIn('dora@sis.test');
+    eli = await _signedIn('eli@sis.test');
+    finn = await _signedIn('finn@sis.test', finnWire);
     bramId = bram.auth.currentUser!.id;
     doraId = dora.auth.currentUser!.id;
     eliId = eli.auth.currentUser!.id;
@@ -717,7 +717,7 @@ void main() {
       );
       expect(last, contains(groupTitle));
       expect(last, contains(doraLast));
-      expect(last, isNot(contains('@integration.test')), reason: 'an email');
+      expect(last, isNot(contains('@sis.test')), reason: 'an email');
 
       // Next start, over a slow connection: the stored list is on screen
       // before the server has answered the list's or the profile's request.

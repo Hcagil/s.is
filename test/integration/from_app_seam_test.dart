@@ -68,7 +68,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 /// A real 1x1 PNG; a tag byte after its end tells the copies apart.
 final _png = base64Decode(
@@ -195,8 +195,8 @@ void main() {
     late String conversationId;
 
     setUpAll(() async {
-      waltClient = await _signedIn('walt@integration.test');
-      xenaClient = await _signedIn('xena@integration.test');
+      waltClient = await _signedIn('walt@sis.test');
+      xenaClient = await _signedIn('xena@sis.test');
       walt = SupabaseChatRepository(waltClient);
       xena = Member(userId: _uid(xenaClient), displayName: 'Xena');
       await findByTag(waltClient, [xenaClient]);
@@ -432,7 +432,7 @@ void main() {
       late SupabaseClient eceClient;
 
       setUpAll(() async {
-        eceClient = await _signedIn('ece@integration.test');
+        eceClient = await _signedIn('ece@sis.test');
         await eceClient
             .from('profiles')
             .update({'onboarding_done': true})

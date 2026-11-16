@@ -41,7 +41,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 SupabaseClient _client() => SupabaseClient(
   _url,
@@ -129,7 +129,7 @@ void main() {
 
   setUpAll(() async {
     Future<Person> p(String e) async {
-      final c = await signedIn('$e@integration.test');
+      final c = await signedIn('$e@sis.test');
       clients.add(c);
       return Person(c);
     }

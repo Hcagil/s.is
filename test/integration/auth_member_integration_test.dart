@@ -32,7 +32,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 SupabaseClient _client(String url) => SupabaseClient(
   url,
@@ -83,7 +83,7 @@ void main() {
     }
   });
 
-  for (final email in ['cleo@integration.test', 'una@integration.test']) {
+  for (final email in ['cleo@sis.test', 'una@sis.test']) {
     test('currentMember() carries $email, the signed-in account', () async {
       final client = await signedIn(email);
       clients.add(client);
@@ -110,7 +110,7 @@ void main() {
 
   test('a broken connection: currentMember() fails with the offline '
       'message, not raw SDK text', () async {
-    final live = await signedIn('cleo@integration.test');
+    final live = await signedIn('cleo@sis.test');
     clients.add(live);
     final dead = await deadButSignedIn(live);
     clients.add(dead);

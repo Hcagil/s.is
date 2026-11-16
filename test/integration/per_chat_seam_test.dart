@@ -34,7 +34,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 SupabaseClient _client(String key) => SupabaseClient(
   _url,
@@ -84,8 +84,8 @@ void main() {
 
   setUpAll(() async {
     service = _client(serviceKey());
-    nicoClient = await _signedIn('nico@integration.test');
-    miraClient = await _signedIn('mira@integration.test');
+    nicoClient = await _signedIn('nico@sis.test');
+    miraClient = await _signedIn('mira@sis.test');
     mira = SupabaseChatRepository(miraClient!);
     nico = SupabaseChatRepository(nicoClient!);
     await findByTag(miraClient!, [nicoClient!]);

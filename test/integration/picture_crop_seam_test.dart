@@ -65,7 +65,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 /// A real, decodable 4x4 JPEG: the avatars bucket takes image/jpeg only.
 final _jpeg = base64Decode(
@@ -155,8 +155,8 @@ void main() {
   late String groupId;
 
   setUpAll(() async {
-    aClient = await _signedIn('deniz@integration.test');
-    bClient = await _signedIn('ece@integration.test');
+    aClient = await _signedIn('deniz@sis.test');
+    bClient = await _signedIn('ece@sis.test');
     await findByTag(aClient, [bClient]);
     await _pictureless(aClient);
     groupId = _ok(

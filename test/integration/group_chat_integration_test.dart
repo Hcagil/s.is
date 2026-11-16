@@ -35,7 +35,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 /// An account that does not exist, to stand in for an invitee the caller may
 /// not add.
@@ -99,10 +99,10 @@ void main() {
   late ChatRepositoryOwner offline;
 
   setUpAll(() async {
-    hankClient = await signedIn('hank@integration.test');
-    ivyClient = await signedIn('ivy@integration.test');
-    jackClient = await signedIn('jack@integration.test');
-    kimClient = await signedIn('kim@integration.test');
+    hankClient = await signedIn('hank@sis.test');
+    ivyClient = await signedIn('ivy@sis.test');
+    jackClient = await signedIn('jack@sis.test');
+    kimClient = await signedIn('kim@sis.test');
     deadClient = deadHostClient();
     // hank invites ivy and jack; kim is never found, so she stays unreachable.
     await findByTag(hankClient!, [ivyClient!, jackClient!]);

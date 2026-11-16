@@ -30,7 +30,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 SupabaseClient _client() => SupabaseClient(
   _url,
@@ -51,8 +51,8 @@ Future<SupabaseClient> _signedIn(String email) async {
 
 void main() {
   test('Realtime delivers a published insert', () async {
-    final ann = await _signedIn('ann@integration.test');
-    final bob = await _signedIn('bob@integration.test');
+    final ann = await _signedIn('ann@sis.test');
+    final bob = await _signedIn('bob@sis.test');
     addTearDown(() async {
       await ann.dispose();
       await bob.dispose();

@@ -98,8 +98,8 @@ void main() {
   late Directory tempRoot;
 
   setUpAll(() async {
-    adaClient = await _signedIn('vp-ada@integration.test');
-    benClient = await _signedIn('vp-ben@integration.test');
+    adaClient = await _signedIn('vp-ada@sis.test');
+    benClient = await _signedIn('vp-ben@sis.test');
     ada = SupabaseChatRepository(adaClient);
     benMember = Member(
       userId: benClient.auth.currentUser!.id,

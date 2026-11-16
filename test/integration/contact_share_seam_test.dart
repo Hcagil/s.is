@@ -35,7 +35,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 Future<SupabaseClient> _signedIn(String email) async {
   final client = SupabaseClient(
@@ -104,9 +104,9 @@ void main() {
   String stamp() => '${DateTime.now().microsecondsSinceEpoch}';
 
   setUpAll(() async {
-    sanaClient = await _signedIn('ct-sana@integration.test');
-    theoClient = await _signedIn('ct-theo@integration.test');
-    umaClient = await _signedIn('ct-uma@integration.test');
+    sanaClient = await _signedIn('ct-sana@sis.test');
+    theoClient = await _signedIn('ct-theo@sis.test');
+    umaClient = await _signedIn('ct-uma@sis.test');
     sanaId = sanaClient.auth.currentUser!.id;
     theoId = theoClient.auth.currentUser!.id;
     final sanaChat = SupabaseChatRepository(sanaClient);

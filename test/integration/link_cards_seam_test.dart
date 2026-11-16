@@ -121,9 +121,9 @@ void main() {
         ..write('<title>site</title>')
         ..close();
     });
-    priyaClient = await _signedIn('priya@integration.test');
-    quinlanClient = await _signedIn('quinlan@integration.test');
-    remyClient = await _signedIn('remy@integration.test');
+    priyaClient = await _signedIn('priya@sis.test');
+    quinlanClient = await _signedIn('quinlan@sis.test');
+    remyClient = await _signedIn('remy@sis.test');
     priya = SupabaseChatRepository(priyaClient);
     quinlan = SupabaseChatRepository(quinlanClient);
     remy = SupabaseChatRepository(remyClient);
@@ -337,13 +337,13 @@ void main() {
       // One active session per account: hand it back to priya's own client.
       addTearDown(() async {
         await priyaClient.auth.signInWithPassword(
-          email: 'priya@integration.test',
+          email: 'priya@sis.test',
           password: localTestPassword,
         );
         expect(await priyaClient.rpc('activate_session'), isTrue);
       });
       await racer.auth.signInWithPassword(
-        email: 'priya@integration.test',
+        email: 'priya@sis.test',
         password: localTestPassword,
       );
       expect(await racer.rpc('activate_session'), isTrue);

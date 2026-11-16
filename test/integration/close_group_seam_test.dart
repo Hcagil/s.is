@@ -61,9 +61,9 @@ void main() {
   String idOf(SupabaseClient c) => c.auth.currentUser!.id;
 
   setUpAll(() async {
-    boss = await _signedIn('clo-boss@integration.test');
-    mate = await _signedIn('clo-mate@integration.test');
-    other = await _signedIn('clo-other@integration.test');
+    boss = await _signedIn('clo-boss@sis.test');
+    mate = await _signedIn('clo-mate@sis.test');
+    other = await _signedIn('clo-other@sis.test');
     service = SupabaseClient(_url, serviceKey());
     try {
       await findByTag(boss, [mate, other]);

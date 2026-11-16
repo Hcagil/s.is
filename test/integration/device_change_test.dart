@@ -37,7 +37,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 SupabaseClient _client() => SupabaseClient(
   _url,
@@ -113,11 +113,11 @@ void main() {
   late Stream<Message> frankIncoming;
 
   setUpAll(() async {
-    frankClient = await signedIn('frank@integration.test');
+    frankClient = await signedIn('frank@sis.test');
     // Grace only has to exist and be allowlisted; she is the second
     // conversation, so "every conversation" is more than one.
-    graceClient = await signedIn('grace@integration.test', activate: false);
-    oldPhoneClient = await signedIn('erin@integration.test');
+    graceClient = await signedIn('grace@sis.test', activate: false);
+    oldPhoneClient = await signedIn('erin@sis.test');
     oldPhone = SupabaseChatRepository(oldPhoneClient!);
     frank = SupabaseChatRepository(frankClient!);
     oldSessionId = sessionIdOf(oldPhoneClient!);
@@ -208,7 +208,7 @@ void main() {
 
     // The phone change itself: a second sign-in for the same member, which is
     // a later auth.sessions row, claiming the single active session.
-    newPhoneClient = await signedIn('erin@integration.test');
+    newPhoneClient = await signedIn('erin@sis.test');
     newPhone = SupabaseChatRepository(newPhoneClient!);
     expect(
       sessionIdOf(newPhoneClient!),

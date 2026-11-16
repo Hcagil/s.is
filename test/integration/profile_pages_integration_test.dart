@@ -51,7 +51,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 SupabaseClient _client(String url) => SupabaseClient(
   url,
   _key,
@@ -226,10 +226,10 @@ void main() {
   final tags = <String, String>{};
 
   setUpAll(() async {
-    fernClient = await _signedIn('fern@integration.test');
-    gusClient = await _signedIn('gus@integration.test');
-    hugoClient = await _signedIn('hugo@integration.test');
-    inesClient = await _signedIn('ines@integration.test');
+    fernClient = await _signedIn('fern@sis.test');
+    gusClient = await _signedIn('gus@sis.test');
+    hugoClient = await _signedIn('hugo@sis.test');
+    inesClient = await _signedIn('ines@sis.test');
     await findByTag(fernClient!, [gusClient!, hugoClient!]);
     deadClient = deadHostClient();
     fern = SupabaseChatRepository(fernClient!);

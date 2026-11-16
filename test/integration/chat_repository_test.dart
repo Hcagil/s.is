@@ -54,7 +54,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 /// Signs [email] in (creating the account the first time) and claims the
 /// active session, so `has_app_access()` is true for this client.
@@ -94,8 +94,8 @@ void main() {
   setUpAll(() async {
     // Bob first: Ann activates last, but they are different users, so both
     // hold an active session at once.
-    bobClient = await signedIn('bob@integration.test');
-    annClient = await signedIn('ann@integration.test');
+    bobClient = await signedIn('bob@sis.test');
+    annClient = await signedIn('ann@sis.test');
     ann = SupabaseChatRepository(annClient!);
     bob = SupabaseChatRepository(bobClient!);
 
@@ -248,7 +248,7 @@ void main() {
     final other = _client();
     addTearDown(other.dispose);
     await other.auth.signInWithPassword(
-      email: 'bob@integration.test',
+      email: 'bob@sis.test',
       password: _password,
     );
     // Signing in again created a NEWER session, which has not been activated,

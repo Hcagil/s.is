@@ -67,7 +67,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 SupabaseClient _client([String key = _key]) => SupabaseClient(
   _url,
@@ -356,8 +356,8 @@ void main() {
   late List<String> ids;
 
   setUpAll(() async {
-    vedatClient = await _signedIn('vedat@integration.test');
-    yesimClient = await _signedIn('yesim@integration.test');
+    vedatClient = await _signedIn('vedat@sis.test');
+    yesimClient = await _signedIn('yesim@sis.test');
     deadClient = await deadButSignedIn(vedatClient);
     vedat = SupabaseChatRepository(vedatClient);
     yesim = SupabaseChatRepository(yesimClient);

@@ -39,7 +39,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 Future<SupabaseClient> _signedIn(String email) async {
   final client = SupabaseClient(
@@ -114,9 +114,9 @@ void main() {
   String idOf(SupabaseClient c) => c.auth.currentUser!.id;
 
   setUpAll(() async {
-    pace = await _signedIn('pace@integration.test');
-    quill = await _signedIn('quill@integration.test');
-    rush = await _signedIn('rush@integration.test');
+    pace = await _signedIn('pace@sis.test');
+    quill = await _signedIn('quill@sis.test');
+    rush = await _signedIn('rush@sis.test');
     service = SupabaseClient(_url, serviceKey());
     // pace reaches quill and rush (stored, so a quick rerun may hit RLMT1).
     try {

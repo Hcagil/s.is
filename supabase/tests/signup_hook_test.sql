@@ -19,7 +19,7 @@ select plan(47);
 -- Every refused address below that is NOT about the allowlist is allowlisted,
 -- so only the gate under test can refuse it.
 insert into app_private.allowlist(email) values
-  ('hook-ann@integration.test'),
+  ('hook-ann@sis.test'),
   ('sis-destek-bot@example.com'),
   ('hook-net@example.net'),
   ('hook-org@example.org')
@@ -38,25 +38,25 @@ create temp table _refused as
   select '{"error":{"http_code":403,"message":"not invited"}}'::jsonb as v;
 
 -- 1 admitted -------------------------------------------------------------
-select is(pg_temp.hook(pg_temp.ev('hook-ann@integration.test', 'google')), '{}'::jsonb,
+select is(pg_temp.hook(pg_temp.ev('hook-ann@sis.test', 'google')), '{}'::jsonb,
           'an allowlisted address signing up with Google is admitted');
-select is(pg_temp.hook(pg_temp.ev('hook-ann@integration.test', 'email')), '{}'::jsonb,
+select is(pg_temp.hook(pg_temp.ev('hook-ann@sis.test', 'email')), '{}'::jsonb,
           'an allowlisted address signing up by email is admitted (google_only is off)');
 select is(pg_temp.hook(pg_temp.ev('  Hook-Ann@Integration.TEST  ', 'google')), '{}'::jsonb,
           'padding and mixed case are normalised before the allowlist match');
-select is(pg_temp.hook(pg_temp.ev(' HOOK-ANN@integration.test ', 'email')), '{}'::jsonb,
+select is(pg_temp.hook(pg_temp.ev(' HOOK-ANN@sis.test ', 'email')), '{}'::jsonb,
           'upper case with surrounding blanks is still the invited address');
 
 -- 2 refused: not on the allowlist ---------------------------------------
-select is(pg_temp.hook(pg_temp.ev('hook-stranger@integration.test')), (select v from _refused),
+select is(pg_temp.hook(pg_temp.ev('hook-stranger@sis.test')), (select v from _refused),
           'a non-allowlisted address is refused with exactly the 403 body');
-select is(pg_temp.hook(pg_temp.ev('hook-stranger@integration.test', 'email')), (select v from _refused),
+select is(pg_temp.hook(pg_temp.ev('hook-stranger@sis.test', 'email')), (select v from _refused),
           'a non-allowlisted address is refused by email too');
-select is(pg_temp.hook(pg_temp.ev('hook-ann+x@integration.test')), (select v from _refused),
+select is(pg_temp.hook(pg_temp.ev('hook-ann+x@sis.test')), (select v from _refused),
           'plus-addressing of an invited address is refused');
-select is(pg_temp.hook(pg_temp.ev('hook-ann+@integration.test')), (select v from _refused),
+select is(pg_temp.hook(pg_temp.ev('hook-ann+@sis.test')), (select v from _refused),
           'an empty plus tag on an invited address is refused');
-select is(pg_temp.hook(pg_temp.ev('hook-ann@integration.test.evil')), (select v from _refused),
+select is(pg_temp.hook(pg_temp.ev('hook-ann@sis.test.evil')), (select v from _refused),
           'a longer domain around the invited address is refused');
 
 -- 3 refused: no usable email ---------------------------------------------
@@ -128,11 +128,11 @@ select is(
 -- raise, not admit and not quietly refuse.
 savepoint fail_closed;
 alter table app_private.allowlist rename to allowlist_gone;
-select throws_ok($$select pg_temp.hook(pg_temp.ev('hook-ann@integration.test'))$$,
+select throws_ok($$select pg_temp.hook(pg_temp.ev('hook-ann@sis.test'))$$,
                  '42P01', null,
                  'an error reading the allowlist propagates out of the hook');
 rollback to savepoint fail_closed;
-select is(pg_temp.hook(pg_temp.ev('hook-ann@integration.test')), '{}'::jsonb,
+select is(pg_temp.hook(pg_temp.ev('hook-ann@sis.test')), '{}'::jsonb,
           'with the allowlist back, the same address is admitted (the error was the only cause)');
 
 -- 7 deleted_attachments L2: a record only covers objects that already existed
@@ -140,9 +140,9 @@ select is(pg_temp.hook(pg_temp.ev('hook-ann@integration.test')), '{}'::jsonb,
 -- between the two checks below is the object's created_at.
 set local storage.allow_delete_query = 'true';
 insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data) values
-  ('00000000-0000-0000-0000-0000000da001', 'da-ann@integration.test', now(), '{"full_name":"Ann"}'),
-  ('00000000-0000-0000-0000-0000000da002', 'da-bob@integration.test', now(), '{"full_name":"Bob"}');
-insert into app_private.allowlist(email) values ('da-ann@integration.test'), ('da-bob@integration.test')
+  ('00000000-0000-0000-0000-0000000da001', 'da-ann@sis.test', now(), '{"full_name":"Ann"}'),
+  ('00000000-0000-0000-0000-0000000da002', 'da-bob@sis.test', now(), '{"full_name":"Bob"}');
+insert into app_private.allowlist(email) values ('da-ann@sis.test'), ('da-bob@sis.test')
 on conflict do nothing;
 insert into app_private.tag_finds(finder, found_id) values
   ('00000000-0000-0000-0000-0000000da001', '00000000-0000-0000-0000-0000000da002');

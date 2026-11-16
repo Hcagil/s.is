@@ -41,7 +41,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 const _unavailable = 'This file is not available.';
 
 Future<SupabaseClient> _signedIn(String email) async {
@@ -155,9 +155,9 @@ void main() {
 
   setUpAll(() async {
     tmp = Directory.systemTemp.createTempSync('sis-files-seam');
-    sanaClient = await _signedIn('fl-sana@integration.test');
-    theoClient = await _signedIn('fl-theo@integration.test');
-    umaClient = await _signedIn('fl-uma@integration.test');
+    sanaClient = await _signedIn('fl-sana@sis.test');
+    theoClient = await _signedIn('fl-theo@sis.test');
+    umaClient = await _signedIn('fl-uma@sis.test');
     sanaId = sanaClient.auth.currentUser!.id;
     theoId = theoClient.auth.currentUser!.id;
     umaId = umaClient.auth.currentUser!.id;

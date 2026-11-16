@@ -22,7 +22,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _seedPw = 'integration-password';
+const _seedPw = 'int-pw';
 
 void main() {
   late SupabaseClient client;
@@ -35,14 +35,11 @@ void main() {
     );
     try {
       await client.auth.signInWithPassword(
-        email: 'edie@integration.test',
+        email: 'edie@sis.test',
         password: _seedPw,
       );
     } on AuthException {
-      await client.auth.signUp(
-        email: 'edie@integration.test',
-        password: _seedPw,
-      );
+      await client.auth.signUp(email: 'edie@sis.test', password: _seedPw);
     }
     expect(await client.rpc('activate_session'), isTrue);
   });

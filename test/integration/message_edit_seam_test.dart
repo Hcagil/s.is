@@ -48,7 +48,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 SupabaseClient _client(String key) => SupabaseClient(
   _url,
@@ -92,8 +92,8 @@ void main() {
   late String conversationId;
 
   setUpAll(() async {
-    haleClient = await _signedIn('hale@integration.test');
-    ivoClient = await _signedIn('ivo@integration.test');
+    haleClient = await _signedIn('hale@sis.test');
+    ivoClient = await _signedIn('ivo@sis.test');
     hale = SupabaseChatRepository(haleClient!);
     haleMember = Member(
       userId: haleClient!.auth.currentUser!.id,

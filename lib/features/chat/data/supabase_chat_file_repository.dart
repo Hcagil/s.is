@@ -62,12 +62,19 @@ final class SupabaseChatFileRepository implements ChatFileRepository {
         createdAt = DateTime.parse(row['created_at'] as String).toLocal();
       } on PostgrestException catch (e) {
         if (e.code != '23505') rethrow;
+        // A taken id may belong to another member or chat; only our own matching row counts as a retry.
         final row = await _client
             .from('messages')
-            .select('created_at')
+            .select('sender_id, conversation_id, reply_to, created_at')
             .eq('id', file.id)
-            .single()
+            .maybeSingle()
             .retriedOnce();
+        if (row == null ||
+            row['sender_id'] != me ||
+            row['conversation_id'] != conversationId ||
+            row['reply_to'] != replyTo) {
+          return const Err(DeniedFailure());
+        }
         createdAt = DateTime.parse(row['created_at'] as String).toLocal();
       }
 

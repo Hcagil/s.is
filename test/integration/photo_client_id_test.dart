@@ -275,4 +275,48 @@ void main() {
     expect(after, hasLength(1));
     expect(after.single['body'], bodyA);
   });
+
+  test('a retry with a different reply target is refused', () async {
+    final quotedA = _ok(
+      await zane.send(
+        id: randomMessageId(),
+        conversationId: umutZane,
+        body: _stamp('quoted A'),
+      ),
+      'quoted A',
+    );
+    final quotedB = _ok(
+      await zane.send(
+        id: randomMessageId(),
+        conversationId: umutZane,
+        body: _stamp('quoted B'),
+      ),
+      'quoted B',
+    );
+    final id = randomMessageId();
+    final body = _stamp('reply');
+    _ok(
+      await umut.sendImage(
+        conversationId: umutZane,
+        image: _img(id),
+        body: body,
+        replyTo: quotedA.id,
+      ),
+      'first',
+    );
+    final r = await umut.sendImage(
+      conversationId: umutZane,
+      image: _img(id),
+      body: body,
+      replyTo: quotedB.id,
+    );
+    await expectDenied(r, 'different reply target');
+    final row = await umutClient
+        .from('messages')
+        .select('reply_to')
+        .eq('id', id)
+        .single();
+    expect(row['reply_to'], quotedA.id);
+    expect(await rows(umutClient, id), hasLength(1));
+  });
 }

@@ -114,7 +114,7 @@ async function fails(code: SalesErrorCode | 'plain', prev = false): Promise<unkn
   }
   return err;
 }
-type SalesErrorCode = 'login' | 'timeout' | 'shape' | 'config';
+type SalesErrorCode = 'login' | 'timeout' | 'shape' | 'config' | 'other';
 
 const opts = { sanitizeOps: false, sanitizeResources: false };
 
@@ -258,12 +258,13 @@ Deno.test({ ...opts, name: 'a slow source => timeout; the 15 s budget covers bot
   assert(ms >= 14000 && ms < 16500, `timed out after ${ms} ms`);
 } });
 
-Deno.test({ ...opts, name: 'connection refused => a plain Error (index reports other); no secret in it', fn: async () => {
+Deno.test({ ...opts, name: 'connection refused => SalesError other at step page; no secret in it', fn: async () => {
   const l = Deno.listen({ hostname: '127.0.0.1', port: 0 });
   const port = (l.addr as Deno.NetAddr).port;
   l.close();
   setup({ SALES_SOURCE_URL: `http://127.0.0.1:${port}` });
-  await fails('plain');
+  const err = await fails('other') as SalesError;
+  assertEquals(err.step, 'page');
 } });
 
 Deno.test({ ...opts, name: 'a crafted page (label, then dash-stat-value x 69000, ~1 MB) => shape in under 1 s (no regex stall)', fn: async () => {
@@ -327,6 +328,57 @@ Deno.test({ ...opts, name: 'a crafted ~64 KB login page (repeated token input ta
   }
   const ms = Date.now() - t0;
   assert(ms < 1000, `took ${ms} ms`);
+} });
+
+
+Deno.test({ ...opts, name: 'step: login page with no __RequestVerificationToken field', fn: async () => {
+  setup();
+  onLoginPage = () => new Response('<html>no token</html>');
+  const err = await fails('login') as SalesError;
+  assertEquals(err.step, 'page');
+} });
+
+Deno.test({ ...opts, name: 'step: login post refused', fn: async () => {
+  setup();
+  onLogin = () => new Response(null, { status: 401 });
+  const err = await fails('login') as SalesError;
+  assertEquals(err.step, 'action');
+} });
+
+Deno.test({ ...opts, name: 'step: summary page not 200', fn: async () => {
+  for (const status of [302, 500]) {
+    setup();
+    onList = () => new Response(null, { status });
+    const err = await fails('login') as SalesError;
+    assertEquals(err.step, 'report');
+  }
+} });
+
+Deno.test({ ...opts, name: 'step: total label missing', fn: async () => {
+  setup();
+  onList = () => new Response('<html><body>maintenance</body></html>');
+  const err = await fails('shape') as SalesError;
+  assertEquals(err.step, 'parse');
+} });
+
+Deno.test({ ...opts, name: 'step: slow login post times out', fn: async () => {
+  setup();
+  onLogin = async () => {
+    await new Promise(r => setTimeout(r, 16000));
+    return new Response(null, { status: 302, headers: loginCookies() });
+  };
+  const err = await fails('timeout') as SalesError;
+  assertEquals(err.step, 'action');
+} });
+
+Deno.test({ ...opts, name: 'step: slow summary page times out', fn: async () => {
+  setup();
+  onList = async () => {
+    await new Promise(r => setTimeout(r, 16000));
+    return new Response(page('1,00'));
+  };
+  const err = await fails('timeout') as SalesError;
+  assertEquals(err.step, 'report');
 } });
 
 Deno.test({ ...opts, name: 'teardown', fn: async () => {

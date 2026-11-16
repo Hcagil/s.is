@@ -39,9 +39,12 @@ class _NewChatPageState extends ConsumerState<NewChatPage> {
     super.dispose();
   }
 
+  int _searchSeq = 0;
+
   Future<void> _search() async {
     final tag = _tagField.text.trim();
     if (tag.isEmpty) return;
+    final seq = ++_searchSeq;
     setState(() {
       _searching = true;
       _searchError = null;
@@ -51,7 +54,8 @@ class _NewChatPageState extends ConsumerState<NewChatPage> {
     final result = await ref
         .read(contactsControllerProvider.notifier)
         .findByTag(tag);
-    if (!mounted) return;
+    // A newer search started meanwhile: its answer wins, not this one.
+    if (!mounted || seq != _searchSeq) return;
     setState(() {
       _searching = false;
       switch (result) {

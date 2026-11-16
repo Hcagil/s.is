@@ -494,6 +494,7 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
     final files = ref.read(deviceFilesProvider);
     final items = <_QueuedSend>[];
     final created = DateTime.now();
+    String? writing; // a copy that may be left half written
     try {
       for (var start = 0; start < images.length; start += 10) {
         final end = start + 10 < images.length ? start + 10 : images.length;
@@ -503,8 +504,10 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
           final id = randomMessageId();
           final name = 'photo.${image.extension}';
           final path = await files.pathFor(id, name);
+          writing = path;
           // shortcut: sync write on the UI isolate, a photo is at most a few MB; upgrade to async if a slow phone shows jank.
           File(path).writeAsBytesSync(image.bytes, flush: true);
+          writing = null;
           final caption = i == 0 ? body : '';
           final reply = i == 0 ? replyTo : null;
           items.add(
@@ -540,6 +543,7 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
         }
       }
     } catch (_) {
+      if (writing != null) _deleteKept(writing);
       for (final i in items) {
         _deleteKept(i.photo!.file.path);
       }

@@ -985,7 +985,8 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
         // The same id was stored by an earlier try whose answer was lost.
         if (e.code != '23505' || image.id == null) rethrow;
         // Accept it as ours only if it truly is (same sender, conversation,
-        // caption, reply); the path is not compared, a retry uploads anew.
+        // caption, reply and album); the path is not compared, a retry uploads
+        // anew.
         final stored = await _client
             .from('messages')
             .select(_messageColumns)
@@ -996,10 +997,13 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
             stored['sender_id'] != me ||
             stored['conversation_id'] != conversationId ||
             stored['body'] != body.trim() ||
-            (replyTo != null && stored['reply_to'] != replyTo)) {
+            stored['reply_to'] != replyTo ||
+            stored['photo_group'] != image.photoGroup) {
           return const Err(DeniedFailure());
         }
         row = stored;
+        // The first try already stored the photo: this try's upload is an orphan.
+        await _removeUploaded(path);
       }
       // The sender already has the photo: never download it back. Kept under
       // the stored path (a retried send's row names its first upload).
@@ -1010,6 +1014,23 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
       return Ok((await _open([_toMessage(row)])).first);
     } catch (e) {
       return Err(_asFailure(e));
+    }
+  }
+
+  /// Best effort: removes the photo this try uploaded and its small companions (`<path>.t`, `<path>.s`) when the first try's row turned out to be stored already. A failed delete is only logged, never an error.
+  Future<void> _removeUploaded(String path) async {
+    try {
+      await _client.storage.from('attachments').remove([
+        path,
+        '$path.t',
+        '$path.s',
+      ]);
+    } catch (e) {
+      log(
+        'sendImage: orphan upload not removed: ${e.runtimeType}',
+        name: 'sis.data',
+        level: 900,
+      );
     }
   }
 

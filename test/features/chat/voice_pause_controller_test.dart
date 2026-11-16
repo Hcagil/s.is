@@ -132,7 +132,9 @@ void main() {
     await t.pump(const Duration(minutes: 11));
   });
 
-  testWidgets('pause in dictation mode', (WidgetTester t) async {
+  testWidgets('pause in dictation mode stops the engine and keeps the bar', (
+    WidgetTester t,
+  ) async {
     final chat = HeldSendChat();
     final files = FileRepoFake();
     final rec = PausableVoiceRecorderFake();
@@ -148,7 +150,9 @@ void main() {
     await settle(t);
     await pauseFuture;
     await settle(t);
-    expect(c.read(voiceCaptureProvider).paused, false);
+    expect(c.read(voiceCaptureProvider).paused, true);
+    expect(dict.calls, contains('stop'));
+    expect(c.read(voiceCaptureProvider).phase, VoicePhase.locked);
     expect(rec.calls, isNot(contains('pause')));
     unawaited(notifier.cancel());
     await settle(t);

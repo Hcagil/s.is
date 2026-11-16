@@ -344,7 +344,7 @@ void main() {
       t,
     ) async {
       final before = (await t.runAsync(ids))!;
-      final host = SwitchableHost();
+      final host = SwitchableHost(online: true);
       final offline = (await t.runAsync(
         () => switchableSignedIn(xenaClient, host),
       ))!;
@@ -352,6 +352,10 @@ void main() {
       final caption = 'queued ${DateTime.now().microsecondsSinceEpoch}';
       final picker = ExternalPickerFake()..offered = [_photo(4), _photo(5)];
       await mount(t, offline, picker);
+      // The chat must have loaded while online; only then go offline.
+      await t.runAsync(() => Future<void>.delayed(const Duration(seconds: 2)));
+      await t.pump(const Duration(milliseconds: 200));
+      host.online = false;
       await t.enterText(byKey('composer-field'), caption);
       await t.pump();
       await tapWhenShown(t, 'composer-attach');

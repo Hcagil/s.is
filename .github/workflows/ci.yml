@@ -200,7 +200,7 @@ jobs:
     needs: [changes, base-images]
     if: needs.changes.outputs.database == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 120
     permissions:
       contents: read
       packages: read

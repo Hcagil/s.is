@@ -356,8 +356,8 @@ void main() {
   late List<String> ids;
 
   setUpAll(() async {
-    vedatClient = await _signedIn('vedat@sis.test');
-    yesimClient = await _signedIn('yesim@sis.test');
+    vedatClient = await _signedIn('vedat@mail.test');
+    yesimClient = await _signedIn('yesim@mail.test');
     deadClient = await deadButSignedIn(vedatClient);
     vedat = SupabaseChatRepository(vedatClient);
     yesim = SupabaseChatRepository(yesimClient);

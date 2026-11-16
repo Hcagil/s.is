@@ -165,8 +165,8 @@ void main() {
   late SupabaseClient denizClient, eceClient, deadClient;
 
   setUpAll(() async {
-    denizClient = await _signedIn('deniz@sis.test');
-    eceClient = await _signedIn('ece@sis.test');
+    denizClient = await _signedIn('it-deniz@mail.test');
+    eceClient = await _signedIn('ece@mail.test');
     deadClient = await deadButSignedIn(denizClient);
     // Since v0.22.0 a profile is open only to people who share a chat (or
     // saved it): ece finds deniz and starts their 1:1, which also lets deniz

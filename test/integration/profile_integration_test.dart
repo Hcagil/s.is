@@ -137,9 +137,9 @@ void main() {
   late Account offline;
 
   setUpAll(() async {
-    veraClient = await signedIn('vera@sis.test');
-    waltClient = await signedIn('walt@sis.test');
-    xenaClient = await signedIn('xena@sis.test');
+    veraClient = await signedIn('vera@mail.test');
+    waltClient = await signedIn('walt@mail.test');
+    xenaClient = await signedIn('xena@mail.test');
     deadClient = await deadButSignedIn(veraClient!);
     vera = Account(veraClient!);
     walt = Account(waltClient!);

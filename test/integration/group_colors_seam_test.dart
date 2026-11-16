@@ -89,9 +89,9 @@ void main() {
 
   setUpAll(() async {
     service = _client(serviceKey());
-    hughClient = await _signedIn('hugh@sis.test');
-    ionaClient = await _signedIn('iona@sis.test');
-    gwenClient = await _signedIn('gwen@sis.test');
+    hughClient = await _signedIn('hugh@mail.test');
+    ionaClient = await _signedIn('iona@mail.test');
+    gwenClient = await _signedIn('gwen@mail.test');
     gwen = SupabaseChatRepository(gwenClient!);
     hugh = SupabaseChatRepository(hughClient!);
     iona = SupabaseChatRepository(ionaClient!);

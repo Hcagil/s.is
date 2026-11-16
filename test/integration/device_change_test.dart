@@ -113,11 +113,11 @@ void main() {
   late Stream<Message> frankIncoming;
 
   setUpAll(() async {
-    frankClient = await signedIn('frank@sis.test');
+    frankClient = await signedIn('it-frank@mail.test');
     // Grace only has to exist and be allowlisted; she is the second
     // conversation, so "every conversation" is more than one.
-    graceClient = await signedIn('grace@sis.test', activate: false);
-    oldPhoneClient = await signedIn('erin@sis.test');
+    graceClient = await signedIn('it-grace@mail.test', activate: false);
+    oldPhoneClient = await signedIn('it-erin@mail.test');
     oldPhone = SupabaseChatRepository(oldPhoneClient!);
     frank = SupabaseChatRepository(frankClient!);
     oldSessionId = sessionIdOf(oldPhoneClient!);
@@ -208,7 +208,7 @@ void main() {
 
     // The phone change itself: a second sign-in for the same member, which is
     // a later auth.sessions row, claiming the single active session.
-    newPhoneClient = await signedIn('erin@sis.test');
+    newPhoneClient = await signedIn('it-erin@mail.test');
     newPhone = SupabaseChatRepository(newPhoneClient!);
     expect(
       sessionIdOf(newPhoneClient!),

@@ -123,8 +123,8 @@ void main() {
           as String?;
 
   setUpAll(() async {
-    pina = await _signedIn('pina@sis.test');
-    pinb = await _signedIn('pinb@sis.test');
+    pina = await _signedIn('pina@mail.test');
+    pinb = await _signedIn('pinb@mail.test');
     pinaId = pina.auth.currentUser!.id;
     await pina
         .from('profiles')

@@ -84,8 +84,8 @@ void main() {
 
   setUpAll(() async {
     service = _client(serviceKey());
-    nicoClient = await _signedIn('nico@sis.test');
-    miraClient = await _signedIn('mira@sis.test');
+    nicoClient = await _signedIn('nico@mail.test');
+    miraClient = await _signedIn('mira@mail.test');
     mira = SupabaseChatRepository(miraClient!);
     nico = SupabaseChatRepository(nicoClient!);
     await findByTag(miraClient!, [nicoClient!]);

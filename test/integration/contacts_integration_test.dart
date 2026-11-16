@@ -87,12 +87,12 @@ void main() {
   String id(SupabaseClient c) => c.auth.currentUser!.id;
 
   setUpAll(() async {
-    selin = await signedIn('selin@sis.test');
-    tuna = await signedIn('tuna@sis.test');
-    ulas = await signedIn('ulas@sis.test');
-    veli = await signedIn('veli@sis.test');
-    yunus = await signedIn('yunus@sis.test');
-    zehra = await signedIn('zehra@sis.test');
+    selin = await signedIn('selin@mail.test');
+    tuna = await signedIn('tuna@mail.test');
+    ulas = await signedIn('ulas@mail.test');
+    veli = await signedIn('veli@mail.test');
+    yunus = await signedIn('yunus@mail.test');
+    zehra = await signedIn('zehra@mail.test');
   });
 
   tearDownAll(() async {

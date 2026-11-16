@@ -128,9 +128,9 @@ void main() {
 
   setUpAll(() async {
     tmp = Directory.systemTemp.createTempSync('sis-video-seam');
-    sanaClient = await _signedIn('fl-sana@sis.test');
-    theoClient = await _signedIn('fl-theo@sis.test');
-    umaClient = await _signedIn('fl-uma@sis.test');
+    sanaClient = await _signedIn('fl-sana@mail.test');
+    theoClient = await _signedIn('fl-theo@mail.test');
+    umaClient = await _signedIn('fl-uma@mail.test');
     sanaId = sanaClient.auth.currentUser!.id;
     theoId = theoClient.auth.currentUser!.id;
     final sanaChat = SupabaseChatRepository(sanaClient);

@@ -226,10 +226,10 @@ void main() {
   final tags = <String, String>{};
 
   setUpAll(() async {
-    fernClient = await _signedIn('fern@sis.test');
-    gusClient = await _signedIn('gus@sis.test');
-    hugoClient = await _signedIn('hugo@sis.test');
-    inesClient = await _signedIn('ines@sis.test');
+    fernClient = await _signedIn('fern@mail.test');
+    gusClient = await _signedIn('gus@mail.test');
+    hugoClient = await _signedIn('hugo@mail.test');
+    inesClient = await _signedIn('ines@mail.test');
     await findByTag(fernClient!, [gusClient!, hugoClient!]);
     deadClient = deadHostClient();
     fern = SupabaseChatRepository(fernClient!);

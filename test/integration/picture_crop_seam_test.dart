@@ -155,8 +155,8 @@ void main() {
   late String groupId;
 
   setUpAll(() async {
-    aClient = await _signedIn('deniz@sis.test');
-    bClient = await _signedIn('ece@sis.test');
+    aClient = await _signedIn('it-deniz@mail.test');
+    bClient = await _signedIn('ece@mail.test');
     await findByTag(aClient, [bClient]);
     await _pictureless(aClient);
     groupId = _ok(

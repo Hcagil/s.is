@@ -155,9 +155,9 @@ void main() {
   String idOf(SupabaseClient c) => c.auth.currentUser!.id;
 
   setUpAll(() async {
-    ash = await _signedIn('dc-ash@sis.test');
-    bea = await _signedIn('dc-bea@sis.test');
-    cyd = await _signedIn('dc-cyd@sis.test');
+    ash = await _signedIn('dc-ash@mail.test');
+    bea = await _signedIn('dc-bea@mail.test');
+    cyd = await _signedIn('dc-cyd@mail.test');
     service = SupabaseClient(_url, serviceKey());
     for (final c in [ash, bea, cyd]) {
       await c

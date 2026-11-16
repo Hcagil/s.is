@@ -99,8 +99,8 @@ void main() {
   final ids = <String>[];
 
   setUpAll(() async {
-    odoClient = await _signedIn('odo@sis.test');
-    namiClient = await _signedIn('nami@sis.test');
+    odoClient = await _signedIn('odo@mail.test');
+    namiClient = await _signedIn('nami@mail.test');
     nami = SupabaseChatRepository(namiClient);
     final odo = SupabaseChatRepository(odoClient);
     await findByTag(odoClient, [namiClient]);
@@ -200,7 +200,7 @@ void main() {
 
     test('another member\'s chat yields nothing', () async {
       // Row-level security applies: a stranger asking by id gets no bytes.
-      final stranger = await _signedIn('pim@sis.test');
+      final stranger = await _signedIn('pim@mail.test');
       addTearDown(stranger.dispose);
       final r = await SupabaseChatRepository(stranger)
           .attachmentPreviews([ids[85]]);

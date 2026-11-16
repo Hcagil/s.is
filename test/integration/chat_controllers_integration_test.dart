@@ -132,8 +132,8 @@ void main() {
   late String conversationId;
 
   setUpAll(() async {
-    danClient = await signedIn('dan@sis.test');
-    carolClient = await signedIn('carol@sis.test');
+    danClient = await signedIn('it-dan@mail.test');
+    carolClient = await signedIn('carol@mail.test');
     carol = ChatRepositoryOwner(carolClient!);
     dan = ChatRepositoryOwner(danClient!);
     deadClient = deadHostClient();

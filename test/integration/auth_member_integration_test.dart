@@ -83,7 +83,7 @@ void main() {
     }
   });
 
-  for (final email in ['cleo@sis.test', 'una@sis.test']) {
+  for (final email in ['cleo@mail.test', 'una@mail.test']) {
     test('currentMember() carries $email, the signed-in account', () async {
       final client = await signedIn(email);
       clients.add(client);
@@ -110,7 +110,7 @@ void main() {
 
   test('a broken connection: currentMember() fails with the offline '
       'message, not raw SDK text', () async {
-    final live = await signedIn('cleo@sis.test');
+    final live = await signedIn('cleo@mail.test');
     clients.add(live);
     final dead = await deadButSignedIn(live);
     clients.add(dead);

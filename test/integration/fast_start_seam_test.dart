@@ -240,10 +240,10 @@ void main() {
   late String withDora, withEli, groupId, groupTitle, doraLast, bramLast;
 
   setUpAll(() async {
-    bram = await _signedIn('bram@sis.test', wire);
-    dora = await _signedIn('dora@sis.test');
-    eli = await _signedIn('eli@sis.test');
-    finn = await _signedIn('finn@sis.test', finnWire);
+    bram = await _signedIn('bram@mail.test', wire);
+    dora = await _signedIn('dora@mail.test');
+    eli = await _signedIn('eli@mail.test');
+    finn = await _signedIn('finn@mail.test', finnWire);
     bramId = bram.auth.currentUser!.id;
     doraId = dora.auth.currentUser!.id;
     eliId = eli.auth.currentUser!.id;
@@ -717,7 +717,7 @@ void main() {
       );
       expect(last, contains(groupTitle));
       expect(last, contains(doraLast));
-      expect(last, isNot(contains('@sis.test')), reason: 'an email');
+      expect(last, isNot(contains('@mail.test')), reason: 'an email');
 
       // Next start, over a slow connection: the stored list is on screen
       // before the server has answered the list's or the profile's request.

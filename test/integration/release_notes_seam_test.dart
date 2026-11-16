@@ -137,7 +137,7 @@ void main() {
 
   setUpAll(() async {
     service = _client(serviceKey());
-    wynn = await _signedIn('wynn@sis.test');
+    wynn = await _signedIn('wynn@mail.test');
     uid = wynn.auth.currentUser!.id;
     prefKey = 'release_notes_served_build_$uid';
     await wynn

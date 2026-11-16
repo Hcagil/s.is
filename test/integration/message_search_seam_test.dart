@@ -130,8 +130,8 @@ void main() {
   late Message inGroup;
 
   setUpAll(() async {
-    vedatClient = await _signedIn('vedat@sis.test');
-    yesimClient = await _signedIn('yesim@sis.test');
+    vedatClient = await _signedIn('vedat@mail.test');
+    yesimClient = await _signedIn('yesim@mail.test');
     vedat = SupabaseChatRepository(vedatClient!);
     yesim = SupabaseChatRepository(yesimClient!);
     deadClient = await deadButSignedIn(vedatClient!);

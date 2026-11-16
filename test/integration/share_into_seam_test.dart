@@ -201,8 +201,8 @@ void main() {
 
   setUpAll(() async {
     // Own accounts (seed.sql): files with a fixed password are locked out of any account localTestPassword moves.
-    reidClient = await _signedIn('shr-a@sis.test');
-    coraClient = await _signedIn('shr-b@sis.test');
+    reidClient = await _signedIn('shr-a@mail.test');
+    coraClient = await _signedIn('shr-b@mail.test');
     reid = SupabaseChatRepository(reidClient!);
     cora = SupabaseChatRepository(coraClient!);
     reidMember = Member(

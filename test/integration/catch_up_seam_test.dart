@@ -76,8 +76,8 @@ void main() {
   late String chat;
 
   setUpAll(() async {
-    sigClient = await _signedIn('sig@sis.test');
-    rhoClient = await _signedIn('rho@sis.test');
+    sigClient = await _signedIn('sig@mail.test');
+    rhoClient = await _signedIn('rho@mail.test');
     rho = SupabaseChatRepository(rhoClient!);
     sig = SupabaseChatRepository(sigClient!);
     await findByTag(rhoClient!, [sigClient!]);

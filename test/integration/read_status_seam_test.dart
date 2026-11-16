@@ -367,9 +367,9 @@ void main() {
   }
 
   setUpAll(() async {
-    sanaClient = await _signedIn('sana@sis.test');
-    theoClient = await _signedIn('theo@sis.test');
-    wrenClient = await _signedIn('wren@sis.test');
+    sanaClient = await _signedIn('sana@mail.test');
+    theoClient = await _signedIn('theo@mail.test');
+    wrenClient = await _signedIn('wren@mail.test');
     deadClient = deadHostClient();
     sana = SupabaseChatRepository(sanaClient);
     theo = SupabaseChatRepository(theoClient);

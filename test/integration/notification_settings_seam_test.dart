@@ -97,8 +97,8 @@ void main() {
   late String annId;
 
   setUpAll(() async {
-    cleoClient = await _signedIn('cleo@sis.test');
-    annClient = await _signedIn('ann@sis.test');
+    cleoClient = await _signedIn('cleo@mail.test');
+    annClient = await _signedIn('it-ann@mail.test');
     annId = annClient!.auth.currentUser!.id;
     await cleoClient!
         .from('profiles')

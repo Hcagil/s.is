@@ -86,8 +86,8 @@ void main() {
   SupabaseClient? bobClient;
 
   setUpAll(() async {
-    bobClient = await _signedIn('bob@sis.test');
-    annClient = await _signedIn('ann@sis.test');
+    bobClient = await _signedIn('it-bob@mail.test');
+    annClient = await _signedIn('it-ann@mail.test');
   });
 
   tearDownAll(() async {

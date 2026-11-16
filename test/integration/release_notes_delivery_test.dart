@@ -123,7 +123,7 @@ void main() {
 
   setUpAll(() async {
     service = _client(serviceKey());
-    whit = await _signedIn('whit@sis.test');
+    whit = await _signedIn('whit@mail.test');
     uid = whit.auth.currentUser!.id;
     prefKey = 'release_notes_served_build_$uid';
     // whit's delivery state now stands at `base`: every later build is new.

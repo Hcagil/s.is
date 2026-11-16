@@ -99,9 +99,9 @@ void main() {
   late String sharedConversation;
 
   setUpAll(() async {
-    cleoClient = await _signedIn('cleo@sis.test');
-    annClient = await _signedIn('ann@sis.test');
-    inesClient = await _signedIn('ines@sis.test');
+    cleoClient = await _signedIn('cleo@mail.test');
+    annClient = await _signedIn('it-ann@mail.test');
+    inesClient = await _signedIn('ines@mail.test');
     // Reaches the real, reachable server, but carries no session: the
     // `anon` role every table here has `revoke all` from.
     anonClient = _client(_url);

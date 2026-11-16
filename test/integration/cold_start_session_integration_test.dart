@@ -264,8 +264,8 @@ void main() {
 
   test('removed from the allowlist: the next start shows the stored state, '
       'then Removed (the server says not allowed), the marker is wiped, and RLS returns zero rows', () async {
-    final p = await phone('csa@sis.test');
-    final partner = await phone('csz@sis.test');
+    final p = await phone('csa@mail.test');
+    final partner = await phone('csz@mail.test');
     final chat = SupabaseChatRepository(p.client);
     await findByTag(p.client, [partner.client]);
     final conv =
@@ -283,7 +283,7 @@ void main() {
     expect(before['conversations'], greaterThan(0));
     await firstRun(p);
 
-    await offAllowlist(p, 'csa@sis.test');
+    await offAllowlist(p, 'csa@mail.test');
     final run = Run(p);
     await run.until(() => run.state is Removed, 'Removed');
     expect(
@@ -304,10 +304,10 @@ void main() {
 
   test('replaced by a second phone: the first phone\'s next start shows the '
       'stored state, then Replaced', () async {
-    final p = await phone('csb@sis.test');
+    final p = await phone('csb@mail.test');
     await firstRun(p);
 
-    final second = await phone('csb@sis.test'); // activates its own
+    final second = await phone('csb@mail.test'); // activates its own
     expect(
       second.client.auth.currentSession!.accessToken,
       isNot(p.client.auth.currentSession!.accessToken),
@@ -323,15 +323,15 @@ void main() {
 
   test('a revoked member sending in the unconfirmed window is refused by the '
       'server (messages_send), and the row never exists', () async {
-    final p = await phone('csc@sis.test');
-    final partner = await phone('csz@sis.test');
+    final p = await phone('csc@mail.test');
+    final partner = await phone('csz@mail.test');
     final chat = SupabaseChatRepository(p.client);
     await findByTag(p.client, [partner.client]);
     final conv =
         (await chat.startDirectConversation(partner.uid) as Ok<String>).value;
     await firstRun(p);
 
-    await offAllowlist(p, 'csc@sis.test');
+    await offAllowlist(p, 'csc@mail.test');
     p.line.holdChecks();
     final run = Run(p);
     await run.until(() => run.state != null, 'the first state');
@@ -351,9 +351,9 @@ void main() {
 
   test('revoked while the phone was offline: the stored state while the '
       'ladder retries, then Removed within one retry of reconnecting', () async {
-    final p = await phone('csd@sis.test');
+    final p = await phone('csd@mail.test');
     await firstRun(p);
-    await offAllowlist(p, 'csd@sis.test');
+    await offAllowlist(p, 'csd@mail.test');
 
     p.line.offline = true;
     final run = Run(p);
@@ -391,7 +391,7 @@ void main() {
 
   test('every auth session deleted (signed out by the server): the next '
       'start locks and wipes the marker', () async {
-    final p = await phone('cse@sis.test');
+    final p = await phone('cse@mail.test');
     await firstRun(p);
     await service.auth.admin.signOut(p.client.auth.currentSession!.accessToken);
     final rows = await p.client.from('messages').select('id');

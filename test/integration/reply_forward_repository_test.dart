@@ -72,9 +72,9 @@ void main() {
   late String bc;
 
   setUpAll(() async {
-    bobClient = await _signedIn('beth@sis.test');
-    annClient = await _signedIn('reid@sis.test');
-    carlClient = await _signedIn('cora@sis.test');
+    bobClient = await _signedIn('beth@mail.test');
+    annClient = await _signedIn('reid@mail.test');
+    carlClient = await _signedIn('cora@mail.test');
     ann = SupabaseChatRepository(annClient!);
     bob = SupabaseChatRepository(bobClient!);
     carl = SupabaseChatRepository(carlClient!);

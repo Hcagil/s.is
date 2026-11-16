@@ -51,7 +51,7 @@ const _key = String.fromEnvironment(
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
 const _password = 'int-pw';
-const _email = 'pax@sis.test';
+const _email = 'pax@mail.test';
 
 /// Every answer report_push_receipts gave, as sent over the wire.
 class _Wire extends http.BaseClient {

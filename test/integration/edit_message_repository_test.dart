@@ -75,9 +75,9 @@ void main() {
   late String fitzGale;
 
   setUpAll(() async {
-    edieClient = await _signedIn('edie@sis.test');
-    fitzClient = await _signedIn('fitz@sis.test');
-    galeClient = await _signedIn('gale@sis.test');
+    edieClient = await _signedIn('edie@mail.test');
+    fitzClient = await _signedIn('fitz@mail.test');
+    galeClient = await _signedIn('gale@mail.test');
     service = _client(serviceKey());
     edie = SupabaseChatRepository(edieClient!);
     fitz = SupabaseChatRepository(fitzClient!);

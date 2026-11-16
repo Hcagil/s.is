@@ -296,9 +296,9 @@ void main() {
   late String roseGroup;
 
   setUpAll(() async {
-    samClient = await _signedIn('sam@sis.test');
-    tessClient = await _signedIn('tess@sis.test');
-    roseClient = await _signedIn('rose@sis.test');
+    samClient = await _signedIn('sam@mail.test');
+    tessClient = await _signedIn('tess@mail.test');
+    roseClient = await _signedIn('rose@mail.test');
     deadClient = deadHostClient();
     rose = SupabaseChatRepository(roseClient!);
     sam = SupabaseChatRepository(samClient!);

@@ -92,8 +92,8 @@ void main() {
   late String conversationId;
 
   setUpAll(() async {
-    haleClient = await _signedIn('hale@sis.test');
-    ivoClient = await _signedIn('ivo@sis.test');
+    haleClient = await _signedIn('hale@mail.test');
+    ivoClient = await _signedIn('ivo@mail.test');
     hale = SupabaseChatRepository(haleClient!);
     haleMember = Member(
       userId: haleClient!.auth.currentUser!.id,

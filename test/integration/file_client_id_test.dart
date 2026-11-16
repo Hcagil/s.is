@@ -130,9 +130,9 @@ void main() {
   }
 
   setUpAll(() async {
-    umutClient = await _signedIn('umut@sis.test');
-    zaneClient = await _signedIn('zane@sis.test');
-    vedatClient = await _signedIn('vedat@sis.test');
+    umutClient = await _signedIn('umut@mail.test');
+    zaneClient = await _signedIn('zane@mail.test');
+    vedatClient = await _signedIn('vedat@mail.test');
     umut = SupabaseChatRepository(umutClient);
     zane = SupabaseChatRepository(zaneClient);
     umutFiles = SupabaseChatFileRepository(umutClient);

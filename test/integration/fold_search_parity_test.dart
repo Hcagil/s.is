@@ -126,7 +126,7 @@ void main() {
       _key,
       authOptions: const AuthClientOptions(authFlowType: AuthFlowType.implicit),
     );
-    const email = 'vedat@sis.test', password = 'int-pw';
+    const email = 'vedat@mail.test', password = 'int-pw';
     try {
       await client.auth.signInWithPassword(email: email, password: password);
     } on AuthException {

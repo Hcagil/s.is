@@ -71,7 +71,7 @@ void main() {
   late FakeUrlLauncherPlatform urls;
   late List<String> playCalls;
 
-  setUpAll(() async => client = await signedIn('cleo@sis.test'));
+  setUpAll(() async => client = await signedIn('cleo@mail.test'));
   tearDownAll(() => client.dispose());
 
   setUp(() {

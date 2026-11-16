@@ -66,7 +66,7 @@ void main() {
   });
 
   test('minSupportedBuild() reads the real singleton row', () async {
-    final client = await signedIn('cleo@sis.test');
+    final client = await signedIn('cleo@mail.test');
     clients.add(client);
 
     final result = await PlayUpdateRepository(client).minSupportedBuild();

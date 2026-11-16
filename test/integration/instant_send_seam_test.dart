@@ -303,8 +303,8 @@ void main() {
   late String conversationId;
 
   setUpAll(() async {
-    umutClient = await _signedIn('umut@sis.test');
-    zaneClient = await _signedIn('zane@sis.test');
+    umutClient = await _signedIn('umut@mail.test');
+    zaneClient = await _signedIn('zane@mail.test');
     umut = Member(userId: umutClient.auth.currentUser!.id, displayName: 'Umut');
     await findByTag(umutClient, [zaneClient]);
     final started = await SupabaseChatRepository(umutClient)

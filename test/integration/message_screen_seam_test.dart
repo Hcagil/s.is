@@ -158,8 +158,8 @@ void main() {
   late Directory tempRoot;
 
   setUpAll(() async {
-    waltClient = await _signedIn('walt@sis.test');
-    xenaClient = await _signedIn('xena@sis.test');
+    waltClient = await _signedIn('walt@mail.test');
+    xenaClient = await _signedIn('xena@mail.test');
     walt = SupabaseChatRepository(waltClient);
     xenaMember = Member(
       userId: xenaClient.auth.currentUser!.id,

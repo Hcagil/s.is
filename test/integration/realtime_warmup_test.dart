@@ -51,8 +51,8 @@ Future<SupabaseClient> _signedIn(String email) async {
 
 void main() {
   test('Realtime delivers a published insert', () async {
-    final ann = await _signedIn('ann@sis.test');
-    final bob = await _signedIn('bob@sis.test');
+    final ann = await _signedIn('it-ann@mail.test');
+    final bob = await _signedIn('it-bob@mail.test');
     addTearDown(() async {
       await ann.dispose();
       await bob.dispose();

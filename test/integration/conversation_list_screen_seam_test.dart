@@ -92,7 +92,7 @@ void main() {
     'a member with no connection sees the offline message, never raw SDK '
     'text, on the real conversation list',
     (t) async {
-      final live = (await t.runAsync(() => _signedIn('cleo@sis.test')))!;
+      final live = (await t.runAsync(() => _signedIn('cleo@mail.test')))!;
       addTearDown(() => live.dispose());
       // The screen must reach home: onboarding is done for this member.
       await t.runAsync(
@@ -206,7 +206,7 @@ void main() {
       WidgetTester t,
       Future<SupabaseClient> Function(SupabaseClient live) chatClient,
     ) async {
-      live = (await t.runAsync(() => _signedIn('cleo@sis.test')))!;
+      live = (await t.runAsync(() => _signedIn('cleo@mail.test')))!;
       addTearDown(() => live.dispose());
       cleoId = live.auth.currentUser!.id;
       await t.runAsync(

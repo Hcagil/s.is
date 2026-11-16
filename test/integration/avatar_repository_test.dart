@@ -183,12 +183,12 @@ void main() {
   late String aviId, beaId;
 
   setUpAll(() async {
-    avi = await _signedIn('avi@sis.test');
-    bea = await _signedIn('bea@sis.test');
-    cem = await _signedIn('cem@sis.test', over: _Faulty()) as _Faulty;
+    avi = await _signedIn('avi@mail.test');
+    bea = await _signedIn('bea@mail.test');
+    cem = await _signedIn('cem@mail.test', over: _Faulty()) as _Faulty;
     // Signs in with Google-like ease but is on no allowlist.
-    await ensureUninvitedUser(_url, 'stranger-avatars@sis.test', _password);
-    stranger = await _signedIn('stranger-avatars@sis.test', activate: false);
+    await ensureUninvitedUser(_url, 'stranger-avatars@mail.test', _password);
+    stranger = await _signedIn('stranger-avatars@mail.test', activate: false);
     anon = _client();
     aviId = avi.auth.currentUser!.id;
     beaId = bea.auth.currentUser!.id;

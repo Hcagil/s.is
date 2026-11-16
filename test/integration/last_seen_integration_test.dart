@@ -179,8 +179,8 @@ void main() {
   final extra = <SupabaseClient>[];
 
   setUpAll(() async {
-    lars = Account(await _signedIn('lars@sis.test'));
-    mona = Account(await _signedIn('mona@sis.test'));
+    lars = Account(await _signedIn('lars@mail.test'));
+    mona = Account(await _signedIn('mona@mail.test'));
     // Since v0.22.0 last seen needs reach: mona finds lars by tag (only
     // that pair; the stranger below never finds anyone).
     await findByTag(mona.client, [lars.client]);
@@ -321,10 +321,10 @@ void main() {
         await lars.presence.touchLastSeen();
         await ensureUninvitedUser(
           _url,
-          'stranger-lastseen@sis.test',
+          'stranger-lastseen@mail.test',
           _password,
         );
-        final stranger = await _signIn('stranger-lastseen@sis.test');
+        final stranger = await _signIn('stranger-lastseen@mail.test');
         extra.add(stranger);
         expect(
           await stranger.rpc('activate_session'),

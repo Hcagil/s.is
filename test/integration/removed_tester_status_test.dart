@@ -19,8 +19,8 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _allowed = 'removed-status@sis.test';
-const _stranger = 'removed-status-stranger@sis.test';
+const _allowed = 'removed-status@mail.test';
+const _stranger = 'removed-status-stranger@mail.test';
 
 typedef Phone = ({SupabaseAuthRepository repo, SupabaseClient client});
 

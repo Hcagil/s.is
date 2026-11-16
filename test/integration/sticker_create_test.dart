@@ -143,8 +143,8 @@ void main() {
 
   setUpAll(() async {
     service = _client(serviceKey());
-    priyaClient = await _signedIn('priya@sis.test');
-    quinlanClient = await _signedIn('quinlan@sis.test');
+    priyaClient = await _signedIn('priya@mail.test');
+    quinlanClient = await _signedIn('quinlan@mail.test');
     priyaId = priyaClient.auth.currentUser!.id;
     priya = SupabaseStickerRepository(priyaClient);
     quinlan = SupabaseStickerRepository(quinlanClient);

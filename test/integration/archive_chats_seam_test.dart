@@ -73,8 +73,8 @@ void main() {
       cleo.from('chat_archives').delete().eq('conversation_id', convId);
 
   setUpAll(() async {
-    cleo = await _signedIn('cleo@sis.test');
-    ann = await _signedIn('ann@sis.test');
+    cleo = await _signedIn('cleo@mail.test');
+    ann = await _signedIn('it-ann@mail.test');
     await cleo
         .from('profiles')
         .update({'onboarding_done': true})

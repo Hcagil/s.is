@@ -129,7 +129,7 @@ void main() {
 
   setUpAll(() async {
     Future<Person> p(String e) async {
-      final c = await signedIn('$e@sis.test');
+      final c = await signedIn('$e@mail.test');
       clients.add(c);
       return Person(c);
     }

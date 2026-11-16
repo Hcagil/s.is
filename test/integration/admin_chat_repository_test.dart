@@ -35,11 +35,11 @@ void main() {
     );
     try {
       await client.auth.signInWithPassword(
-        email: 'edie@sis.test',
+        email: 'edie@mail.test',
         password: _seedPw,
       );
     } on AuthException {
-      await client.auth.signUp(email: 'edie@sis.test', password: _seedPw);
+      await client.auth.signUp(email: 'edie@mail.test', password: _seedPw);
     }
     expect(await client.rpc('activate_session'), isTrue);
   });

@@ -146,8 +146,8 @@ void main() {
   late SupabaseClient denizClient, eceClient;
 
   setUpAll(() async {
-    denizClient = await _signedIn('deniz@sis.test');
-    eceClient = await _signedIn('ece@sis.test');
+    denizClient = await _signedIn('it-deniz@mail.test');
+    eceClient = await _signedIn('ece@mail.test');
     // Past onboarding, so her app opens on the list.
     await eceClient
         .from('profiles')

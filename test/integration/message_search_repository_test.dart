@@ -84,9 +84,9 @@ void main() {
   late String umutTarik;
 
   setUpAll(() async {
-    sofiClient = await _signedIn('sofi@sis.test');
-    tarikClient = await _signedIn('tarik@sis.test');
-    umutClient = await _signedIn('umut@sis.test');
+    sofiClient = await _signedIn('sofi@mail.test');
+    tarikClient = await _signedIn('tarik@mail.test');
+    umutClient = await _signedIn('umut@mail.test');
     service = _client(serviceKey());
     sofi = SupabaseChatRepository(sofiClient!);
     tarik = SupabaseChatRepository(tarikClient!);
@@ -316,7 +316,7 @@ void main() {
       // Umut is not in sofiTarik; tarik is. Tarik's own old client is what
       // app access must refuse once his second sign-in takes over.
       final oldTarik = tarikClient!;
-      final newTarikClient = await _signedIn('tarik@sis.test');
+      final newTarikClient = await _signedIn('tarik@mail.test');
       laterClients.add(newTarikClient);
       final newTarik = SupabaseChatRepository(newTarikClient);
 

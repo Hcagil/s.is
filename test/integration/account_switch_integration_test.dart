@@ -141,8 +141,8 @@ void main() {
     // jude and kara each have a conversation with lena the other is not in.
     final tags = <String, String>{};
     for (final (email, set) in [
-      ('jude@sis.test', (String id) => judeId = id),
-      ('kara@sis.test', (String id) => karaId = id),
+      ('jude@mail.test', (String id) => judeId = id),
+      ('kara@mail.test', (String id) => karaId = id),
     ]) {
       final other = await elsewhere(email);
       set(other.auth.currentUser!.id);
@@ -158,7 +158,7 @@ void main() {
       }
       await other.dispose();
     }
-    lena = await elsewhere('lena@sis.test');
+    lena = await elsewhere('lena@mail.test');
     lenaId = lena!.auth.currentUser!.id;
     for (final MapEntry(key: id, value: tag) in tags.entries) {
       await findTag(lena!, tag, id: id);
@@ -255,7 +255,7 @@ void main() {
 
   test('the second account on the phone gets its own members and '
       'conversations, and the first gets hers back', () async {
-    await signInAs('jude@sis.test', judeId);
+    await signInAs('jude@mail.test', judeId);
     // Since v0.22.0 "members" is your people: lena shares a chat with jude,
     // kara shares nothing with her.
     expect(members(), contains(lenaId));
@@ -265,7 +265,7 @@ void main() {
     expect(listed(), isNot(contains(karaWithLena)));
 
     await signOut();
-    await signInAs('kara@sis.test', karaId);
+    await signInAs('kara@mail.test', karaId);
 
     expect(
       members(),
@@ -286,7 +286,7 @@ void main() {
     expect(c.read(ownProfileProvider).requireValue.userId, karaId);
 
     await signOut();
-    await signInAs('jude@sis.test', judeId);
+    await signInAs('jude@mail.test', judeId);
     expect(members(), isNot(contains(judeId)));
     expect(members(), contains(lenaId));
     expect(members(), isNot(contains(karaId)), reason: 'still kara\'s list');

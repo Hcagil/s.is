@@ -83,9 +83,9 @@ void main() {
   late String c3; // a group of all three: ticked
 
   setUpAll(() async {
-    reidClient = await _signedIn('reid@sis.test');
-    bethClient = await _signedIn('beth@sis.test');
-    coraClient = await _signedIn('cora@sis.test');
+    reidClient = await _signedIn('reid@mail.test');
+    bethClient = await _signedIn('beth@mail.test');
+    coraClient = await _signedIn('cora@mail.test');
     reid = SupabaseChatRepository(reidClient!);
     cora = SupabaseChatRepository(coraClient!);
     reidMember = Member(

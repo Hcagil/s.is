@@ -122,9 +122,9 @@ void main() {
   }
 
   setUpAll(() async {
-    quinnClient = await _signedIn('quinn@sis.test');
-    peteClient = await _signedIn('pete@sis.test');
-    oliveClient = await _signedIn('olive@sis.test');
+    quinnClient = await _signedIn('quinn@mail.test');
+    peteClient = await _signedIn('pete@mail.test');
+    oliveClient = await _signedIn('olive@mail.test');
     olive = SupabaseChatRepository(oliveClient!);
 
     await findByTag(oliveClient!, [peteClient!, quinnClient!]);

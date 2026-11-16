@@ -195,8 +195,8 @@ void main() {
     late String conversationId;
 
     setUpAll(() async {
-      waltClient = await _signedIn('walt@sis.test');
-      xenaClient = await _signedIn('xena@sis.test');
+      waltClient = await _signedIn('walt@mail.test');
+      xenaClient = await _signedIn('xena@mail.test');
       walt = SupabaseChatRepository(waltClient);
       xena = Member(userId: _uid(xenaClient), displayName: 'Xena');
       await findByTag(waltClient, [xenaClient]);
@@ -432,7 +432,7 @@ void main() {
       late SupabaseClient eceClient;
 
       setUpAll(() async {
-        eceClient = await _signedIn('ece@sis.test');
+        eceClient = await _signedIn('ece@mail.test');
         await eceClient
             .from('profiles')
             .update({'onboarding_done': true})

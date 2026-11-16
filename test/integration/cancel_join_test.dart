@@ -133,8 +133,8 @@ void main() {
 
   setUpAll(() async {
     relay = await _Relay.start();
-    sigClient = await _signedIn('sig@sis.test');
-    rhoClient = await _signedIn('rho@sis.test', relay.url);
+    sigClient = await _signedIn('sig@mail.test');
+    rhoClient = await _signedIn('rho@mail.test', relay.url);
     await findByTag(rhoClient, [sigClient]);
     rho = SupabaseChatRepository(rhoClient);
     sig = SupabaseChatRepository(sigClient);

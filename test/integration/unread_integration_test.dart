@@ -373,9 +373,9 @@ void main() {
   late String piaOtto;
 
   setUpAll(() async {
-    unaClient = await _signedIn('una@sis.test');
-    ottoClient = await _signedIn('otto@sis.test');
-    piaClient = await _signedIn('pia@sis.test');
+    unaClient = await _signedIn('una@mail.test');
+    ottoClient = await _signedIn('otto@mail.test');
+    piaClient = await _signedIn('pia@mail.test');
     deadClient = deadHostClient();
     una = SupabaseChatRepository(unaClient!);
     otto = SupabaseChatRepository(ottoClient!);

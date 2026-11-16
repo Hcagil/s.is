@@ -152,9 +152,9 @@ void main() {
   }
 
   setUpAll(() async {
-    quill = await _signedIn('quill@sis.test');
-    rush = await _signedIn('rush@sis.test');
-    pace = await _signedIn('pace@sis.test', wire);
+    quill = await _signedIn('quill@mail.test');
+    rush = await _signedIn('rush@mail.test');
+    pace = await _signedIn('pace@mail.test', wire);
     repo = SupabaseChatRepository(pace);
     paceId = pace.auth.currentUser!.id;
     final quillId = quill.auth.currentUser!.id;

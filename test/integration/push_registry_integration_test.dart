@@ -75,7 +75,7 @@ void main() {
   final extra = <SupabaseClient>[];
 
   setUpAll(() async {
-    irisClient = await _signedIn('iris@sis.test');
+    irisClient = await _signedIn('iris@mail.test');
   });
 
   tearDown(() async {
@@ -168,9 +168,9 @@ void main() {
 
     setUpAll(() async {
       service = SupabaseClient(_url, serviceKey());
-      ione = await _signedIn('ione@sis.test');
-      ilka = await _signedIn('ilka@sis.test');
-      isak = await _signedIn('isak@sis.test');
+      ione = await _signedIn('ione@mail.test');
+      ilka = await _signedIn('ilka@mail.test');
+      isak = await _signedIn('isak@mail.test');
       await findByTag(ione, [ilka, isak]);
       final started = await SupabaseChatRepository(ione).startGroupConversation(
         title: 'ios push ${DateTime.now().microsecondsSinceEpoch}',

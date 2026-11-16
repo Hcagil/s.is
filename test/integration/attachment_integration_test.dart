@@ -165,9 +165,9 @@ void main() {
   late String conversationId;
 
   setUpAll(() async {
-    noahClient = await _signedIn('noah@sis.test');
-    miaClient = await _signedIn('mia@sis.test');
-    liamClient = await _signedIn('liam@sis.test');
+    noahClient = await _signedIn('noah@mail.test');
+    miaClient = await _signedIn('mia@mail.test');
+    liamClient = await _signedIn('liam@mail.test');
     deadClient = deadHostClient();
     liam = SupabaseChatRepository(liamClient!);
     mia = SupabaseChatRepository(miaClient!);

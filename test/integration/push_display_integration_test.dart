@@ -124,11 +124,11 @@ void main() {
 
   setUpAll(() async {
     service = SupabaseClient(_url, serviceKey());
-    final oren = await _signedIn('oren@sis.test');
+    final oren = await _signedIn('oren@mail.test');
     orenId = oren.auth.currentUser!.id;
     final orenTag = await tagOf(oren);
     await oren.dispose();
-    nell = await _signedIn('nell@sis.test');
+    nell = await _signedIn('nell@mail.test');
     expect(await nell.rpc('activate_session'), isTrue);
     await findTag(nell, orenTag, id: orenId);
     final started = await SupabaseChatRepository(nell)
@@ -164,7 +164,7 @@ void main() {
 
   test('a 0.11 build registers the way it always has and stays on regular '
       'notifications', () async {
-    final phone = await _signedIn('oren@sis.test');
+    final phone = await _signedIn('oren@mail.test');
     addTearDown(phone.dispose);
     expect(await phone.rpc('activate_session'), isTrue);
     // Verbatim the call a 0.11 build makes.
@@ -187,7 +187,7 @@ void main() {
 
   test('updating the app switches the same phone over on its next start, '
       'through the registration path main.dart mounts', () async {
-    final phone = await _signedIn('oren@sis.test');
+    final phone = await _signedIn('oren@mail.test');
     addTearDown(phone.dispose);
     final source = PushSourceFake(token: orenToken);
     final c = ProviderContainer.test(

@@ -220,9 +220,9 @@ void main() {
   final extra = <SupabaseClient>[];
 
   setUpAll(() async {
-    yara = Account(await _signedIn('yara@sis.test'));
-    zane = Account(await _signedIn('zane@sis.test'));
-    abby = Account(await _signedIn('abby@sis.test'));
+    yara = Account(await _signedIn('yara@mail.test'));
+    zane = Account(await _signedIn('zane@mail.test'));
+    abby = Account(await _signedIn('abby@mail.test'));
     await findByTag(yara.client, [zane.client]);
     final started = await SupabaseChatRepository(yara.client)
         .startDirectConversation(zane.id);
@@ -489,10 +489,10 @@ void main() {
       'stranger': () async {
         await ensureUninvitedUser(
           _url,
-          'stranger-presence@sis.test',
+          'stranger-presence@mail.test',
           _password,
         );
-        final c = await _signIn('stranger-presence@sis.test');
+        final c = await _signIn('stranger-presence@mail.test');
         expect(
           await c.rpc('activate_session'),
           isFalse,

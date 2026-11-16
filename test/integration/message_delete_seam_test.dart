@@ -97,8 +97,8 @@ void main() {
   late String conversationId;
 
   setUpAll(() async {
-    opalClient = await _signedIn('opal@sis.test');
-    russClient = await _signedIn('russ@sis.test');
+    opalClient = await _signedIn('opal@mail.test');
+    russClient = await _signedIn('russ@mail.test');
     opal = SupabaseChatRepository(opalClient!);
     opalMember = Member(
       userId: opalClient!.auth.currentUser!.id,

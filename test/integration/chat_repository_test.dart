@@ -94,8 +94,8 @@ void main() {
   setUpAll(() async {
     // Bob first: Ann activates last, but they are different users, so both
     // hold an active session at once.
-    bobClient = await signedIn('bob@sis.test');
-    annClient = await signedIn('ann@sis.test');
+    bobClient = await signedIn('it-bob@mail.test');
+    annClient = await signedIn('it-ann@mail.test');
     ann = SupabaseChatRepository(annClient!);
     bob = SupabaseChatRepository(bobClient!);
 
@@ -248,7 +248,7 @@ void main() {
     final other = _client();
     addTearDown(other.dispose);
     await other.auth.signInWithPassword(
-      email: 'bob@sis.test',
+      email: 'it-bob@mail.test',
       password: _password,
     );
     // Signing in again created a NEWER session, which has not been activated,

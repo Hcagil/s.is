@@ -114,9 +114,9 @@ void main() {
   String idOf(SupabaseClient c) => c.auth.currentUser!.id;
 
   setUpAll(() async {
-    pace = await _signedIn('pace@sis.test');
-    quill = await _signedIn('quill@sis.test');
-    rush = await _signedIn('rush@sis.test');
+    pace = await _signedIn('pace@mail.test');
+    quill = await _signedIn('quill@mail.test');
+    rush = await _signedIn('rush@mail.test');
     service = SupabaseClient(_url, serviceKey());
     // pace reaches quill and rush (stored, so a quick rerun may hit RLMT1).
     try {

@@ -69,9 +69,9 @@ void main() {
   late String chat;
 
   setUpAll(() async {
-    giaC = await _signedIn('gia@sis.test');
-    holC = await _signedIn('hol@sis.test');
-    ikeC = await _signedIn('ike@sis.test');
+    giaC = await _signedIn('gia@mail.test');
+    holC = await _signedIn('hol@mail.test');
+    ikeC = await _signedIn('ike@mail.test');
     gia = SupabaseChatRepository(giaC);
     hol = SupabaseChatRepository(holC);
     ike = SupabaseChatRepository(ikeC);

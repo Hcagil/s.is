@@ -61,7 +61,7 @@ Future<SupabaseClient> _signIn(String email) async {
 }
 
 Future<SupabaseClient> _member() async {
-  final c = await _signIn('cleo@sis.test');
+  final c = await _signIn('cleo@mail.test');
   expect(
     await c.rpc('activate_session'),
     isTrue,
@@ -71,8 +71,8 @@ Future<SupabaseClient> _member() async {
 }
 
 Future<SupabaseClient> _stranger() async {
-  await ensureUninvitedUser(_url, 'stranger-channels@sis.test', _password);
-  final c = await _signIn('stranger-channels@sis.test');
+  await ensureUninvitedUser(_url, 'stranger-channels@mail.test', _password);
+  final c = await _signIn('stranger-channels@mail.test');
   expect(
     await c.rpc('activate_session'),
     isFalse,

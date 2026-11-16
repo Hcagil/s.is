@@ -76,7 +76,7 @@ service_key() {
   "${CI[@]}" run --rm supabase status -o env | sed -n 's/^SECRET_KEY="\(.*\)"/\1/p'
 }
 
-layer_rules() { tool/check_pattern.sh && tool/check_release_clean.sh && test/tool/check_pattern_test.sh && test/tool/whats_new_note_test.sh && test/tool/ios_release_test.sh && test/tool/workflow_pipes_test.sh && test/tool/asc_signing_test.py && test/tool/ios_signing_bootstrap_test.py && test/tool/asc_tester_test.py && test/tool/vault_names_test.py && test/tool/admin_apple_workflow_test.sh && test/tool/sis_bot_watch_test.sh && test/tool/sis_bot_length_test.sh && test/tool/check_pr_body_test.py && test/tool/release_scope_test.sh && test/tool/release_kind_test.sh && test/tool/release_kind_l10n_test.sh && test/tool/workflow_quiet_test.sh && test/tool/check_release_clean_test.sh && test/tool/sis_test_send_test.sh && test/tool/private_install_db_test.sh && test/tool/ci_local_cache_test.sh && test/tool/ci_local_isolation_test.sh && test/tool/ci_local_gradle_test.sh && test/tool/check_migration_versions_test.sh && test/tool/ci_test_lists_test.sh; }
+layer_rules() { tool/check_pattern.sh && tool/check_release_clean.sh && test/tool/check_pattern_test.sh && test/tool/whats_new_note_test.sh && test/tool/ios_release_test.sh && test/tool/workflow_pipes_test.sh && test/tool/asc_signing_test.py && test/tool/ios_signing_bootstrap_test.py && test/tool/asc_tester_test.py && test/tool/vault_names_test.py && test/tool/admin_apple_workflow_test.sh && test/tool/sis_bot_watch_test.sh && test/tool/sis_bot_length_test.sh && test/tool/check_pr_body_test.py && test/tool/release_scope_test.sh && test/tool/release_kind_test.sh && test/tool/release_kind_l10n_test.sh && test/tool/workflow_quiet_test.sh && test/tool/check_release_clean_test.sh && test/tool/sis_test_send_test.sh && test/tool/private_install_db_test.sh && test/tool/ci_local_cache_test.sh && test/tool/ci_local_isolation_test.sh && test/tool/ci_local_gradle_test.sh && test/tool/check_migration_versions_test.sh && test/tool/old_app_check_test.sh && test/tool/ci_test_lists_test.sh; }
 
 bundle() {
   test -f android/app/google-services.json \
@@ -110,6 +110,11 @@ integration() {
   # The owners table holds one row: leave none for the pgTAP tests that follow, pass or fail.
   docker exec -i "$SIS_DB_CONTAINER" psql -U postgres -v ON_ERROR_STOP=1 -qAt < test/integration/fixtures/admin_view_cleanup.sql >/dev/null || rc=$?
   return "$rc"
+}
+
+# Replays the newest and the oldest allowed old app build's integration tests against this stack (tool/old_app_check.sh); it skips itself when supabase/ is unchanged against origin/main.
+old_app() {
+  OLD_APP_BASE=origin/main OLD_APP_COMPOSE="${CI[*]}" OLD_APP_DB_CONTAINER="$SIS_DB_CONTAINER" OLD_APP_RESET_CMD="${CI[*]} run --rm -T supabase db reset" tool/old_app_check.sh
 }
 
 # The private functions and their tests live outside git, in the main checkout's .private/ops (found through the git common dir, so a worktree sees them).
@@ -291,7 +296,9 @@ job_database() {
   # The integration tests run before the private pack: the registry fixture adds a stand-in panel only when none exists.
   step "Private functions and tests" private_scripts || return 1
   step "SIS Bot tool test" env SIS_BOT_TEST_COMPOSE="${CI[*]}" test/tool/sis_bot_tool_test.sh || return 1
-  step "Test sender admin tool test" env SIS_BOT_TEST_COMPOSE="${CI[*]}" test/tool/sis_test_account_admin_test.sh
+  step "Test sender admin tool test" env SIS_BOT_TEST_COMPOSE="${CI[*]}" test/tool/sis_test_account_admin_test.sh || return 1
+  # Last: the replay resets the database first (old suites expect a clean one) and leaves it dirty.
+  step "Old app builds still work" old_app
 }
 
 status=0

@@ -2,6 +2,7 @@
 # Replays .github/workflows/ci.yml locally, in Docker: the `android` and
 # `database` jobs, same steps, same order, same commands.
 # mirrors ci.yml jobs android + database; update both together.
+# The "Migration versions are unique" step runs in both jobs here (in CI it is a step of the Classify changes job).
 #
 # Not replayed: the iOS jobs (build, signed build; need macOS and Apple secrets,
 # GitHub CI only), the classify/documentation jobs, and the "Restore Firebase
@@ -75,7 +76,7 @@ service_key() {
   "${CI[@]}" run --rm supabase status -o env | sed -n 's/^SECRET_KEY="\(.*\)"/\1/p'
 }
 
-layer_rules() { tool/check_pattern.sh && tool/check_release_clean.sh && test/tool/check_pattern_test.sh && test/tool/whats_new_note_test.sh && test/tool/ios_release_test.sh && test/tool/workflow_pipes_test.sh && test/tool/asc_signing_test.py && test/tool/ios_signing_bootstrap_test.py && test/tool/asc_tester_test.py && test/tool/vault_names_test.py && test/tool/admin_apple_workflow_test.sh && test/tool/sis_bot_watch_test.sh && test/tool/sis_bot_length_test.sh && test/tool/check_pr_body_test.py && test/tool/release_scope_test.sh && test/tool/release_kind_test.sh && test/tool/release_kind_l10n_test.sh && test/tool/workflow_quiet_test.sh && test/tool/check_release_clean_test.sh && test/tool/sis_test_send_test.sh && test/tool/private_install_db_test.sh && test/tool/ci_local_cache_test.sh && test/tool/ci_local_isolation_test.sh && test/tool/ci_local_gradle_test.sh && test/tool/ci_test_lists_test.sh; }
+layer_rules() { tool/check_pattern.sh && tool/check_release_clean.sh && test/tool/check_pattern_test.sh && test/tool/whats_new_note_test.sh && test/tool/ios_release_test.sh && test/tool/workflow_pipes_test.sh && test/tool/asc_signing_test.py && test/tool/ios_signing_bootstrap_test.py && test/tool/asc_tester_test.py && test/tool/vault_names_test.py && test/tool/admin_apple_workflow_test.sh && test/tool/sis_bot_watch_test.sh && test/tool/sis_bot_length_test.sh && test/tool/check_pr_body_test.py && test/tool/release_scope_test.sh && test/tool/release_kind_test.sh && test/tool/release_kind_l10n_test.sh && test/tool/workflow_quiet_test.sh && test/tool/check_release_clean_test.sh && test/tool/sis_test_send_test.sh && test/tool/private_install_db_test.sh && test/tool/ci_local_cache_test.sh && test/tool/ci_local_isolation_test.sh && test/tool/ci_local_gradle_test.sh && test/tool/check_migration_versions_test.sh && test/tool/ci_test_lists_test.sh; }
 
 bundle() {
   test -f android/app/google-services.json \
@@ -153,6 +154,7 @@ private_hashes() {
 }
 
 job_android() {
+  step "Migration versions are unique" tool/check_migration_versions.sh || return 1
   step "Build development image" "${CI[@]}" build || return 1
   step "Resolve dependencies" "${CI[@]}" run --rm flutter flutter pub get || return 1
   step "Layer rules" layer_rules || return 1
@@ -269,6 +271,7 @@ gradle_cleanup() {
 }
 
 job_database() {
+  step "Migration versions are unique" tool/check_migration_versions.sh || return 1
   # Own project id, ports and database per run, so two worktrees can run at once; cleaned up on any exit.
   trap 'sb_cleanup; gradle_cleanup' EXIT
   trap 'sb_cleanup; gradle_cleanup; exit 130' INT TERM

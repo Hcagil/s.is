@@ -624,7 +624,7 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     final result = await ref
         .read(chatRepositoryProvider)
         .startDirectConversation(otherUserId);
-    if (result is Ok<String>) {
+    if (result is Ok<String> && ref.mounted) {
       await refresh();
     }
     return result;
@@ -638,7 +638,7 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     final result = await ref
         .read(chatRepositoryProvider)
         .startGroupConversation(title: title, memberIds: memberIds);
-    if (result is Ok<String>) {
+    if (result is Ok<String> && ref.mounted) {
       await refresh();
     }
     return result;

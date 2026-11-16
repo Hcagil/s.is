@@ -217,5 +217,36 @@ has c16b-pass "ERROR v1.0.101+101"
 grep -qF "OLD_APP_BASE=origin/main" "$repo/tool/ci_local.sh" || fail c17-base
 grep -qF "tool/old_app_check.sh" "$repo/tool/ci_local.sh" || fail c17-script
 
+# c18
+mkrepo 101 120
+run OLD_APP_MIN=500 GITHUB_STEP_SUMMARY="$tmp/sum"
+eqv c18-code "$code" 0
+eqv c18-calls "$calls" "v1.0.120+120"
+has c18-warn "WARN: no build at or above the oldest allowed build 500; only the newest is checked"
+grep -qF "WARN: no build at or above the oldest allowed build 500; only the newest is checked" "$tmp/sum" || fail c18-sum
+
+# negative
+mkrepo 101 120
+run OLD_APP_MIN=1
+[[ "$out" != *"WARN:"* ]] || fail c18-nowarn
+
+# c19
+WITH_INTEG=1 mkrepo 101 120
+cat > "$tmp/compose_fail.sh" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *"supabase status"*) echo 'SECRET_KEY="k"' ;;
+  *"flutter test"*) for i in $(seq 1 30); do echo "logline $i"; done; exit 1 ;;
+esac
+exit 0
+EOF
+chmod +x "$tmp/compose_fail.sh"
+runreal OLD_APP_MIN=1 OLD_APP_HEAD=v1.0.120+120 OLD_APP_COMPOSE="$tmp/compose_fail.sh"
+eqv c19-code "$code" 1
+has c19-fail "FAIL v1.0.101+101"
+has c19-last "logline 30"
+has c19-first-of-tail "logline 11"
+[[ "$out" != *"logline 10"$'\n'* ]] || fail c19-tail-too-long
+
 [ "$fails" -eq 0 ] || { echo "old_app_check_test: $fails failed"; exit 1; }
 echo "old_app_check_test: OK"

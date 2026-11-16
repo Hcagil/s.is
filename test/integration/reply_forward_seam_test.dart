@@ -320,6 +320,17 @@ void main() {
         () => anyTarget.evaluate().isNotEmpty,
         'the forward picker to load reid\'s conversations',
       );
+      // The open chat is a target too. It is most recent, so it is near the
+      // top; scroll up to it in case the list starts below the fold.
+      final pickerScrollable = find
+          .ancestor(of: anyTarget.first, matching: find.byType(Scrollable))
+          .first;
+      await t.scrollUntilVisible(
+        find.byKey(ValueKey('forward-$c1')),
+        -100,
+        scrollable: pickerScrollable,
+      );
+      expect(find.byKey(ValueKey('forward-$c1')), findsOneWidget);
       // The picker is a lazily built list, most recent first; c2 was emptied
       // above, so it sorts last, and every earlier run of
       // reply_forward_repository_test.dart leaves reid one more group above
@@ -331,11 +342,6 @@ void main() {
         scrollable: find
             .ancestor(of: anyTarget.first, matching: find.byType(Scrollable))
             .first,
-      );
-      expect(
-        find.byKey(ValueKey('forward-$c1'), skipOffstage: false),
-        findsOneWidget,
-        reason: 'the open chat is a target too',
       );
       // scrollUntilVisible returns with the lazily built list one frame
       // stale (rows of different heights): the row can still sit under the

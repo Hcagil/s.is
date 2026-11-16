@@ -336,6 +336,18 @@ class _ComposerState extends ConsumerState<_Composer>
                 picked.images,
                 body: picked.caption,
                 replyTo: ref.read(replyingToProvider),
+                // The cap notice says "were sent": it comes after the last one is.
+                onAllSent: picked.dropped > 0
+                    ? () {
+                        if (mounted) {
+                          showSisNotice(
+                            context,
+                            AppLocalizations.of(context).composerPhotoLimit,
+                            isError: false,
+                          );
+                        }
+                      }
+                    : null,
               );
     if (!mounted) return;
     setState(() => _sending = false);
@@ -346,13 +358,6 @@ class _ComposerState extends ConsumerState<_Composer>
           _controller.clear();
           // clear() skips onChanged: end the stored draft too.
           if (id != null) ref.read(draftsProvider.notifier).setText(id, '');
-        }
-        if (picked.dropped > 0) {
-          showSisNotice(
-            context,
-            AppLocalizations.of(context).composerPhotoLimit,
-            isError: false,
-          );
         }
       case Err(:final failure):
         showSisNotice(context, failure.message, isError: true);

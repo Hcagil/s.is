@@ -139,6 +139,7 @@ class _QueuedSend {
     required this.message,
     required this.body,
     required this.replyTo,
+    this.onSent,
     this.file,
     this.video,
     this.photo,
@@ -151,6 +152,7 @@ class _QueuedSend {
   final Message message;
   final String body;
   final Message? replyTo;
+  final void Function()? onSent;
   PickedFile? file;
   VideoSource? video;
   final QueuedPhoto? photo;
@@ -480,12 +482,13 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
     return message;
   }
 
-  /// Queues [images] (picked together) for [conversationId] like [enqueueFile] and shows every pending bubble at once. Each photo is first copied into the app's own folder (so it survives the app being killed and is sent when the network is back); when any copy fails nothing is queued and the Err says so. The caption [body] goes with the first photo only; only the first answers [replyTo]. Photos picked together become albums of at most 10 sharing one group id (a lone leftover photo stays a plain photo).
+  /// Queues [images] (picked together) for [conversationId] like [enqueueFile] and shows every pending bubble at once. Each photo is first copied into the app's own folder (so it survives the app being killed and is sent when the network is back); when any copy fails nothing is queued and the Err says so. The caption [body] goes with the first photo only; only the first answers [replyTo]. Photos picked together become albums of at most 10 sharing one group id (a lone leftover photo stays a plain photo). When given, [onAllSent] runs once after the last of these photos was stored (not after a refusal, not after an app restart).
   Future<Result<void>> enqueuePhotos(
     String conversationId,
     List<PickedImage> images, {
     String body = '',
     Message? replyTo,
+    void Function()? onAllSent,
   }) async {
     if (images.isEmpty) return const Ok(null);
     final files = ref.read(deviceFilesProvider);
@@ -520,6 +523,7 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
               ),
               body: caption,
               replyTo: reply,
+              onSent: i == images.length - 1 ? onAllSent : null,
               photo: QueuedPhoto(
                 file: PickedFile(
                   id: id,
@@ -780,6 +784,7 @@ class SendQueueController extends Notifier<Map<String, List<Message>>> {
           items.removeAt(0);
           final kept = item.photo;
           if (kept != null) _deleteKept(kept.file.path);
+          item.onSent?.call();
           progress.clear(item.message.id);
           // Published once with the stored row in place of the pending
           // bubble, so a listening MessagesController can upsert it by id

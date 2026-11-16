@@ -984,14 +984,29 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
       } on PostgrestException catch (e) {
         // The same id was stored by an earlier try whose answer was lost.
         if (e.code != '23505' || image.id == null) rethrow;
-        row = await _client
+        // Accept it as ours only if it truly is (same sender, conversation,
+        // caption, reply); the path is not compared, a retry uploads anew.
+        final stored = await _client
             .from('messages')
             .select(_messageColumns)
             .eq('id', image.id!)
-            .single();
+            .maybeSingle()
+            .retriedOnce();
+        if (stored == null ||
+            stored['sender_id'] != me ||
+            stored['conversation_id'] != conversationId ||
+            stored['body'] != body.trim() ||
+            (replyTo != null && stored['reply_to'] != replyTo)) {
+          return const Err(DeniedFailure());
+        }
+        row = stored;
       }
-      // The sender already has the photo: never download it back.
-      await _cache.write(path, image.bytes);
+      // The sender already has the photo: never download it back. Kept under
+      // the stored path (a retried send's row names its first upload).
+      await _cache.write(
+        row['attachment_path'] as String? ?? path,
+        image.bytes,
+      );
       return Ok((await _open([_toMessage(row)])).first);
     } catch (e) {
       return Err(_asFailure(e));

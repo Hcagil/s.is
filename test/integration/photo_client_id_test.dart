@@ -11,6 +11,7 @@ import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../support/delete_blocked_host.dart';
 import '../support/reach.dart';
 
 const _url = String.fromEnvironment(
@@ -319,4 +320,202 @@ void main() {
     expect(row['reply_to'], quotedA.id);
     expect(await rows(umutClient, id), hasLength(1));
   });
+
+  test(
+    'a retry whose stored row has a reply but the retry has none is refused',
+    () async {
+      final quoted = _ok(
+        await zane.send(
+          id: randomMessageId(),
+          conversationId: umutZane,
+          body: _stamp('quoted'),
+        ),
+        'quoted',
+      );
+      final id = randomMessageId();
+      final body = _stamp('reply');
+      _ok(
+        await umut.sendImage(
+          conversationId: umutZane,
+          image: _img(id),
+          body: body,
+          replyTo: quoted.id,
+        ),
+        'first',
+      );
+      final r = await umut.sendImage(
+        conversationId: umutZane,
+        image: _img(id),
+        body: body,
+      );
+      await expectDenied(r, 'retry with no reply');
+      final row = await umutClient
+          .from('messages')
+          .select('reply_to')
+          .eq('id', id)
+          .single();
+      expect(row['reply_to'], quoted.id);
+      expect(await rows(umutClient, id), hasLength(1));
+    },
+  );
+
+  test(
+    'a retry with a reply where the stored row has none is refused',
+    () async {
+      final quoted = _ok(
+        await zane.send(
+          id: randomMessageId(),
+          conversationId: umutZane,
+          body: _stamp('quoted'),
+        ),
+        'quoted',
+      );
+      final id = randomMessageId();
+      final body = _stamp('reply');
+      _ok(
+        await umut.sendImage(
+          conversationId: umutZane,
+          image: _img(id),
+          body: body,
+        ),
+        'first',
+      );
+      final r = await umut.sendImage(
+        conversationId: umutZane,
+        image: _img(id),
+        body: body,
+        replyTo: quoted.id,
+      );
+      await expectDenied(r, 'retry with reply');
+      final row = await umutClient
+          .from('messages')
+          .select('reply_to')
+          .eq('id', id)
+          .single();
+      expect(row['reply_to'], isNull);
+      expect(await rows(umutClient, id), hasLength(1));
+    },
+  );
+
+  test(
+    'a retry in the same album (same photo_group) is accepted and is one row',
+    () async {
+      final group = randomMessageId();
+      final id = randomMessageId();
+      final body = _stamp('album');
+      _ok(
+        await umut.sendImage(
+          conversationId: umutZane,
+          image: _img(id).inGroup(group),
+          body: body,
+        ),
+        'first',
+      );
+      final second = _ok(
+        await umut.sendImage(
+          conversationId: umutZane,
+          image: _img(id).inGroup(group),
+          body: body,
+        ),
+        'second',
+      );
+      expect(second.photoGroup, group);
+      expect(await rows(umutClient, id), hasLength(1));
+    },
+  );
+
+  test('a retry with another album id is refused', () async {
+    final g1 = randomMessageId();
+    final g2 = randomMessageId();
+    final id = randomMessageId();
+    final body = _stamp('album diff');
+    _ok(
+      await umut.sendImage(
+        conversationId: umutZane,
+        image: _img(id).inGroup(g1),
+        body: body,
+      ),
+      'first',
+    );
+    final r = await umut.sendImage(
+      conversationId: umutZane,
+      image: _img(id).inGroup(g2),
+      body: body,
+    );
+    await expectDenied(r, 'different album');
+    expect(await rows(umutClient, id), hasLength(1));
+  });
+
+  test('an album photo retried as a lone photo is refused', () async {
+    final group = randomMessageId();
+    final id = randomMessageId();
+    final body = _stamp('album to lone');
+    _ok(
+      await umut.sendImage(
+        conversationId: umutZane,
+        image: _img(id).inGroup(group),
+        body: body,
+      ),
+      'first',
+    );
+    final r = await umut.sendImage(
+      conversationId: umutZane,
+      image: _img(id),
+      body: body,
+    );
+    await expectDenied(r, 'album to lone');
+    expect(await rows(umutClient, id), hasLength(1));
+  });
+
+  test('a lone photo retried into an album is refused', () async {
+    final group = randomMessageId();
+    final id = randomMessageId();
+    final body = _stamp('lone to album');
+    _ok(
+      await umut.sendImage(
+        conversationId: umutZane,
+        image: _img(id),
+        body: body,
+      ),
+      'first',
+    );
+    final r = await umut.sendImage(
+      conversationId: umutZane,
+      image: _img(id).inGroup(group),
+      body: body,
+    );
+    await expectDenied(r, 'lone to album');
+    expect(await rows(umutClient, id), hasLength(1));
+  });
+
+  test(
+    'a storage remove that fails still gives Ok for an accepted retry',
+    () async {
+      final host = DeleteBlockedHost();
+      final blocked = await deleteBlockedSignedIn(umutClient, host);
+      addTearDown(blocked.dispose);
+      final repo = SupabaseChatRepository(blocked);
+      final id = randomMessageId();
+      final body = _stamp('blocked cleanup');
+      _ok(
+        await umut.sendImage(
+          conversationId: umutZane,
+          image: _img(id),
+          body: body,
+        ),
+        'first',
+      );
+      final again = _ok(
+        await repo.sendImage(
+          conversationId: umutZane,
+          image: _img(id),
+          body: body,
+        ),
+        'retry with a failing remove',
+      );
+      expect(again.id, id);
+      expect(host.deletes, isNotEmpty, reason: 'the cleanup was attempted');
+      expect(await rows(umutClient, id), hasLength(1));
+    },
+  );
 }

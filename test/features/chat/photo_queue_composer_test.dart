@@ -151,6 +151,22 @@ class _FlakyChat extends ChatFake {
   }
 }
 
+/// The second copy fails after its file exists: the file is read-only, so the write throws.
+class _HalfwayFailFiles extends DeviceFilesFake {
+  _HalfwayFailFiles(String root) : super(onDisk: true, root: root);
+  int _calls = 0;
+  @override
+  Future<String> pathFor(String messageId, String name) async {
+    final path = await super.pathFor(messageId, name);
+    if (++_calls == 2) {
+      // A regular file that exists but cannot be written: the write throws.
+      File(path).createSync();
+      Process.runSync('chmod', ['444', path]);
+    }
+    return path;
+  }
+}
+
 List<File> keptFiles(DeviceFilesFake f) {
   final dir = Directory(f.root);
   if (!dir.existsSync()) return [];
@@ -287,5 +303,43 @@ void main() {
         },
       );
     }
+
+    testWidgets(
+      'a copy that fails halfway leaves no file in the app folder (earlier copies too), queues nothing and shows the save notice',
+      (tester) async {
+        final tempdir = Directory.systemTemp.createTempSync();
+        addTearDown(() => tempdir.deleteSync(recursive: true));
+        final files = _HalfwayFailFiles(tempdir.path);
+        final chat = _FlakyChat()..online = true;
+        final picker = ExternalPickerFake()
+          ..offered = [shot(1), shot(2), shot(3)];
+        await pump(
+          tester,
+          chat,
+          galleryAt(GalleryAccess.full),
+          picker,
+          files: files,
+        );
+        await type(tester, 'cap');
+        await openSheet(tester);
+        await fromApp(tester);
+        await steps(tester, 30);
+        expect(chat.sentImages, isEmpty);
+        expect(find.byKey(const ValueKey('attachment-local')), findsNothing);
+        final left = Directory(files.root).existsSync()
+            ? Directory(files.root)
+                  .listSync(recursive: true, followLinks: false)
+                  .where((e) => e is File || e is Link)
+                  .toList()
+            : <FileSystemEntity>[];
+        expect(left, isEmpty, reason: 'no copy, whole or partial, is left');
+        final n = notices(tester);
+        expect(n, hasLength(1));
+        expect(n.single.isError, isTrue);
+        expect(n.single.message, l10nEn.failMessageSave);
+        expect(composerText(tester), 'cap');
+        await drain(tester);
+      },
+    );
   });
 }

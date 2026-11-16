@@ -34,7 +34,8 @@ import 'package:sis/features/update/application/update_controller.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../support/session_claim.dart';
-import '../support/dead_host.dart';
+import '../support/switch_host.dart';
+import '../support/temp_device_files.dart';
 import '../support/fakes.dart';
 import '../support/reach.dart';
 
@@ -236,6 +237,7 @@ void main() {
             SupabasePresenceRepository(xenaClient),
           ),
           galleryProvider.overrideWithValue(gallery),
+          deviceFilesProvider.overrideWithValue(tempDeviceFiles()),
           externalPickerProvider.overrideWithValue(picker),
           sessionControllerProvider.overrideWith(() => _SignedIn(xena)),
         ],
@@ -337,36 +339,63 @@ void main() {
       await unmount(t);
     }, timeout: const Timeout(Duration(seconds: 120)));
 
-    testWidgets('offline, the first send fails: an error notice, nothing '
-        'reaches the server, the rest are not tried', (t) async {
+    testWidgets('offline: the photos wait in the queue with no error notice, '
+        'then arrive once, the caption on the first only, when back online', (
+      t,
+    ) async {
       final before = (await t.runAsync(ids))!;
-      final dead = (await t.runAsync(() => deadButSignedIn(xenaClient)))!;
-      addTearDown(dead.dispose);
+      final host = SwitchableHost();
+      final offline = (await t.runAsync(
+        () => switchableSignedIn(xenaClient, host),
+      ))!;
+      addTearDown(offline.dispose);
+      final caption = 'queued ${DateTime.now().microsecondsSinceEpoch}';
       final picker = ExternalPickerFake()..offered = [_photo(4), _photo(5)];
-      await mount(t, dead, picker);
-
+      await mount(t, offline, picker);
+      await t.enterText(byKey('composer-field'), caption);
+      await t.pump();
       await tapWhenShown(t, 'composer-attach');
       await tapWhenShown(t, 'attach-photo');
       await tapWhenShown(t, 'sheet-from-app');
-      // What comes back is sent at once, like ticked grid photos: no preview
-      // step.
       await until(
         t,
-        () => t
-            .widgetList<SisNotice>(find.byType(SisNotice))
-            .any((n) => n.isError),
-        'an error notice',
+        () => shows(byKey('attachment-local')),
+        'a pending photo bubble',
       );
-
-      final after = (await t.runAsync(ids))!;
-      expect(after.difference(before), isEmpty);
-      expect(byKey('preview-page'), findsNothing, reason: 'a preview step');
       expect(
-        find.textContaining('Only the first'),
-        findsNothing,
-        reason: 'nothing was capped',
+        t.widgetList<SisNotice>(find.byType(SisNotice)).where((n) => n.isError),
+        isEmpty,
+        reason: 'offline photos wait, no error',
       );
+      expect(
+        (await t.runAsync(ids))!.difference(before),
+        isEmpty,
+        reason: 'nothing on the server yet',
+      );
+      host.online = true;
+      var arrived = <Message>[];
+      Future<void> poll() async {
+        final all = _ok(await walt.messages(conversationId), 'messages');
+        arrived = [
+          for (final m in all)
+            if (!before.contains(m.id)) m,
+        ]..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      }
 
+      for (var i = 0; i < 150 && arrived.length < 2; i++) {
+        await t.runAsync(poll);
+        await t.pump(const Duration(milliseconds: 200));
+      }
+      await t.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 500)),
+      );
+      await t.runAsync(poll);
+      expect(arrived, hasLength(2), reason: 'each photo arrives once');
+      expect([for (final m in arrived) m.body], [caption, '']);
+      expect(
+        t.widgetList<SisNotice>(find.byType(SisNotice)).where((n) => n.isError),
+        isEmpty,
+      );
       await unmount(t);
     }, timeout: const Timeout(Duration(seconds: 120)));
   });

@@ -964,20 +964,32 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
       await _uploadNotificationPicture(path, image.bytes);
       await _uploadSmallPicture(path, image.bytes);
 
-      final row = await _client
-          .from('messages')
-          .insert({
-            'conversation_id': conversationId,
-            'sender_id': me,
-            'body': body.trim(),
-            'attachment_path': path,
-            'reply_to': ?replyTo,
-            'photo_group': ?image.photoGroup,
-            if (image.preview case final preview?)
-              'attachment_preview': base64Encode(preview),
-          })
-          .select(_messageColumns)
-          .single();
+      Map<String, dynamic> row;
+      try {
+        row = await _client
+            .from('messages')
+            .insert({
+              'id': ?image.id,
+              'conversation_id': conversationId,
+              'sender_id': me,
+              'body': body.trim(),
+              'attachment_path': path,
+              'reply_to': ?replyTo,
+              'photo_group': ?image.photoGroup,
+              if (image.preview case final preview?)
+                'attachment_preview': base64Encode(preview),
+            })
+            .select(_messageColumns)
+            .single();
+      } on PostgrestException catch (e) {
+        // The same id was stored by an earlier try whose answer was lost.
+        if (e.code != '23505' || image.id == null) rethrow;
+        row = await _client
+            .from('messages')
+            .select(_messageColumns)
+            .eq('id', image.id!)
+            .single();
+      }
       // The sender already has the photo: never download it back.
       await _cache.write(path, image.bytes);
       return Ok((await _open([_toMessage(row)])).first);

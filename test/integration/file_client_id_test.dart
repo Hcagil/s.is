@@ -122,7 +122,10 @@ void main() {
   final tmp = Directory.systemTemp.createTempSync('file-client-id');
 
   Future<String> direct(SupabaseChatRepository a, SupabaseClient b) async {
-    final r = await a.startDirectConversation(b.auth.currentUser!.id);
+    final r = await a.startGroupConversation(
+      title: 'file ids ${DateTime.now().microsecondsSinceEpoch}',
+      memberIds: [b.auth.currentUser!.id],
+    );
     return (r as Ok<String>).value;
   }
 

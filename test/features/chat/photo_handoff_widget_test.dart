@@ -26,6 +26,7 @@ import '../../support/fakes.dart';
 import 'package:sis/l10n/app_localizations.dart';
 
 import '../../support/video_fakes.dart';
+import '../../support/temp_device_files.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya');
 
@@ -55,6 +56,7 @@ Future<ChatFake> pumpChat(WidgetTester tester) async {
       overrides: [
         ...videoOverrides(),
         chatRepositoryProvider.overrideWithValue(chat),
+        deviceFilesProvider.overrideWithValue(tempDeviceFiles()),
         presenceRepositoryProvider.overrideWithValue(PresenceFake()),
         attachmentCacheProvider.overrideWithValue(AttachmentCacheFake()),
         galleryProvider.overrideWithValue(

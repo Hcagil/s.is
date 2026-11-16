@@ -514,6 +514,7 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     _live = null;
     if (old != null) unawaited(old.cancel());
     await reloadQuietly();
+    if (!ref.mounted) return;
     final opened = await ref.read(chatRepositoryProvider).incomingAll();
     if (opened is! Ok<Stream<Message>>) return;
     if (gen != _gen || !ref.mounted) {

@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/app/sis_app.dart';
@@ -11,7 +10,6 @@ import 'package:sis/features/auth/application/session_controller.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
-import 'package:sis/features/chat/domain/group_member.dart';
 import 'package:sis/features/notifications/application/notification_settings_controller.dart';
 import 'package:sis/features/notifications/application/push_controller.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
@@ -24,9 +22,7 @@ import '../../support/chat_delete_fakes.dart';
 import '../../support/fakes.dart';
 import '../../support/group_settings_fakes.dart';
 import '../../support/pin_fakes.dart';
-import '../../support/sis_ui.dart' as ui;
 import '../../support/video_fakes.dart';
-import '../../support/l10n.dart';
 
 const config = RuntimeConfig(
   supabaseUrl: 'https://x.supabase.co',

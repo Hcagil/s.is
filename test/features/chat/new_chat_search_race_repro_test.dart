@@ -1,5 +1,6 @@
 // test/features/chat/new_chat_search_race_repro_test.dart
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,7 +19,6 @@ import 'package:sis/features/profile/domain/own_profile.dart';
 import 'package:sis/features/update/application/update_controller.dart';
 
 import '../../support/fakes.dart';
-import '../../support/sis_ui.dart';
 import '../../support/video_fakes.dart';
 
 const me = Member(userId: 'u1', displayName: 'Maya Kaya', tag: 'maya');
@@ -59,8 +59,9 @@ class RaceContacts implements ContactsRepository {
   }
 
   @override
-  Future<Result<List<ContactMatch>>> findByContacts(List<String> hashes) async =>
-      Ok(<ContactMatch>[]);
+  Future<Result<List<ContactMatch>>> findByContacts(
+    List<String> hashes,
+  ) async => Ok(<ContactMatch>[]);
 }
 
 Finder byKey(String key) => find.byKey(ValueKey(key));
@@ -96,14 +97,16 @@ Future<void> pumpApp(WidgetTester t, RaceContacts race) async {
         chatRepositoryProvider.overrideWithValue(chat),
         contactsRepositoryProvider.overrideWithValue(race),
         presenceRepositoryProvider.overrideWithValue(PresenceFake()),
-        profileRepositoryProvider.overrideWithValue(ProfileFake(
-          profile: const OwnProfile(
-            userId: 'u1',
-            displayName: 'Maya Kaya',
-            tag: 'maya',
-            onboardingDone: true,
+        profileRepositoryProvider.overrideWithValue(
+          ProfileFake(
+            profile: const OwnProfile(
+              userId: 'u1',
+              displayName: 'Maya Kaya',
+              tag: 'maya',
+              onboardingDone: true,
+            ),
           ),
-        )),
+        ),
         pushSourceProvider.overrideWithValue(PushSourceFake()),
         pushRegistryProvider.overrideWithValue(PushRegistryFake()),
       ],
@@ -142,10 +145,16 @@ void main() {
     await steps(t);
 
     // Verify only dee is shown
-    expect(byKey('find-by-tag-result-${dee.userId}'), findsOneWidget,
-        reason: 'dee result present');
-    expect(byKey('find-by-tag-result-${bob.userId}'), findsNothing,
-        reason: 'bob result absent');
+    expect(
+      byKey('find-by-tag-result-${dee.userId}'),
+      findsOneWidget,
+      reason: 'dee result present',
+    );
+    expect(
+      byKey('find-by-tag-result-${bob.userId}'),
+      findsNothing,
+      reason: 'bob result absent',
+    );
 
     // Verify field text remains 'dee'
     final field = t.widget<TextField>(byKey('find-by-tag-field'));
@@ -154,7 +163,6 @@ void main() {
     // Tap dee chat button
     await tapKey(t, 'find-by-tag-chat-${dee.userId}');
     // Verify chat opened with Dee only
-    expect(find.text('Dee Kurt'), findsWidgets,
-        reason: 'chat with Dee opened');
+    expect(find.text('Dee Kurt'), findsWidgets, reason: 'chat with Dee opened');
   });
 }

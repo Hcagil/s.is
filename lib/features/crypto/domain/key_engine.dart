@@ -1,8 +1,16 @@
 import 'key_directory.dart';
 
 /// Thrown when the engine cannot do what was asked (bad pickle, bad key). Carries no text on purpose: nothing from keys or pickles may reach logs or screens.
+/// Only engine start-up failures set [cause] (the original error, no key data) so a stale native library stays diagnosable.
 final class KeyEngineException implements Exception {
-  const KeyEngineException();
+  const KeyEngineException({this.cause, this.causeStackTrace});
+
+  final Object? cause;
+  final StackTrace? causeStackTrace;
+
+  @override
+  String toString() =>
+      cause == null ? 'KeyEngineException' : 'KeyEngineException: $cause';
 }
 
 /// One Olm account (this phone's identity and keys).

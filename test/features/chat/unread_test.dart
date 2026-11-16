@@ -72,6 +72,15 @@ ProviderContainer scope(ChatFake chat) => ProviderContainer.test(
 
 Future<void> settle() => Future<void>.delayed(const Duration(milliseconds: 20));
 
+/// Yields to the event loop (no wall-clock wait) until [ok], so a test never
+/// depends on how fast the machine is.
+Future<void> until(bool Function() ok) async {
+  for (var i = 0; i < 1000 && !ok(); i++) {
+    await Future<void>.delayed(Duration.zero);
+  }
+  expect(ok(), isTrue, reason: 'condition never became true');
+}
+
 Conversation row(ProviderContainer c, String id) =>
     c.read(conversationListProvider).requireValue.firstWhere((x) => x.id == id);
 
@@ -267,15 +276,20 @@ void main() {
         ..holdList();
       final c = scope(chat);
       c.listen(conversationListProvider, (_, _) {});
-      await settle();
-      expect(chat.calls, contains('conversations'), reason: 'read in flight');
+      // "mine" is known, the read is in flight and the live subscription is
+      // listening before anything is delivered: no wall-clock guess.
+      await c.read(sessionControllerProvider.future);
+      await until(
+        () =>
+            chat.calls.contains('conversations') && chat.liveAllListeners == 1,
+      );
 
       // After the read's snapshot: the server count in it does not include it.
       chat.deliver(msg('c2', 40));
       await settle();
       chat.releaseList();
       await c.read(conversationListProvider.future);
-      await settle();
+      await until(() => row(c, 'c2').unread == 1);
 
       expect(row(c, 'c2').unread, 1);
     });

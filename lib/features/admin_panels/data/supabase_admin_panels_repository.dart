@@ -291,6 +291,8 @@ final class SupabaseAdminPanelsRepository implements AdminPanelsRepository {
               'p_epoch': epoch,
               'p_seq': seq,
               'p_body': byteaParam(wire),
+              // Read marks have their own server limit; everything else counts as 'other'.
+              'p_kind': message['kind'] == 'read' ? 'read' : 'other',
             },
           );
           return Ok(AdminSentRef(epoch, seq));

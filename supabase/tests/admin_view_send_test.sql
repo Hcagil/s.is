@@ -1,5 +1,5 @@
 begin;
-select plan(27);
+select plan(45);
 
 -- Helper functions from template
 create or replace function test_as(uid uuid, sid text) returns void language plpgsql as $$
@@ -98,16 +98,16 @@ select is(try_exec($$select public.admin_view_send(0,50,bytes(1073))$$), 'err:22
 select is(try_exec($$select public.admin_view_send(1,10,bytes(1073))$$), 'ok:1', 'gap accepted');
 reset role;
 
--- 6. Rate 60/h
--- fill 59 calls
+-- 6. Rate 240/h (other)
+-- fill 239 calls
 delete from app_private.admin_view_calls;
 insert into app_private.admin_view_calls(user_id,kind,called_at)
-select '00000000-0000-0000-0000-0000000a1001','owner_send',now() from generate_series(1,59);
+select '00000000-0000-0000-0000-0000000a1001','owner_send',now() from generate_series(1,239);
 select as_own();
--- 60th allowed
-select is(try_exec($$select public.admin_view_send(1,11,bytes(1073))$$), 'ok:1', '60th send in the hour is allowed');
--- 61st refused
-select is(try_exec($$select public.admin_view_send(1,12,bytes(1073))$$), 'err:RLMT1', '61st send refused');
+-- 240th allowed
+select is(try_exec($$select public.admin_view_send(1,11,bytes(1073))$$), 'ok:1', '240th send in the hour is allowed');
+-- 241st refused
+select is(try_exec($$select public.admin_view_send(1,12,bytes(1073))$$), 'err:RLMT1', '241st send refused');
 reset role;
 -- old calls older than 2 hours
 delete from app_private.admin_view_calls;
@@ -127,6 +127,7 @@ reset role;
 -- 7. Capacity 200
 delete from app_private.admin_view_calls;
 delete from app_private.admin_view_items;
+update app_private.admin_view_keys set last_up_seq = 1999;
 insert into app_private.admin_view_items(dir,epoch,seq,body)
 select 'up',1,g,bytes(1073) from generate_series(1000,1199) g;
 select as_own();
@@ -135,5 +136,49 @@ reset role;
 delete from app_private.admin_view_items where seq = 1000;
 select as_own();
 select is(try_exec($$select public.admin_view_send(1,2000,bytes(1073))$$), 'ok:1', '199 up rows: accepted');
+reset role;
+
+-- 8. Kinds, bounds, compat, grants
+delete from app_private.admin_view_calls;
+delete from app_private.admin_view_items;
+update app_private.admin_view_keys set last_up_seq = 5000;
+-- 'other' at 240: reads still pass, counters independent
+insert into app_private.admin_view_calls(user_id,kind,called_at)
+select '00000000-0000-0000-0000-0000000a1001','owner_send',now() from generate_series(1,240);
+select as_own();
+select is(try_exec($$select public.admin_view_send(1,5001,bytes(1073),'other')$$), 'err:RLMT1', 'other: 241st refused');
+select is(try_exec($$select public.admin_view_send(1,5001,bytes(1073),'read')$$), 'ok:1', 'read not blocked when other is at 240');
+reset role;
+select is((select count(*)::int from app_private.admin_view_calls where kind='owner_send'), 240, 'refused other left no row');
+select is((select count(*)::int from app_private.admin_view_calls where kind='owner_read'), 1, 'read counted as owner_read');
+-- reads: 720 ok, 721st refused
+delete from app_private.admin_view_calls;
+insert into app_private.admin_view_calls(user_id,kind,called_at)
+select '00000000-0000-0000-0000-0000000a1001','owner_read',now() from generate_series(1,719);
+select as_own();
+select is(try_exec($$select public.admin_view_send(1,5002,bytes(1073),'read')$$), 'ok:1', '720th read allowed');
+select is(try_exec($$select public.admin_view_send(1,5003,bytes(1073),'read')$$), 'err:RLMT1', '721st read refused');
+reset role;
+select is((select count(*)::int from app_private.admin_view_calls where kind='owner_read'), 720, 'refused read left no row');
+-- bad kind
+delete from app_private.admin_view_calls;
+select as_own();
+select is(try_exec($$select public.admin_view_send(1,5003,bytes(1073),'bogus')$$), 'err:22023', 'bogus kind refused');
+select is(try_exec($$select public.admin_view_send(1,5003,bytes(1073),null)$$), 'err:22023', 'null kind refused');
+-- seq bound: +1000001 refused, +1000000 ok
+select is(try_exec($$select public.admin_view_send(1,1005003,bytes(1073))$$), 'err:22023', '+1000001 refused');
+reset role;
+select is((select last_up_seq from app_private.admin_view_keys), 5002::bigint, 'refused call changed nothing');
+select is((select count(*)::int from app_private.admin_view_calls), 0, 'refused bound left no call row');
+select as_own();
+select is(try_exec($$select public.admin_view_send(1,1005002,bytes(1073))$$), 'ok:1', '+1000000 accepted');
+-- backward compat: 3 named args counted as owner_send
+select is(try_exec($$select public.admin_view_send(p_epoch => 1, p_seq => 1005003, p_body => bytes(1073))$$), 'ok:1', 'named 3-arg call works');
+reset role;
+select is((select count(*)::int from app_private.admin_view_calls where kind='owner_send'), 2, 'default kind and named 3-arg both counted as owner_send');
+select is((select count(*)::int from app_private.admin_view_calls where kind='owner_read'), 0, 'no read rows from 3-arg calls');
+-- anon cannot execute
+select is(has_function_privilege('anon','public.admin_view_send(integer,bigint,bytea,text)','execute'), false, 'anon cannot execute');
+select is(has_function_privilege('authenticated','public.admin_view_send(integer,bigint,bytea,text)','execute'), true, 'authenticated can execute');
 
 select * from finish(); rollback;

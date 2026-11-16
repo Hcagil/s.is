@@ -119,8 +119,8 @@ void main() {
   }
 
   setUpAll(() async {
-    annClient = await _signedIn('fre-ann@sis.test');
-    bobClient = await _signedIn('fre-bob@sis.test');
+    annClient = await _signedIn('fre-ann@mail.test');
+    bobClient = await _signedIn('fre-bob@mail.test');
     annRepo = SupabaseChatRepository(annClient);
     bobRepo = SupabaseChatRepository(bobClient);
     annFiles = SupabaseChatFileRepository(annClient);

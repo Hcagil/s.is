@@ -198,7 +198,7 @@ insert into app_private.allowlist(email) values
   ('hank@mail.test'),
   ('it-ivy@mail.test'),
   ('jack@mail.test'),
-  ('kim@mail.test'),
+  ('it-kim@mail.test'),
   ('liam@mail.test'),
   ('mia@mail.test'),
   ('noah@mail.test'),

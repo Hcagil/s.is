@@ -102,7 +102,7 @@ void main() {
     hankClient = await signedIn('hank@mail.test');
     ivyClient = await signedIn('it-ivy@mail.test');
     jackClient = await signedIn('jack@mail.test');
-    kimClient = await signedIn('kim@mail.test');
+    kimClient = await signedIn('it-kim@mail.test');
     deadClient = deadHostClient();
     // hank invites ivy and jack; kim is never found, so she stays unreachable.
     await findByTag(hankClient!, [ivyClient!, jackClient!]);

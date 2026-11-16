@@ -1,26 +1,31 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-/// A real‑server client whose HTTP DELETE calls (Storage remove) fail,
-/// so a failing remove can be tested against the real repository.
-class DeleteBlockedHost extends http.BaseClient {
+/// A real‑server client that records every HTTP request, so a test can
+/// prove which calls a repository made.
+class RequestLogHost extends http.BaseClient {
   final http.Client _inner = http.Client();
-  final deletes = <Uri>[];
+  final requests = <http.BaseRequest>[];
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) {
-    if (request.method == 'DELETE') {
-      deletes.add(request.url);
-      throw const SocketException('storage remove blocked (test)');
-    }
+    requests.add(request);
     return _inner.send(request);
   }
 
   @override
   void close() => _inner.close();
+
+  /// Returns all non‑GET/HEAD requests to Storage endpoints.
+  List<http.BaseRequest> get storageWrites => [
+    for (final r in requests)
+      if (r.url.path.contains('/storage/v1/') &&
+          r.method != 'GET' &&
+          r.method != 'HEAD')
+        r,
+  ];
 }
 
 const _url = String.fromEnvironment(
@@ -33,9 +38,9 @@ const _key = String.fromEnvironment(
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
 
-Future<SupabaseClient> deleteBlockedSignedIn(
+Future<SupabaseClient> loggedSignedIn(
   SupabaseClient live,
-  DeleteBlockedHost host,
+  RequestLogHost host,
 ) async {
   final c = SupabaseClient(
     _url,

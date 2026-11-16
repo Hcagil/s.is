@@ -11,8 +11,9 @@ import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/domain/attachment.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../support/delete_blocked_host.dart';
 import '../support/reach.dart';
+import '../support/request_log_host.dart';
+import '../support/service_key.dart';
 
 const _url = String.fromEnvironment(
   'SUPABASE_TEST_URL',
@@ -66,6 +67,13 @@ Future<void> expectDenied(Result<Message> r, String why) async {
     isFalse,
     reason: 'a taken id is not "no connection": retrying cannot help',
   );
+}
+
+Future<Set<String>> objectNames(SupabaseClient service, String dir) async {
+  final listed = await service.storage
+      .from('attachments')
+      .list(path: dir, searchOptions: const SearchOptions(limit: 1000));
+  return {for (final f in listed) f.name};
 }
 
 void main() {
@@ -488,34 +496,75 @@ void main() {
     expect(await rows(umutClient, id), hasLength(1));
   });
 
-  test(
-    'a storage remove that fails still gives Ok for an accepted retry',
-    () async {
-      final host = DeleteBlockedHost();
-      final blocked = await deleteBlockedSignedIn(umutClient, host);
-      addTearDown(blocked.dispose);
-      final repo = SupabaseChatRepository(blocked);
-      final id = randomMessageId();
-      final body = _stamp('blocked cleanup');
-      _ok(
-        await umut.sendImage(
-          conversationId: umutZane,
-          image: _img(id),
-          body: body,
-        ),
-        'first',
-      );
-      final again = _ok(
-        await repo.sendImage(
-          conversationId: umutZane,
-          image: _img(id),
-          body: body,
-        ),
-        'retry with a failing remove',
-      );
-      expect(again.id, id);
-      expect(host.deletes, isNotEmpty, reason: 'the cleanup was attempted');
-      expect(await rows(umutClient, id), hasLength(1));
-    },
-  );
+  test('an accepted retry leaves no extra object in storage; the stored photo and its companions stay', () async {
+    final service = SupabaseClient(
+      _url,
+      serviceKey(),
+      authOptions: const AuthClientOptions(authFlowType: AuthFlowType.implicit),
+    );
+    addTearDown(service.dispose);
+    final id = randomMessageId();
+    final body = _stamp('cleanup');
+    final first = _ok(
+      await umut.sendImage(
+        conversationId: umutZane,
+        image: _img(id),
+        body: body,
+      ),
+      'first',
+    );
+    final stored = first.attachmentPath!;
+    final name = stored.substring(stored.lastIndexOf('/') + 1);
+    final before = await objectNames(service, umutZane);
+    expect(before, contains(name));
+    final again = _ok(
+      await umut.sendImage(
+        conversationId: umutZane,
+        image: _img(id),
+        body: body,
+      ),
+      'retry',
+    );
+    expect(again.attachmentPath, stored);
+    final after = await objectNames(service, umutZane);
+    expect(
+      after,
+      before,
+      reason: 'the retry left no extra object (photo, .t or .s) behind',
+    );
+    expect(after, contains(name), reason: 'the stored photo is not removed');
+    expect(after, contains('$name.s'));
+  });
+
+  test('an accepted retry makes no upload and no storage delete', () async {
+    final host = RequestLogHost();
+    final logged = await loggedSignedIn(umutClient, host);
+    addTearDown(logged.dispose);
+    final repo = SupabaseChatRepository(logged);
+    final id = randomMessageId();
+    final body = _stamp('no upload');
+    _ok(
+      await umut.sendImage(
+        conversationId: umutZane,
+        image: _img(id),
+        body: body,
+      ),
+      'first',
+    );
+    final again = _ok(
+      await repo.sendImage(
+        conversationId: umutZane,
+        image: _img(id),
+        body: body,
+      ),
+      'retry',
+    );
+    expect(again.id, id);
+    expect(
+      host.storageWrites,
+      isEmpty,
+      reason: 'no upload and no delete: the stored row is found first',
+    );
+    expect(await rows(umutClient, id), hasLength(1));
+  });
 }

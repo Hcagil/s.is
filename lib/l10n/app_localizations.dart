@@ -5389,6 +5389,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Show more'**
   String get messageReadMore;
+
+  /// No description provided for @messageReadLess.
+  ///
+  /// In en, this message translates to:
+  /// **'Show less'**
+  String get messageReadLess;
 }
 
 class _AppLocalizationsDelegate

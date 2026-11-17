@@ -3102,4 +3102,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get messageReadMore => 'Show more';
+
+  @override
+  String get messageReadLess => 'Show less';
 }

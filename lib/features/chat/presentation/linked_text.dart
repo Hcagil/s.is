@@ -30,7 +30,15 @@ class _LinkedText extends ConsumerStatefulWidget {
 class _LinkedTextState extends ConsumerState<_LinkedText> {
   bool _expanded = false;
 
-  String _cut(String t) => t.characters.take(foldMessageAfter).toString();
+  String _cut(String t) {
+    final c = t.characters;
+    final head = c.take(foldMessageAfter);
+    final next = c.skip(foldMessageAfter).first;
+    if (next.trim().isEmpty) return head.toString().trimRight();
+    final s = head.toString();
+    final i = s.lastIndexOf(RegExp(r'\s'));
+    return i <= 0 ? s : s.substring(0, i).trimRight();
+  }
 
   // One recognizer per link, disposed with the widget: a recognizer that is
   // never disposed leaks its gesture arena entry.
@@ -135,29 +143,45 @@ class _LinkedTextState extends ConsumerState<_LinkedText> {
   @override
   Widget build(BuildContext context) {
     _clear();
-    final folded = !_expanded && widget.text.length > foldMessageAfter;
-    final content = _content(folded ? _cut(widget.text) : widget.text);
-    if (!folded) return content;
-    return Column(
+    final long = widget.text.characters.length > foldMessageAfter;
+    if (!long) return _content(widget.text);
+    final style = TextButton.styleFrom(
+      padding: EdgeInsets.zero,
+      minimumSize: const Size(0, 32),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      foregroundColor: widget.linkColor,
+      textStyle: const TextStyle(fontSize: 14),
+    );
+    final l10n = AppLocalizations.of(context);
+    final body = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        content,
+        _content(_expanded ? widget.text : _cut(widget.text)),
         Align(
           alignment: Alignment.centerLeft,
           child: TextButton(
-            key: const ValueKey('read-more'),
-            onPressed: () => setState(() => _expanded = true),
-            style: TextButton.styleFrom(
-              padding: EdgeInsets.zero,
-              minimumSize: const Size(0, 32),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              foregroundColor: widget.linkColor,
+            key: ValueKey(_expanded ? 'read-less' : 'read-more'),
+            onPressed: () => setState(() => _expanded = !_expanded),
+            style: style,
+            child: Text(
+              _expanded ? l10n.messageReadLess : l10n.messageReadMore,
             ),
-            child: Text(AppLocalizations.of(context).messageReadMore),
           ),
         ),
       ],
+    );
+    // Open/close takes 200 ms; with reduced motion it is a 150 ms fade instead.
+    if (MediaQuery.disableAnimationsOf(context)) {
+      return AnimatedSwitcher(
+        duration: const Duration(milliseconds: 150),
+        child: KeyedSubtree(key: ValueKey(_expanded), child: body),
+      );
+    }
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 200),
+      alignment: Alignment.topLeft,
+      child: body,
     );
   }
 }

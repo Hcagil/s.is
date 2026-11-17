@@ -3075,4 +3075,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get messageReadMore => 'Daha fazla göster';
+
+  @override
+  String get messageReadLess => 'Daha az göster';
 }

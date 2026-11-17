@@ -62,15 +62,16 @@ class AdminQuestionCard extends StatelessWidget {
               ],
             ),
           ),
-          if (expanded) ...[
-            if (question.ctx.isNotEmpty)
-              Text(question.ctx, style: TextStyle(color: t.muted)),
-            if (waiting)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(l.adminWaiting, style: TextStyle(color: t.muted)),
-              )
-            else if (question.kind == 'action')
+          if (expanded && question.ctx.isNotEmpty)
+            Text(question.ctx, style: TextStyle(color: t.muted)),
+          // The status stays on the closed header too.
+          if (waiting)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(l.adminWaiting, style: TextStyle(color: t.muted)),
+            )
+          else if (expanded) ...[
+            if (question.kind == 'action')
               OutlinedButton(
                 key: ValueKey('admin-question-done-${question.id}'),
                 onPressed: () => onSelected(0),

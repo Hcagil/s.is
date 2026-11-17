@@ -3,10 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/controls.dart';
-import '../../../app/theme.dart';
+import '../../../app/notice.dart';
+import '../../../app/settings_row.dart';
+import '../../../core/failure.dart';
 import '../../../l10n/app_localizations.dart';
 import '../application/alert_controller.dart';
 import '../domain/alert_settings.dart';
+import './alert_choice_sheet.dart';
 
 /// Vibration and tone are Android-only: iOS lets an app choose neither.
 bool get _isAndroid => defaultTargetPlatform == TargetPlatform.android;
@@ -70,9 +73,16 @@ class AlertDefaultsSection extends ConsumerWidget {
 /// On a chat's profile page: this chat's own sound and vibration, each
 /// Default (follow the settings above), On or Off.
 class ChatAlertTiles extends ConsumerWidget {
-  const ChatAlertTiles({super.key, required this.conversationId});
+  const ChatAlertTiles({
+    super.key,
+    required this.conversationId,
+    this.muted = false,
+  });
 
   final String conversationId;
+
+  /// muted greys the rows and shows why; the saved choices stay.
+  final bool muted;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -80,74 +90,84 @@ class ChatAlertTiles extends ConsumerWidget {
     final prefs = ref.watch(alertPrefsProvider).value;
     if (prefs == null) return const SizedBox.shrink();
     final chat = prefs.chat(conversationId);
-    final controller = ref.read(alertPrefsProvider.notifier);
     return Column(
       children: [
-        _ChoiceTile(
-          tileKey: 'chat-alert-sound',
-          title: l.commonSound,
-          value: chat.sound,
-          onChanged: (v) =>
-              controller.setChat(conversationId, chat.copyWith(sound: v)),
+        Opacity(
+          opacity: muted ? 0.4 : 1,
+          child: Column(
+            children: [
+              _row(
+                context,
+                ref,
+                key: 'chat-alert-sound',
+                icon: Icons.music_note_outlined,
+                title: l.commonSound,
+                value: chat.sound,
+                onPicked: (v) => chat.copyWith(sound: v),
+              ),
+              if (_isAndroid)
+                _row(
+                  context,
+                  ref,
+                  key: 'chat-alert-vibration',
+                  icon: Icons.vibration,
+                  title: l.commonVibration,
+                  value: chat.vibration,
+                  onPicked: (v) => chat.copyWith(vibration: v),
+                ),
+            ],
+          ),
         ),
-        if (_isAndroid)
-          _ChoiceTile(
-            tileKey: 'chat-alert-vibration',
-            title: l.commonVibration,
-            value: chat.vibration,
-            onChanged: (v) =>
-                controller.setChat(conversationId, chat.copyWith(vibration: v)),
+        if (muted)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: Text(
+              _isAndroid ? l.chatMutedSoundVibrationNote : l.chatMutedSoundNote,
+              key: const ValueKey('chat-alert-muted-note'),
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
           ),
       ],
     );
   }
-}
 
-class _ChoiceTile extends StatelessWidget {
-  const _ChoiceTile({
-    required this.tileKey,
-    required this.title,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final String tileKey;
-  final String title;
-  final AlertChoice value;
-  final ValueChanged<AlertChoice> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _row(
+    BuildContext context,
+    WidgetRef ref, {
+    required String key,
+    required IconData icon,
+    required String title,
+    required AlertChoice value,
+    required ChatAlert Function(AlertChoice) onPicked,
+  }) {
     final l = AppLocalizations.of(context);
-    return Padding(
-      key: ValueKey(tileKey),
-      padding: SisTokens.settingsRowPadding,
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(title, style: Theme.of(context).textTheme.bodyLarge),
-          ),
-          DropdownButton<AlertChoice>(
-            key: ValueKey('$tileKey-choice'),
-            underline: const SizedBox.shrink(),
-            value: value,
-            items: [
-              for (final c in AlertChoice.values)
-                DropdownMenuItem(
-                  value: c,
-                  child: Text(switch (c) {
-                    AlertChoice.byDefault => l.alertChoiceDefault,
-                    AlertChoice.on => l.alertChoiceOn,
-                    AlertChoice.off => l.alertChoiceOff,
-                  }),
-                ),
-            ],
-            onChanged: (v) {
-              if (v != null) onChanged(v);
+    return SisSettingsRow(
+      key: ValueKey(key),
+      icon: icon,
+      title: title,
+      value: label(l, value),
+      onTap: muted
+          ? null
+          : () async {
+              final picked = await showAlertChoiceSheet(
+                context,
+                title: title,
+                current: value,
+              );
+              if (picked == null || picked == value) return;
+              final r = await ref
+                  .read(alertPrefsProvider.notifier)
+                  .setChat(conversationId, onPicked(picked));
+              if (r case Err(:final failure) when context.mounted) {
+                showSisNotice(context, failure.message, isError: true);
+              }
             },
-          ),
-        ],
-      ),
     );
   }
+
+  String label(AppLocalizations l, AlertChoice c) => switch (c) {
+    AlertChoice.byDefault => l.alertChoiceDefault,
+    AlertChoice.on => l.alertChoiceOn,
+    AlertChoice.off => l.alertChoiceOff,
+  };
 }

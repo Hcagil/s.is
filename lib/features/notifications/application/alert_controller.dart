@@ -38,7 +38,9 @@ final alertPrefsProvider = AsyncNotifierProvider<AlertController, AlertPrefs>(
 class AlertController extends AsyncNotifier<AlertPrefs> {
   @override
   Future<AlertPrefs> build() async {
-    ref.watch(currentUserIdProvider); // a switch of account loads that account's copy
+    ref.watch(
+      currentUserIdProvider,
+    ); // a switch of account loads that account's copy
     final store = ref.read(alertStoreProvider);
     final defaults = await store.loadDefaults();
     final chats = await store.loadChats();

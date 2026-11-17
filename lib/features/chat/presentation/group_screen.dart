@@ -134,8 +134,7 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
-                  MuteTile(kind: MuteKind.conversation, target: conversationId),
-                  ChatAlertTiles(conversationId: conversationId),
+                  ChatSettingsRow(conversationId: conversationId),
                   _GroupSettings(
                     conversationId: conversationId,
                     amAdmin: amAdmin,

@@ -912,5 +912,9 @@
   "adminReasonDeskOnly": "Bunu yalnızca bilgisayarınızın başında yanıtlayabilirsiniz.",
   "adminReasonUnknownItem": "Bu öğe artık bilgisayarınızda yok.",
   "adminReasonGeneric": "Bir hata oluştu. Tekrar deneyin.",
-  "adminDashboardStale": "Bilgisayarınızdan güncel durum gelmiyor. Bilgisayarınız kapalı veya uykuda olabilir."
+  "adminDashboardStale": "Bilgisayarınızdan güncel durum gelmiyor. Bilgisayarınız kapalı veya uykuda olabilir.",
+  "chatSettingsTitle": "Sohbet ayarları",
+  "chatMutedSoundVibrationNote": "Bu sohbet sessizdeyken ses ve titreşim kapalıdır.",
+  "chatMutedSoundNote": "Bu sohbet sessizdeyken ses kapalıdır.",
+  "alertChoiceDefaultHint": "Bildirim ayarlarınızı izler"
 }

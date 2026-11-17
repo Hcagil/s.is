@@ -93,8 +93,8 @@ class PersonScreen extends ConsumerWidget {
             if (direct != null) EncryptionRow(userId: userId, name: name),
             // Muting a person silences them in every chat, groups included.
             MuteTile(kind: MuteKind.person, target: userId),
-            // Your 1:1 with them: its own sound and vibration.
-            if (direct != null) ChatAlertTiles(conversationId: direct.id),
+            // Your 1:1 with them: mute, sound and vibration on their own page.
+            if (direct != null) ChatSettingsRow(conversationId: direct.id),
             const SizedBox(height: 12),
             const TabBar(
               tabs: [

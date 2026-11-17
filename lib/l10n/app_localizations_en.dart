@@ -3099,4 +3099,17 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get adminDashboardStale =>
       'No fresh status from your computer. It may be off or asleep.';
+
+  @override
+  String get chatSettingsTitle => 'Chat settings';
+
+  @override
+  String get chatMutedSoundVibrationNote =>
+      'Sound and vibration are off while this chat is muted.';
+
+  @override
+  String get chatMutedSoundNote => 'Sound is off while this chat is muted.';
+
+  @override
+  String get alertChoiceDefaultHint => 'Follows your notification settings';
 }

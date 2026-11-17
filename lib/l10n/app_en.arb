@@ -2026,5 +2026,13 @@
   "adminReasonGeneric": "Something went wrong. Try again.",
   "@adminReasonGeneric": {"description": "Admin panels screen text"},
   "adminDashboardStale": "No fresh status from your computer. It may be off or asleep.",
-  "@adminDashboardStale": {"description": "Admin panels screen text"}
+  "@adminDashboardStale": {"description": "Admin panels screen text"},
+  "chatSettingsTitle": "Chat settings",
+  "@chatSettingsTitle": {"description": "Title of the per-chat notification settings page"},
+  "chatMutedSoundVibrationNote": "Sound and vibration are off while this chat is muted.",
+  "@chatMutedSoundVibrationNote": {"description": "Note under the grey Sound and Vibration rows while the chat is muted (Android)"},
+  "chatMutedSoundNote": "Sound is off while this chat is muted.",
+  "@chatMutedSoundNote": {"description": "Note under the grey Sound row while the chat is muted (iPhone)"},
+  "alertChoiceDefaultHint": "Follows your notification settings",
+  "@alertChoiceDefaultHint": {"description": "Small line under the Default choice of the Sound and Vibration sheets"}
 }

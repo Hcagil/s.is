@@ -335,33 +335,36 @@ void main() {
   });
 
   group('the selection bar chat actions', () {
-    testWidgets('long-press then Select selects and lights the row; back puts the row '
-        'back', (t) async {
-      await pumpList(t);
-      final row = byKey('conversation-c2');
-      final other = byKey('conversation-c1');
-      final before = await drawn(t, row);
-      final otherBefore = await drawn(t, other);
+    testWidgets(
+      'long-press then Select selects and lights the row; back puts the row '
+      'back',
+      (t) async {
+        await pumpList(t);
+        final row = byKey('conversation-c2');
+        final other = byKey('conversation-c1');
+        final before = await drawn(t, row);
+        final otherBefore = await drawn(t, other);
 
-      await t.longPress(row);
-      await t.pumpAndSettle();
-      await t.tap(byKey('chat-menu-select'));
-      await t.pumpAndSettle();
-      expect(byKey('selection-count'), findsOneWidget);
-      // Lit = the selected row changes more than an unselected one.
-      final rowShift = shift(before, await drawn(t, row));
-      final otherShift = shift(otherBefore, await drawn(t, other));
-      expect(
-        rowShift,
-        greaterThan(otherShift),
-        reason: 'the row is not lit: row $rowShift, other $otherShift',
-      );
+        await t.longPress(row);
+        await t.pumpAndSettle();
+        await t.tap(byKey('chat-menu-select'));
+        await t.pumpAndSettle();
+        expect(byKey('selection-count'), findsOneWidget);
+        // Lit = the selected row changes more than an unselected one.
+        final rowShift = shift(before, await drawn(t, row));
+        final otherShift = shift(otherBefore, await drawn(t, other));
+        expect(
+          rowShift,
+          greaterThan(otherShift),
+          reason: 'the row is not lit: row $rowShift, other $otherShift',
+        );
 
-      await t.tap(byKey('selection-back'));
-      await t.pumpAndSettle();
-      expect(byKey('selection-count'), findsNothing);
-      expect(await drawn(t, row), before, reason: 'still lit after back');
-    });
+        await t.tap(byKey('selection-back'));
+        await t.pumpAndSettle();
+        expect(byKey('selection-count'), findsNothing);
+        expect(await drawn(t, row), before, reason: 'still lit after back');
+      },
+    );
 
     testWidgets('Mute expands to the five lengths, no Always and no Unmute; '
         'picking one mutes the conversation and the bell appears', (t) async {

@@ -457,7 +457,7 @@ class AccountScreen extends ConsumerWidget {
   }
 }
 
-/// Asks to confirm, then asks the server to delete the account in 29 days; a failure shows as a notice, backing out of the sign-in shows nothing.
+/// Asks to confirm, then asks the server to delete the account in 30 days; a failure shows as a notice, backing out of the sign-in shows nothing.
 Future<void> _deleteAccount(BuildContext context, WidgetRef ref) async {
   final l = AppLocalizations.of(context);
   final controller = ref.read(accountDeletionControllerProvider.notifier);
@@ -487,6 +487,31 @@ Future<void> _deleteAccount(BuildContext context, WidgetRef ref) async {
   if (r is Err<DateTime> && context.mounted) {
     final f = r.failure;
     if (f is ProviderFailure && f.userCanceled) return;
+    if (f is ReauthRequiredFailure) {
+      // read before the box: signing out swaps the root screen
+      final session = ref.read(sessionControllerProvider.notifier);
+      final out = await showDialog<bool>(
+        context: context,
+        builder: (d) => AlertDialog(
+          content: Text(f.message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(d).pop(false),
+              child: Text(l.settingsDeleteAccountCancel),
+            ),
+            TextButton(
+              key: const ValueKey('account-delete-sign-out'),
+              onPressed: () => Navigator.of(d).pop(true),
+              child: Text(l.settingsSignOut),
+            ),
+          ],
+        ),
+      );
+      if (out != true || !context.mounted) return;
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      await session.signOut();
+      return;
+    }
     showSisNotice(context, f.message, isError: true);
   }
 }

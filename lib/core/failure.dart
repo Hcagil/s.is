@@ -153,6 +153,14 @@ final class HiddenEmailFailure extends Failure {
   String get message => failureStrings.failAppleEmail;
 }
 
+/// The server wants a fresher sign-in before it deletes the account ('REAUTH'); the screen offers Sign out.
+final class ReauthRequiredFailure extends Failure {
+  const ReauthRequiredFailure();
+
+  @override
+  String get message => failureStrings.failDeleteAccountReauth;
+}
+
 /// A chat partner's published keys failed their signature check; no session is opened.
 final class DeviceKeysFailure extends Failure {
   const DeviceKeysFailure();

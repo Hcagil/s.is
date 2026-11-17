@@ -5399,7 +5399,7 @@ abstract class AppLocalizations {
   /// Delete account confirm dialog text
   ///
   /// In en, this message translates to:
-  /// **'You will be signed out on every phone. Your account and messages are deleted after 29 days. Sign in again before then to keep it. Other people keep the messages they already have, shown as \"Deleted account\".'**
+  /// **'You will be signed out on every phone right away. Your account will be deleted in 30 days. To keep it, sign in again before then. Until then, others see your name and messages as before. After that, your messages show the name \"Deleted account\".'**
   String get settingsDeleteAccountBody;
 
   /// Delete account confirm dialog button
@@ -5411,7 +5411,7 @@ abstract class AppLocalizations {
   /// Delete account confirm dialog button
   ///
   /// In en, this message translates to:
-  /// **'Delete'**
+  /// **'Delete my account'**
   String get settingsDeleteAccountConfirm;
 
   /// Error text shown to the member
@@ -5419,6 +5419,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Your account could not be deleted. Try again.'**
   String get failDeleteAccount;
+
+  /// Delete account text
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted account'**
+  String get deletedAccountName;
+
+  /// Delete account text
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out and sign in again, then delete your account.'**
+  String get failDeleteAccountReauth;
+
+  /// Delete account text
+  ///
+  /// In en, this message translates to:
+  /// **'Your account was not deleted. Apple sign-in could not be removed. Try again.'**
+  String get failDeleteAccountApple;
 }
 
 class _AppLocalizationsDelegate

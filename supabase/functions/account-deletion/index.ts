@@ -1,7 +1,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 /**
- * Removes accounts whose 29-day wait is over; called hourly by pg_cron through pg_net; deployed with --no-verify-jwt, the shared secret is the credential; never callable by users; never logs ids, emails or secrets.
+ * Removes accounts whose 30-day wait is over; called hourly by pg_cron through pg_net; deployed with --no-verify-jwt, the shared secret is the credential; never callable by users; never logs ids, emails or secrets.
  */
 const reply = (status: number, body: Record<string, unknown>) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });

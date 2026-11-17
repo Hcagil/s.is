@@ -38,7 +38,7 @@ class SupabaseAccountDeletionRepository implements AccountDeletionRepository {
         );
       } catch (e) {
         log('Apple revoke failed', name: 'sis.auth');
-        return Err(ProviderFailure(failureStrings.failDeleteAccount));
+        return Err(ProviderFailure(failureStrings.failDeleteAccountApple));
       }
     } else {
       final r = await _auth.signInWithGoogle();
@@ -52,12 +52,12 @@ class SupabaseAccountDeletionRepository implements AccountDeletionRepository {
       answer = await _client.rpc('request_account_deletion') as String;
     } on PostgrestException catch (e) {
       // 42501 not permitted; P0001 REAUTH or APPLE_REVOKE_REQUIRED
-      final refused =
-          e.code == '42501' ||
-          e.message == 'REAUTH' ||
-          e.message == 'APPLE_REVOKE_REQUIRED';
+      if (e.message == 'REAUTH') return const Err(ReauthRequiredFailure());
+      if (e.message == 'APPLE_REVOKE_REQUIRED') {
+        return Err(ProviderFailure(failureStrings.failDeleteAccountApple));
+      }
       return Err(
-        refused
+        e.code == '42501'
             ? ProviderFailure(failureStrings.failDeleteAccount)
             : readableFailure(e),
       );
@@ -68,6 +68,24 @@ class SupabaseAccountDeletionRepository implements AccountDeletionRepository {
     final due = DateTime.parse(answer);
     await _auth.signOut();
     return Ok(due.toLocal());
+  }
+
+  @override
+  Future<Result<Set<String>>> missingUsers(List<String> ids) async {
+    final missing = <String>{};
+    try {
+      for (var i = 0; i < ids.length; i += 200) {
+        final end = i + 200 > ids.length ? ids.length : i + 200;
+        final answer = await _client.rpc(
+          'missing_users',
+          params: {'ids': ids.sublist(i, end)},
+        );
+        missing.addAll((answer as List).cast<String>());
+      }
+    } catch (e) {
+      return Err(readableFailure(e));
+    }
+    return Ok(missing);
   }
 
   /// Signs in with Apple again (a fresh session) and returns the one-time authorization code Apple's revoke needs.

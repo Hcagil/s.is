@@ -19,6 +19,7 @@ import '../../../l10n/app_localizations.dart';
 import '../domain/encrypted_message_repository.dart';
 import '../../appearance/presentation/chat_text_scale.dart';
 import '../../appearance/presentation/chat_wallpaper.dart';
+import '../../auth/application/deleted_users_controller.dart';
 import '../../auth/application/session_controller.dart';
 import '../application/staff_registry_controller.dart';
 import '../../auth/domain/session_state.dart';
@@ -634,6 +635,27 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
         ),
       if (!isGroup && otherUserId != null && title != null) otherUserId: title,
     };
+    // A sender the roster cannot name may be an account that no longer exists: ask the server once per id.
+    final deletedIds = ref.watch(deletedUsersControllerProvider);
+    final unnamed = {
+      for (final m in messages.value ?? const <Message>[])
+        if (isGroup &&
+            m.senderId != myMember?.userId &&
+            !names.containsKey(m.senderId))
+          m.senderId,
+    };
+    if (unnamed.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ref.read(deletedUsersControllerProvider.notifier).check(unnamed);
+        }
+      });
+    }
+    String nameFor(String id) =>
+        names[id] ??
+        (deletedIds.contains(id)
+            ? AppLocalizations.of(context).deletedAccountName
+            : AppLocalizations.of(context).commonMember);
     final departedSenderIds = {
       for (final m in roster)
         if (m.hasLeft) m.member.userId,
@@ -1002,9 +1024,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                             isGroup &&
                                                 !mine &&
                                                 startsRun(value, index)
-                                            ? (names[message.senderId] ??
-                                                  AppLocalizations.of(context)
-                                                      .commonMember)
+                                            ? nameFor(message.senderId)
                                             : null,
                                         senderLeft: departedSenderIds.contains(
                                           message.senderId,
@@ -1017,9 +1037,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                             : quoted.senderId == me
                                             ? AppLocalizations.of(context)
                                                   .commonYou
-                                            : (names[quoted.senderId] ??
-                                                  AppLocalizations.of(context)
-                                                      .commonMember),
+                                            : nameFor(quoted.senderId),
                                         highlightQuery: searchQuery,
                                         isCurrentHit:
                                             message.id == currentHitId,

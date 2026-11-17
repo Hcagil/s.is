@@ -6,4 +6,7 @@ abstract interface class AccountDeletionRepository {
   /// `Ok` holds the day the account will be removed; the person is signed out everywhere and this phone forgets the session.
   /// An [Err] with a [ProviderFailure] whose `userCanceled` is true means the person backed out of the sign-in.
   Future<Result<DateTime>> requestDeletion();
+
+  /// Of [ids] (any number; asked 200 at a time), the ones whose account no longer exists on the server.
+  Future<Result<Set<String>>> missingUsers(List<String> ids);
 }

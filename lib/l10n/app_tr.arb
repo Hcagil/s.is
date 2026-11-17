@@ -914,9 +914,12 @@
   "adminReasonGeneric": "Bir hata oluştu. Tekrar deneyin.",
   "adminDashboardStale": "Bilgisayarınızdan güncel durum gelmiyor. Bilgisayarınız kapalı veya uykuda olabilir.",
   "settingsDeleteAccount": "Hesabımı sil",
-  "settingsDeleteAccountTitle": "Hesabın silinsin mi?",
-  "settingsDeleteAccountBody": "Tüm telefonlardan çıkış yapılır. Hesabın ve mesajların 29 gün sonra silinir. Bu süre dolmadan tekrar giriş yaparsan hesabın silinmez. Başkalarında kalan mesajların \"Silinmiş hesap\" olarak görünür.",
-  "settingsDeleteAccountCancel": "Vazgeç",
-  "settingsDeleteAccountConfirm": "Sil",
-  "failDeleteAccount": "Hesabın silinemedi. Tekrar dene."
+  "settingsDeleteAccountTitle": "Hesabınız silinsin mi?",
+  "settingsDeleteAccountBody": "Tüm telefonlarda oturumunuz hemen kapanır. Hesabınız 30 gün sonra silinir. Hesabınızı korumak için bu süre dolmadan yeniden oturum açın. O zamana kadar başkaları adınızı ve mesajlarınızı eskisi gibi görür. Sonrasında mesajlarınız \"Silinmiş hesap\" adıyla görünür.",
+  "settingsDeleteAccountCancel": "İptal et",
+  "settingsDeleteAccountConfirm": "Hesabımı sil",
+  "failDeleteAccount": "Hesabınız silinemedi. Tekrar deneyin.",
+  "deletedAccountName": "Silinmiş hesap",
+  "failDeleteAccountReauth": "Oturumu kapatıp yeniden açın, sonra hesabınızı silin.",
+  "failDeleteAccountApple": "Hesabınız silinmedi. Apple ile oturum açma kaldırılamadı. Tekrar deneyin."
 }

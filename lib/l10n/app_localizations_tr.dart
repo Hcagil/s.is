@@ -3077,18 +3077,29 @@ class AppLocalizationsTr extends AppLocalizations {
   String get settingsDeleteAccount => 'Hesabımı sil';
 
   @override
-  String get settingsDeleteAccountTitle => 'Hesabın silinsin mi?';
+  String get settingsDeleteAccountTitle => 'Hesabınız silinsin mi?';
 
   @override
   String get settingsDeleteAccountBody =>
-      'Tüm telefonlardan çıkış yapılır. Hesabın ve mesajların 29 gün sonra silinir. Bu süre dolmadan tekrar giriş yaparsan hesabın silinmez. Başkalarında kalan mesajların \"Silinmiş hesap\" olarak görünür.';
+      'Tüm telefonlarda oturumunuz hemen kapanır. Hesabınız 30 gün sonra silinir. Hesabınızı korumak için bu süre dolmadan yeniden oturum açın. O zamana kadar başkaları adınızı ve mesajlarınızı eskisi gibi görür. Sonrasında mesajlarınız \"Silinmiş hesap\" adıyla görünür.';
 
   @override
-  String get settingsDeleteAccountCancel => 'Vazgeç';
+  String get settingsDeleteAccountCancel => 'İptal et';
 
   @override
-  String get settingsDeleteAccountConfirm => 'Sil';
+  String get settingsDeleteAccountConfirm => 'Hesabımı sil';
 
   @override
-  String get failDeleteAccount => 'Hesabın silinemedi. Tekrar dene.';
+  String get failDeleteAccount => 'Hesabınız silinemedi. Tekrar deneyin.';
+
+  @override
+  String get deletedAccountName => 'Silinmiş hesap';
+
+  @override
+  String get failDeleteAccountReauth =>
+      'Oturumu kapatıp yeniden açın, sonra hesabınızı silin.';
+
+  @override
+  String get failDeleteAccountApple =>
+      'Hesabınız silinmedi. Apple ile oturum açma kaldırılamadı. Tekrar deneyin.';
 }

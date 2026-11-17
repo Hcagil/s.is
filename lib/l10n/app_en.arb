@@ -2031,12 +2031,18 @@
   "@settingsDeleteAccount": {"description": "Account settings button"},
   "settingsDeleteAccountTitle": "Delete your account?",
   "@settingsDeleteAccountTitle": {"description": "Delete account confirm dialog title"},
-  "settingsDeleteAccountBody": "You will be signed out on every phone. Your account and messages are deleted after 29 days. Sign in again before then to keep it. Other people keep the messages they already have, shown as \"Deleted account\".",
+  "settingsDeleteAccountBody": "You will be signed out on every phone right away. Your account will be deleted in 30 days. To keep it, sign in again before then. Until then, others see your name and messages as before. After that, your messages show the name \"Deleted account\".",
   "@settingsDeleteAccountBody": {"description": "Delete account confirm dialog text"},
   "settingsDeleteAccountCancel": "Cancel",
   "@settingsDeleteAccountCancel": {"description": "Delete account confirm dialog button"},
-  "settingsDeleteAccountConfirm": "Delete",
+  "settingsDeleteAccountConfirm": "Delete my account",
   "@settingsDeleteAccountConfirm": {"description": "Delete account confirm dialog button"},
   "failDeleteAccount": "Your account could not be deleted. Try again.",
-  "@failDeleteAccount": {"description": "Error text shown to the member"}
+  "@failDeleteAccount": {"description": "Error text shown to the member"},
+  "deletedAccountName": "Deleted account",
+  "@deletedAccountName": {"description": "Delete account text"},
+  "failDeleteAccountReauth": "Sign out and sign in again, then delete your account.",
+  "@failDeleteAccountReauth": {"description": "Delete account text"},
+  "failDeleteAccountApple": "Your account was not deleted. Apple sign-in could not be removed. Try again.",
+  "@failDeleteAccountApple": {"description": "Delete account text"}
 }

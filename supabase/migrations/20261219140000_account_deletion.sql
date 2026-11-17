@@ -70,7 +70,7 @@ $$;
 revoke all on function app_private.cancel_account_deletion(uuid) from public, anon, authenticated;
 
 -- Errors: 42501 not permitted (also owner, bot, bridge and staff accounts), P0001 'REAUTH' (sign-in older than 10 minutes), P0001 'APPLE_REVOKE_REQUIRED'.
--- Returns when the account will be removed (29 days). Idempotent while pending.
+-- Returns when the account will be removed (30 days minus 1 hour, so the hourly job ends inside 30 days). Idempotent while pending.
 create function public.request_account_deletion() returns timestamptz language plpgsql volatile security definer set search_path = ''
 as $$
 #variable_conflict use_column
@@ -102,7 +102,7 @@ begin
      and not exists (select 1 from app_private.apple_revocations r where r.user_id = uid and r.revoked_at > now() - interval '10 minutes') then
     raise exception 'APPLE_REVOKE_REQUIRED' using errcode = 'P0001';
   end if;
-  due := now() + interval '29 days';
+  due := now() + interval '30 days' - interval '1 hour';
   select email into addr from auth.users where id = uid;
   insert into app_private.account_deletions(user_id, due_at) values (uid, due) returning request_id into rid;
   insert into app_private.account_deletion_log(request_id, email_hmac, requested_at, due_at, channel, outcome)
@@ -325,7 +325,7 @@ declare
 begin
   -- a deletion whose row is gone and which was not cancelled finished, even if the edge function died before reporting
   update app_private.account_deletion_log l set outcome = 'done', done_at = now()
-   where l.outcome = 'pending' and l.due_at < now() - interval '1 day'
+   where l.outcome = 'pending'
      and not exists (select 1 from app_private.account_deletions d where d.request_id = l.request_id);
   select decrypted_secret into url from vault.decrypted_secrets where name in ('account_deletion_url');
   select decrypted_secret into secret from vault.decrypted_secrets where name in ('account_deletion_secret');
@@ -357,7 +357,7 @@ as $$
 $$;
 revoke all on function app_private.purge_account_deletion_log() from public, anon, authenticated;
 
--- hourly: ask the edge function to remove accounts whose 29 days are over
+-- hourly: ask the edge function to remove accounts whose wait (30 days minus 1 hour) is over
 select cron.schedule('account-deletion', '7 * * * *', 'select app_private.run_account_deletion()');
 -- 03:23 every day: drop deletion records older than 3 years
 select cron.schedule('account-deletion-log-purge', '23 3 * * *', 'select app_private.purge_account_deletion_log()');

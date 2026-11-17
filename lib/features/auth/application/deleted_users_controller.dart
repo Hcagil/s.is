@@ -12,6 +12,19 @@ class DeletedUsersController extends Notifier<Set<String>> {
   @override
   Set<String> build() => const {};
 
+  /// Of [ids], the ones whose stored messages must stay on this phone: accounts reported deleted, and ids with no server answer yet (a failed or missing answer never deletes anything).
+  Future<Set<String>> keepable(Set<String> ids) async {
+    try {
+      await check(ids);
+    } catch (_) {
+      return ids;
+    }
+    return {
+      for (final id in ids)
+        if (state.contains(id) || !_answered.contains(id)) id,
+    };
+  }
+
   /// Asks the server about [ids] not asked before (200 per call, done by the repository); adds the ones reported missing to the state.
   Future<void> check(Iterable<String> ids) async {
     final now = DateTime.now();

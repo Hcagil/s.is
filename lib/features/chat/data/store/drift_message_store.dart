@@ -27,7 +27,11 @@ final class DriftMessageStore
     required this._key,
     required this._deleteKey,
     this.interceptor,
+    this.keepSenders,
   });
+
+  /// Asked by [reconcilePage] which senders of the rows the server no longer returns keep their stored rows (accounts deleted on the server, or no answer yet); null keeps nothing.
+  final Future<Set<String>> Function(Set<String> senderIds)? keepSenders;
   final String ownerId;
   final Future<File> Function() _file;
   final Future<String> Function() _key;
@@ -475,103 +479,133 @@ final class DriftMessageStore
     String conversationId,
     List<Message> page, {
     required bool reachedStart,
-  }) => _write(
-    (db) => db.transaction(() async {
-      final ids = [for (final m in page) m.id];
-      // Held = the chat ever held a locked text: the page or a stored row is a placeholder, or its held meta mark is set.
-      final held =
-          page.any((m) => isLockedPlaceholder(m.body)) ||
-          await (db.select(db.meta)
-                    ..where((m) => m.key.equals(heldMetaKey(conversationId))))
-                  .getSingleOrNull() !=
-              null ||
-          await (db.select(db.messages)
-                    ..where(
-                      (t) =>
-                          t.conversationId.equals(conversationId) &
-                          t.body.equals(lockedBodyPlaceholder),
-                    )
-                    ..limit(1))
-                  .getSingleOrNull() !=
-              null;
-      final oldest = page.isEmpty
-          ? null
-          : page.first.createdAt.microsecondsSinceEpoch;
-      final pageNewest = page.isEmpty
-          ? null
-          : page.last.createdAt.microsecondsSinceEpoch;
-      // Stored rows the server no longer returns for the range this page covers (never newer than its pageNewest row); a held chat keeps its placeholders.
-      await (db.delete(db.messages)..where((t) {
-            final stale =
-                t.conversationId.equals(conversationId) &
-                t.id.isNotIn(ids) &
-                (held
-                    ? t.body.equals(lockedBodyPlaceholder).not()
-                    : const Constant(true));
-            // An empty page covers no range: it deletes all only as the server's "chat is empty" (reachedStart).
-            if (pageNewest == null) {
-              return reachedStart ? stale : const Constant(false);
-            }
-            final upTo = stale & t.createdAt.isSmallerOrEqualValue(pageNewest);
-            return reachedStart
-                ? upTo
-                : upTo & t.createdAt.isBiggerOrEqualValue(oldest!);
-          }))
-          .go();
-      for (final m in page) {
-        // one upsert per row, same as upsertAll
-        final writable = await _writable(db, [m]);
-        if (writable.isEmpty) continue;
-        final c = writable.first;
-        await db.into(db.messages).insert(c, onConflict: _upsertClause(c));
-      }
-      if (oldest == null) {
-        if (reachedStart && !held) {
-          await db
-              .into(db.syncStates)
-              .insertOnConflictUpdate(
-                SyncStatesCompanion.insert(
-                  conversationId: conversationId,
-                  complete: const Value(true),
-                ),
-              );
+  }) async {
+    // Senders whose stored rows must stay (deleted accounts, or not answered yet): asked BEFORE the write, so no network wait holds the write queue.
+    var keep = const <String>{};
+    final ask = keepSenders;
+    if (ask != null) {
+      final pageIds = [for (final m in page) m.id];
+      final senders = await _run<Set<String>>(const {}, (db) async {
+        final rows =
+            await (db.selectOnly(db.messages, distinct: true)
+                  ..addColumns([db.messages.senderId])
+                  ..where(
+                    db.messages.conversationId.equals(conversationId) &
+                        db.messages.id.isNotIn(pageIds),
+                  ))
+                .get();
+        return {for (final r in rows) r.read(db.messages.senderId)!};
+      });
+      if (senders.isNotEmpty) {
+        try {
+          keep = await ask(senders);
+        } catch (_) {
+          keep = senders; // never delete on a failed check
         }
-        return;
       }
-      final newest = page.last.createdAt.microsecondsSinceEpoch;
-      final prev =
-          await (db.select(db.syncStates)
-                ..where((t) => t.conversationId.equals(conversationId)))
-              .getSingleOrNull();
-      // The old contiguous block still joins this page when it reaches up to the page's oldest row.
-      final joined =
-          prev != null &&
-          prev.newestAt != null &&
-          prev.contiguousFrom != null &&
-          prev.newestAt! >= oldest;
-      // A held chat never lifts contiguousFrom or completeness from a page the server may have cut short.
-      final from = held
-          ? (prev?.contiguousFrom == null
-                ? oldest
-                : math.min(prev!.contiguousFrom!, oldest))
-          : (reachedStart
-                ? oldest
-                : (joined ? math.min(prev.contiguousFrom!, oldest) : oldest));
-      final complete = held
-          ? (prev?.complete ?? false)
-          : (reachedStart || (joined && prev.complete));
-      await db
-          .into(db.syncStates)
-          .insertOnConflictUpdate(
-            SyncStatesCompanion.insert(
-              conversationId: conversationId,
-              newestAt: Value(newest),
-              contiguousFrom: Value(from),
-              complete: Value(complete),
-            ),
-          );
-    }),
-  );
+    }
+    await _write(
+      (db) => db.transaction(() async {
+        final ids = [for (final m in page) m.id];
+        // Held = the chat ever held a locked text: the page or a stored row is a placeholder, or its held meta mark is set.
+        final held =
+            page.any((m) => isLockedPlaceholder(m.body)) ||
+            await (db.select(db.meta)
+                      ..where((m) => m.key.equals(heldMetaKey(conversationId))))
+                    .getSingleOrNull() !=
+                null ||
+            await (db.select(db.messages)
+                      ..where(
+                        (t) =>
+                            t.conversationId.equals(conversationId) &
+                            t.body.equals(lockedBodyPlaceholder),
+                      )
+                      ..limit(1))
+                    .getSingleOrNull() !=
+                null;
+        final oldest = page.isEmpty
+            ? null
+            : page.first.createdAt.microsecondsSinceEpoch;
+        final pageNewest = page.isEmpty
+            ? null
+            : page.last.createdAt.microsecondsSinceEpoch;
+        // Stored rows the server no longer returns for the range this page covers (never newer than its pageNewest row); a held chat keeps its placeholders.
+        await (db.delete(db.messages)..where((t) {
+              final stale =
+                  t.conversationId.equals(conversationId) &
+                  t.id.isNotIn(ids) &
+                  (keep.isEmpty
+                      ? const Constant(true)
+                      : t.senderId.isIn(keep).not()) &
+                  (held
+                      ? t.body.equals(lockedBodyPlaceholder).not()
+                      : const Constant(true));
+              // An empty page covers no range: it deletes all only as the server's "chat is empty" (reachedStart).
+              if (pageNewest == null) {
+                return reachedStart ? stale : const Constant(false);
+              }
+              final upTo =
+                  stale & t.createdAt.isSmallerOrEqualValue(pageNewest);
+              return reachedStart
+                  ? upTo
+                  : upTo & t.createdAt.isBiggerOrEqualValue(oldest!);
+            }))
+            .go();
+        for (final m in page) {
+          // one upsert per row, same as upsertAll
+          final writable = await _writable(db, [m]);
+          if (writable.isEmpty) continue;
+          final c = writable.first;
+          await db.into(db.messages).insert(c, onConflict: _upsertClause(c));
+        }
+        if (oldest == null) {
+          if (reachedStart && !held) {
+            await db
+                .into(db.syncStates)
+                .insertOnConflictUpdate(
+                  SyncStatesCompanion.insert(
+                    conversationId: conversationId,
+                    complete: const Value(true),
+                  ),
+                );
+          }
+          return;
+        }
+        final newest = page.last.createdAt.microsecondsSinceEpoch;
+        final prev =
+            await (db.select(db.syncStates)
+                  ..where((t) => t.conversationId.equals(conversationId)))
+                .getSingleOrNull();
+        // The old contiguous block still joins this page when it reaches up to the page's oldest row.
+        final joined =
+            prev != null &&
+            prev.newestAt != null &&
+            prev.contiguousFrom != null &&
+            prev.newestAt! >= oldest;
+        // A held chat never lifts contiguousFrom or completeness from a page the server may have cut short.
+        final from = held
+            ? (prev?.contiguousFrom == null
+                  ? oldest
+                  : math.min(prev!.contiguousFrom!, oldest))
+            : (reachedStart
+                  ? oldest
+                  : (joined ? math.min(prev.contiguousFrom!, oldest) : oldest));
+        final complete = held
+            ? (prev?.complete ?? false)
+            : (reachedStart || (joined && prev.complete));
+        await db
+            .into(db.syncStates)
+            .insertOnConflictUpdate(
+              SyncStatesCompanion.insert(
+                conversationId: conversationId,
+                newestAt: Value(newest),
+                contiguousFrom: Value(from),
+                complete: Value(complete),
+              ),
+            );
+      }),
+    );
+  }
 
   /// Older page from the background fill: lowers contiguousFrom only.
   @override

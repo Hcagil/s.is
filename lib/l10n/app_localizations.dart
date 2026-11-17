@@ -236,18 +236,6 @@ abstract class AppLocalizations {
   /// **'Great, I\'ll bring the cake'**
   String get previewMine;
 
-  /// Switch title
-  ///
-  /// In en, this message translates to:
-  /// **'Use the phone\'s own font'**
-  String get textSystemFont;
-
-  /// Switch subtitle
-  ///
-  /// In en, this message translates to:
-  /// **'Uses your phone\'s font. When off, SIS uses its own font.'**
-  String get textSystemFontHint;
-
   /// Section label
   ///
   /// In en, this message translates to:

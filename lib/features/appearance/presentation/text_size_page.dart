@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/controls.dart';
 import '../../../app/theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../application/appearance_controller.dart';
@@ -23,13 +22,6 @@ class TextSizePage extends ConsumerWidget {
       body: SafeArea(
         child: ListView(
           children: [
-            SisSwitchTile(
-              key: const ValueKey('text-system-font'),
-              title: l.textSystemFont,
-              subtitle: l.textSystemFontHint,
-              value: look.systemFont,
-              onChanged: notifier.setSystemFont,
-            ),
             _Label(l.textChatSize),
             const ChatPreview(),
             Padding(

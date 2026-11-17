@@ -1,5 +1,5 @@
 begin;
-select plan(27);
+select plan(30);
 
 -- fixtures
 insert into auth.users(id,email,email_confirmed_at)
@@ -233,6 +233,47 @@ select is(
    from public.messages where id = (select id from rid)),
   300,
   'real path: stored JSON still holds all 300 testers'
+);
+
+-- supabase/tests/zz_partD.sql
+
+CREATE OR REPLACE FUNCTION bad_list(i int, a int, o int, pad int)
+RETURNS boolean
+LANGUAGE sql
+AS $$
+  WITH s AS (
+    SELECT b(pl(i, a, o, pad)) AS t
+  )
+  SELECT
+    char_length(t) > 4000
+    OR t LIKE '%… and 0 more%'
+    OR (t ~ '… and \d+ more$' AND
+        (regexp_match(t, '… and (\d+) more$'))[1]::int + kept(t) <> i + a + o)
+    OR t NOT LIKE '%iPhone (' || i || ')%'
+    OR t NOT LIKE '%Android (' || a || ')%'
+    OR (o > 0 AND t NOT LIKE '%Other (' || o || ')%')
+  FROM s;
+$$;
+
+SELECT is(
+  (SELECT COUNT(*)::int FROM generate_series(3900,4100) p
+   WHERE bad_list(100,0,0,p)),
+  0,
+  'heading-only overflow (iPhone list, Android empty): no heading cut, no "and 0 more"'
+);
+
+SELECT is(
+  (SELECT COUNT(*)::int FROM generate_series(190,240) n
+   WHERE bad_list(n,0,0,0)),
+  0,
+  'iPhone lists near the limit keep headings, never say "and 0 more"'
+);
+
+SELECT is(
+  (SELECT COUNT(*)::int FROM generate_series(150,215) n
+   WHERE bad_list(n,0,3,0)),
+  0,
+  'with an Other group: every cut body keeps all three headings and N >= 1'
 );
 
 select * from finish();

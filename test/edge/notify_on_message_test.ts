@@ -274,6 +274,8 @@ Deno.test({
           // The message itself, so the phone's push receipt can be matched
           // to it on the server.
           message_id: messageId,
+          // Who wrote it, so the phone can save the line as a message.
+          sender_id: sender.id,
           // 0.30.6: a group message names its sender and the group apart,
           // on both Android shapes.
           sender: target.sender,
@@ -428,6 +430,8 @@ Deno.test({
           badge: String(badges[x.id]),
           user_id: x.id,
           message_id: messageId,
+          // Only with the real text (preview full): nothing wrong can be saved.
+          ...(x === p.iossender || x === p.iosnone ? {} : { sender_id: sender.id }),
           conversation_id: conversationId,
           title: t.title,
           body: t.body,
@@ -584,18 +588,104 @@ Deno.test({
         assertEquals(Object.keys(m).sort(), ['android', 'data', 'token'], `data only: ${JSON.stringify(m)}`);
         return m;
       };
-      const ids = (x: typeof p.ann, conversation: string, message: string) =>
-        ({ conversation_id: conversation, user_id: x.id, message_id: message });
+      const ids = (x: typeof p.ann, conversation: string, message: string, full = true) =>
+        ({ conversation_id: conversation, user_id: x.id, message_id: message, ...(full ? { sender_id: p.ann.id } : {}) });
       assertEquals(placeholders(onlyTo(g.sent, p.gfull), ids(p.gfull, group, g.id)), fixture.group_full,
         'group, preview full');
-      assertEquals(placeholders(onlyTo(g.sent, p.gsender), ids(p.gsender, group, g.id)), fixture.group_sender,
+      assertEquals(placeholders(onlyTo(g.sent, p.gsender), ids(p.gsender, group, g.id, false)), fixture.group_sender,
         'group, preview sender');
-      assertEquals(placeholders(onlyTo(g.sent, p.gnone), ids(p.gnone, group, g.id)), fixture.group_none,
+      assertEquals(placeholders(onlyTo(g.sent, p.gnone), ids(p.gnone, group, g.id, false)), fixture.group_none,
         'group, preview none: no sender, no chat');
       const direct1 = placeholders(onlyTo(d.sent, p.dfull), ids(p.dfull, direct, d.id));
       assertEquals(direct1, fixture.direct_full, '1:1: the five keys it always had, plus the badge');
       // As before 0.30.6, plus only 0.30.8's badge: no sender, no chat.
-      assertEquals(Object.keys(direct1).sort(), ['badge', 'body', 'conversation_id', 'message_id', 'title', 'user_id']);
+      assertEquals(Object.keys(direct1).sort(), ['badge', 'body', 'conversation_id', 'message_id', 'sender_id', 'title', 'user_id']);
+    } finally {
+      await sql.begin(async (tx) => {
+        await tx`delete from app_private.tag_finds where finder in ${sql(people.map((x) => x.id))}`;
+        await tx`delete from app_private.device_tokens where user_id in ${sql(people.map((x) => x.id))}`;
+        await tx`delete from app_private.allowlist where email in ${sql(people.map((x) => x.email))}`;
+      }).catch(() => {});
+    }
+  },
+});
+
+Deno.test({
+  name: 'sender_id: only with the complete text -- 120 characters carry it, 121 (cut) do not',
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const run = Date.now().toString(36);
+    const who = ['ann', 'dfull'];
+    const people = who.map((w) => ({
+      id: crypto.randomUUID(),
+      session: crypto.randomUUID(),
+      email: `cut-${w}-${run}@edge.test`,
+      name: w === 'ann' ? 'Ann Sender' : w,
+      token: `edge-cut-${w}-${run}`.padEnd(16, '0'),
+    }));
+    const p = Object.fromEntries(who.map((w, i) => [w, people[i]]));
+    const asP = <T>(x: typeof p.ann, body: (tx: postgres.TransactionSql) => Promise<T>) =>
+      as(x.id, x.email, x.session, body);
+    try {
+      for (const x of people) {
+        await sql`insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
+                  values (${x.id}, ${x.email}, now(), ${sql.json({ full_name: x.name })})`;
+        await sql`insert into app_private.allowlist(email) values (${x.email})`;
+        await sql`insert into auth.sessions (id, user_id, created_at, updated_at)
+                  values (${x.session}, ${x.id}, now(), now())`;
+        await asP(x, (tx) => tx`select public.activate_session()`);
+        if (x !== p.ann) {
+          await asP(x, (tx) => tx`select public.register_device_token(${x.token}, 'android', true)`);
+        }
+      }
+      await sql`insert into app_private.tag_finds(finder, found_id)
+                select ${p.ann.id}::uuid, unnest(${people.slice(1).map((r) => r.id)}::uuid[])`;
+      const [{ id: direct }] = await asP(p.ann, (tx) =>
+        tx`select public.start_direct_conversation(${p.dfull.id}) as id`);
+      const send = async (conversation: string, body: string) => {
+        const [{ id }] = await asP(p.ann, (tx) =>
+          tx`insert into public.messages(conversation_id, sender_id, body)
+             values (${conversation}, ${p.ann.id}, ${body}) returning id`);
+        assertEquals(await deliver(id), { status: 204, text: '' });
+        return { id: id as string, sent: [...sent] };
+      };
+      const whole = 'a'.repeat(120);
+      const long = 'b'.repeat(121);
+      const dataOf = (s: { sent: Sent[] }) => {
+        const mine = s.sent.filter((x) => x.message.token === p.dfull.token);
+        assertEquals(mine.length, 1, `exactly one send: ${JSON.stringify(s.sent)}`);
+        return mine[0].message.data as Record<string, string>;
+      };
+      const w = await send(direct, whole);
+      assertEquals(dataOf(w).body, whole, 'fixture: 120 characters arrive whole');
+      assertEquals(dataOf(w).sender_id, p.ann.id, '120 characters: the complete text, so the sender id rides along');
+      const c = await send(direct, long);
+      assertEquals(dataOf(c).body, 'b'.repeat(119) + '…', 'fixture: 121 characters are cut to 119 plus an ellipsis');
+      assert(!('sender_id' in dataOf(c)), `a cut body carries no sender id, so the phone never saves it cut: ${JSON.stringify(dataOf(c))}`);
+      const deliverData = async (id: string) => {
+        assertEquals(await deliver(id), { status: 204, text: '' });
+        return dataOf({ sent: [...sent] });
+      };
+      // A photo without a caption: the push body is a label, messages.body is ''.
+      const photoId = crypto.randomUUID();
+      await sql`insert into public.messages(id, conversation_id, sender_id, body, attachment_path)
+                values (${photoId}, ${direct}, ${p.ann.id}, '', ${`${direct}/${photoId}/p.jpg`})`;
+      const ph = await deliverData(photoId);
+      assert(ph.body !== '', `fixture: a photo push has a label body: ${JSON.stringify(ph)}`);
+      assert(!('sender_id' in ph), `a label is not the message text: no sender id: ${JSON.stringify(ph)}`);
+      // A contact: the push body is a label plus the name, messages.body is name + phone.
+      const [{ id: contactId }] = await sql`insert into public.messages(conversation_id, sender_id, body, contact)
+                values (${direct}, ${p.ann.id}, ${'Zed Quill\n5551234567'}, true) returning id`;
+      const ct = await deliverData(contactId);
+      assert(ct.body.endsWith('Zed Quill'), `fixture: a contact push names the contact: ${JSON.stringify(ct)}`);
+      assert(!('sender_id' in ct), `a contact label is not the message text: no sender id: ${JSON.stringify(ct)}`);
+      // A contact whose long name the label cuts to 60 characters.
+      const [{ id: longContactId }] = await sql`insert into public.messages(conversation_id, sender_id, body, contact)
+                values (${direct}, ${p.ann.id}, ${'Q'.repeat(500) + '\n5551234567'}, true) returning id`;
+      const lc = await deliverData(longContactId);
+      assert(lc.body.endsWith('Q'.repeat(60)) && !lc.body.endsWith('Q'.repeat(61)), `fixture: the name is cut to 60: ${JSON.stringify(lc)}`);
+      assert(!('sender_id' in lc), `a cut contact label carries no sender id: ${JSON.stringify(lc)}`);
     } finally {
       await sql.begin(async (tx) => {
         await tx`delete from app_private.tag_finds where finder in ${sql(people.map((x) => x.id))}`;
@@ -662,6 +752,7 @@ Deno.test({
       const data = (x: typeof p.ann) => ({
         user_id: x.id,
         message_id: messageId,
+        sender_id: p.ann.id,
         conversation_id: group,
         title: t(x).title,
         body: t(x).body,
@@ -1433,7 +1524,7 @@ Deno.test({
         assertEquals(mine.length, 1, `exactly one send to ${x.name}: ${JSON.stringify(sent)}`);
         return mine[0].message;
       };
-      const baseKeys = ['badge', 'body', 'conversation_id', 'message_id', 'title', 'user_id'];
+      const baseKeys = ['badge', 'body', 'conversation_id', 'message_id', 'sender_id', 'title', 'user_id'];
 
       // iPhone 1:1 plain
       const id1 = await send(toIos, 'dt plain words');

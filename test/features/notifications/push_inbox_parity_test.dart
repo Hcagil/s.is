@@ -76,6 +76,7 @@ void main() {
             sender: s['sender'] as String?,
             chat: s['chat'] as String?,
             messageId: s['message_id'] as String?,
+            senderId: s['sender_id'] as String?,
             at: DateTime.fromMillisecondsSinceEpoch(s['at']! as int),
           );
         }
@@ -85,6 +86,32 @@ void main() {
 
     test('the line limit is the shared one', () {
       expect(maxInboxLines, _vectors['max_lines']);
+    });
+
+    group('a line\'s sender id, key "u"', () {
+      test('a line with "u" parses it and writes it back', () {
+        final line = InboxLine.fromJson(const {
+          's': 'Ava',
+          'x': 'hi',
+          'a': 1000,
+          'm': 'm1',
+          'u': 'u-ava',
+        });
+        expect(line.senderId, 'u-ava');
+        expect(line.toJson()['u'], 'u-ava');
+      });
+
+      test('a line without "u" (written before it existed) still parses', () {
+        final line = InboxLine.fromJson(const {
+          's': 'Ava',
+          'x': 'hi',
+          'a': 1000,
+          'm': 'm1',
+        });
+        expect(line.senderId, isNull);
+        expect(line.text, 'hi');
+        expect(line.toJson().containsKey('u'), isFalse);
+      });
     });
 
     for (final v

@@ -72,6 +72,8 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
         ?.avatarPath;
     listenGroupGone(context, ref, conversationId);
     final amAdmin = ref.watch(amGroupAdminProvider(conversationId));
+    final isClosed = (ref.watch(conversationListProvider).value ?? const [])
+        .any((c) => c.id == conversationId && c.isClosed);
     final canSetPicture =
         amAdmin ||
         ref.watch(groupSettingsProvider(conversationId)).membersCanSetAvatar;
@@ -140,7 +142,7 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
                     conversationId: conversationId,
                     amAdmin: amAdmin,
                   ),
-                  if (amAdmin)
+                  if (amAdmin && !isClosed)
                     SisSettingsRow(
                       key: const ValueKey('setting-invite-link'),
                       icon: Icons.link,

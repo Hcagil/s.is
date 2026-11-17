@@ -7,11 +7,15 @@ final class InviteLink {
     required this.token,
     required this.createdAt,
     this.expiresAt,
+    this.validDays,
   });
 
   final String token;
   final DateTime createdAt;
   final DateTime? expiresAt;
+
+  /// The chosen time limit in days (1, 7 or 30); null = no limit.
+  final int? validDays;
 
   /// Returns true if [expiresAt] is not after [now], or if there is no expiry.
   bool expiredAt(DateTime now) => expiresAt != null && !expiresAt!.isAfter(now);
@@ -24,12 +28,16 @@ final class InvitePreview {
     required this.title,
     required this.memberCount,
     this.avatarPath,
+    this.newMembersSeeHistory,
   });
 
   final String conversationId;
   final String title;
   final int memberCount;
   final String? avatarPath;
+
+  /// Whether new members see earlier messages; null when the server did not say.
+  final bool? newMembersSeeHistory;
 }
 
 /// Matches a 24-character invite code (alphanumeric, underscore, hyphen).

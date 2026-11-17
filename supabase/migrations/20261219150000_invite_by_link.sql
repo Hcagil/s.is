@@ -10,7 +10,8 @@ create table app_private.group_invite_links (
   token text not null unique check (token ~ '^[A-Za-z0-9_-]{24}$'),
   created_by uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
-  expires_at timestamptz  -- null = no time limit
+  expires_at timestamptz,  -- null = no time limit
+  valid_days int check (valid_days in (1,7,30))  -- null = no limit
 );
 
 revoke all on app_private.group_invite_links from public, anon, authenticated;
@@ -101,7 +102,7 @@ grant execute on function public.group_join_events(uuid) to authenticated;
 
 -- create and reset are one action: a new token replaces the old one, so the old link stops working.
 create function public.reset_invite_link(conversation uuid, valid_days int)
-returns table (token text, created_at timestamptz, expires_at timestamptz)
+returns table (token text, created_at timestamptz, expires_at timestamptz, limit_days int)
 language plpgsql volatile security definer set search_path = '' as $$
 declare
   me uuid := auth.uid();
@@ -117,12 +118,13 @@ begin
   if valid_days is not null and valid_days not in (1,7,30) then
     raise exception 'invalid days' using errcode = '22023';
   end if;
-  insert into app_private.group_invite_links(conversation_id, token, created_by, created_at, expires_at)
+  insert into app_private.group_invite_links(conversation_id, token, created_by, created_at, expires_at, valid_days)
   values (conversation, translate(encode(extensions.gen_random_bytes(18), 'base64'), '+/', '-_'), me, now(),
-          case when valid_days is null then null else now() + make_interval(days => valid_days) end)
+          case when valid_days is null then null else now() + make_interval(days => valid_days) end,
+          reset_invite_link.valid_days)
   on conflict (conversation_id) do update set token = excluded.token, created_by = excluded.created_by,
-    created_at = excluded.created_at, expires_at = excluded.expires_at;
-  return query select l.token, l.created_at, l.expires_at from app_private.group_invite_links l where l.conversation_id = reset_invite_link.conversation;
+    created_at = excluded.created_at, expires_at = excluded.expires_at, valid_days = excluded.valid_days;
+  return query select l.token, l.created_at, l.expires_at, l.valid_days from app_private.group_invite_links l where l.conversation_id = reset_invite_link.conversation;
 end $$;
 revoke all on function public.reset_invite_link(uuid, int) from public, anon;
 grant execute on function public.reset_invite_link(uuid, int) to authenticated;
@@ -148,7 +150,7 @@ grant execute on function public.turn_off_invite_link(uuid) to authenticated;
 
 -- A new time limit keeps the same link and restarts its timer; only reset_invite_link makes a new token.
 create function public.set_invite_link_expiry(conversation uuid, valid_days int)
-returns table (token text, created_at timestamptz, expires_at timestamptz)
+returns table (token text, created_at timestamptz, expires_at timestamptz, limit_days int)
 language plpgsql volatile security definer set search_path = '' as $$
 declare
   me uuid := auth.uid();
@@ -165,12 +167,13 @@ begin
     raise exception 'invalid days' using errcode = '22023';
   end if;
   update app_private.group_invite_links l
-     set expires_at = case when valid_days is null then null else now() + make_interval(days => valid_days) end
+     set expires_at = case when set_invite_link_expiry.valid_days is null then null else now() + make_interval(days => set_invite_link_expiry.valid_days) end,
+         valid_days = set_invite_link_expiry.valid_days
    where l.conversation_id = set_invite_link_expiry.conversation;
   if not found then
     raise exception 'invalid link' using errcode = 'LINK1';
   end if;
-  return query select l.token, l.created_at, l.expires_at
+  return query select l.token, l.created_at, l.expires_at, l.valid_days
     from app_private.group_invite_links l
    where l.conversation_id = set_invite_link_expiry.conversation;
 end $$;
@@ -178,7 +181,7 @@ revoke all on function public.set_invite_link_expiry(uuid, int) from public, ano
 grant execute on function public.set_invite_link_expiry(uuid, int) to authenticated;
 
 create function public.get_invite_link(conversation uuid)
-returns table (token text, created_at timestamptz, expires_at timestamptz)
+returns table (token text, created_at timestamptz, expires_at timestamptz, limit_days int)
 language plpgsql volatile security definer set search_path = '' as $$
 declare
   me uuid := auth.uid();
@@ -191,7 +194,7 @@ begin
      or not app_private.is_admin(conversation) then
     raise exception 'not permitted' using errcode = '42501';
   end if;
-  return query select l.token, l.created_at, l.expires_at
+  return query select l.token, l.created_at, l.expires_at, l.valid_days
     from app_private.group_invite_links l
    where l.conversation_id = get_invite_link.conversation;
 end $$;
@@ -209,7 +212,7 @@ $$;
 revoke all on function app_private.invite_removed(uuid, uuid) from public, anon, authenticated;
 
 create function public.preview_invite_link(token text)
-returns table (conversation_id uuid, title text, avatar_path text, member_count int, error text)
+returns table (conversation_id uuid, title text, avatar_path text, member_count int, new_members_see_history boolean, error text)
 language plpgsql volatile security definer set search_path = '' as $$
 declare
   me uuid := auth.uid();
@@ -220,37 +223,38 @@ begin
   end if;
   perform app_private.invite_rate_check();
   if token is null or token !~ '^[A-Za-z0-9_-]{24}$' then
-    return query select null::uuid, null::text, null::text, null::int, 'LINK1'::text;
+    return query select null::uuid, null::text, null::text, null::int, null::boolean, 'LINK1'::text;
     return;
   end if;
   select l.conversation_id, l.expires_at into link
     from app_private.group_invite_links l where l.token = preview_invite_link.token;
   if not found then
-    return query select null::uuid, null::text, null::text, null::int, 'LINK1'::text;
+    return query select null::uuid, null::text, null::text, null::int, null::boolean, 'LINK1'::text;
     return;
   end if;
   case app_private.invite_group_state(link.conversation_id)
     when 'none' then
-      return query select null::uuid, null::text, null::text, null::int, 'LINK1'::text;
+      return query select null::uuid, null::text, null::text, null::int, null::boolean, 'LINK1'::text;
       return;
     when 'closed' then
-      return query select null::uuid, null::text, null::text, null::int, 'LINK3'::text;
+      return query select null::uuid, null::text, null::text, null::int, null::boolean, 'LINK3'::text;
       return;
     else null;
   end case;
   if link.expires_at is not null and link.expires_at <= now() then
-    return query select null::uuid, null::text, null::text, null::int, 'LINK2'::text;
+    return query select null::uuid, null::text, null::text, null::int, null::boolean, 'LINK2'::text;
     return;
   end if;
   -- a member an admin removed comes back only when an admin adds them
   if app_private.invite_removed(link.conversation_id, me) then
-    return query select null::uuid, null::text, null::text, null::int, 'LINK4'::text;
+    return query select null::uuid, null::text, null::text, null::int, null::boolean, 'LINK4'::text;
     return;
   end if;
   return query
     select c.id, c.title, c.avatar_path,
            (select count(*)::int from public.conversation_members m
              where m.conversation_id = c.id and m.left_at is null),
+           c.new_members_see_history,
            null::text
       from public.conversations c where c.id = link.conversation_id;
 end $$;

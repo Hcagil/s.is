@@ -49,8 +49,8 @@ class _GroupInvitePageState extends ConsumerState<GroupInvitePage> {
   bool _offline = false;
   bool _failed = false;
   Future<void> Function()? _retry;
-  int? _days;
-  bool _daysKnown = false;
+  int? get _days =>
+      ref.read(inviteLinkProvider(widget.conversationId)).value?.validDays;
 
   @override
   Widget build(BuildContext context) {
@@ -70,15 +70,6 @@ class _GroupInvitePageState extends ConsumerState<GroupInvitePage> {
         .firstOrNull
         ?.avatarPath;
     final current = link.value;
-
-    if (!_daysKnown && current != null) {
-      final expiresAt = current.expiresAt;
-      // shortcut: the server does not store the chosen limit, so it is estimated from the time left; store valid_days on the server to make it exact.
-      _days = expiresAt == null
-          ? null
-          : _nearestDays(expiresAt.difference(DateTime.now()));
-      _daysKnown = true;
-    }
 
     final List<Widget> content;
     if (link.isLoading && !link.hasValue) {
@@ -268,12 +259,6 @@ class _GroupInvitePageState extends ConsumerState<GroupInvitePage> {
   Widget _greyed(bool grey, String name, String label, Widget child) =>
       grey ? GreyOption(name: name, label: label, child: child) : child;
 
-  int _nearestDays(Duration left) => left.inHours <= 24
-      ? 1
-      : left.inHours <= 168
-      ? 7
-      : 30;
-
   String? _currentText() {
     final link = ref.read(inviteLinkProvider(widget.conversationId)).value;
     if (link == null) return null;
@@ -315,12 +300,6 @@ class _GroupInvitePageState extends ConsumerState<GroupInvitePage> {
     await _run(
       () => ref.read(inviteLinkControllerProvider).reset(id, validDays: null),
     );
-    if (mounted && !_failed && !_offline) {
-      setState(() {
-        _days = null;
-        _daysKnown = true;
-      });
-    }
   }
 
   Future<void> _copy() async {
@@ -348,7 +327,6 @@ class _GroupInvitePageState extends ConsumerState<GroupInvitePage> {
           .read(inviteLinkControllerProvider)
           .setExpiry(widget.conversationId, validDays: days),
     );
-    if (mounted && !_failed && !_offline) setState(() => _days = days);
   }
 
   Future<void> _reset() async {

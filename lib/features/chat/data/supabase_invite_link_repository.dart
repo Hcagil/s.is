@@ -54,6 +54,7 @@ final class SupabaseInviteLinkRepository implements InviteLinkRepository {
           expiresAt: row['expires_at'] != null
               ? DateTime.parse(row['expires_at'] as String)
               : null,
+          validDays: row['limit_days'] as int?,
         ),
       );
     } catch (e) {
@@ -79,6 +80,7 @@ final class SupabaseInviteLinkRepository implements InviteLinkRepository {
           expiresAt: row['expires_at'] != null
               ? DateTime.parse(row['expires_at'] as String)
               : null,
+          validDays: row['limit_days'] as int?,
         ),
       );
     } catch (e) {
@@ -104,6 +106,7 @@ final class SupabaseInviteLinkRepository implements InviteLinkRepository {
           expiresAt: row['expires_at'] != null
               ? DateTime.parse(row['expires_at'] as String)
               : null,
+          validDays: row['limit_days'] as int?,
         ),
       );
     } catch (e) {
@@ -140,6 +143,7 @@ final class SupabaseInviteLinkRepository implements InviteLinkRepository {
           title: row['title'] as String,
           memberCount: row['member_count'] as int,
           avatarPath: row['avatar_path'] as String?,
+          newMembersSeeHistory: row['new_members_see_history'] as bool?,
         ),
       );
     } catch (e) {

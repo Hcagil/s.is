@@ -162,6 +162,12 @@ class _InviteJoinPageState extends ConsumerState<InviteJoinPage> {
                 memberCount: preview.memberCount,
               ),
               const SizedBox(height: 16),
+              if (preview.newMembersSeeHistory case final sees?)
+                Text(
+                  sees ? l.addMembersOldHint : l.inviteJoinNoHistory,
+                  key: const ValueKey('invite-join-history'),
+                  style: TextStyle(color: SisBrand.of(context).muted),
+                ),
               if (_joining)
                 Text(
                   l.inviteJoiningStatus,

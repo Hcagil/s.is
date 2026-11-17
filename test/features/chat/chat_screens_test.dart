@@ -171,7 +171,7 @@ void main() {
     testWidgets('a slow load shows progress, not an empty list', (
       tester,
     ) async {
-      final chat = ChatFake(latency: const Duration(milliseconds: 200))
+      final chat = ChatFake(latency: const Duration(seconds: 1))
         ..conversationsResult = const Ok([withBob]);
       final container = await _scope(chat);
       await tester.pumpWidget(
@@ -186,11 +186,20 @@ void main() {
       );
       await tester.pump();
 
-      expect(sisWait, findsOneWidget);
+      expect(sisWait, findsNothing, reason: 'nothing for the first 500 ms');
+      expect(guidance, findsNothing, reason: 'not empty — still loading');
+
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(sisWait, findsNothing, reason: 'nothing for the first 500 ms');
+      expect(guidance, findsNothing, reason: 'not empty — still loading');
+
+      await tester.pump(const Duration(milliseconds: 150));
+      expect(sisWait, findsOneWidget, reason: 'still loading after 500 ms');
       expect(guidance, findsNothing, reason: 'not empty — still loading');
 
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('conversation-c1')), findsOneWidget);
+      expect(sisWait, findsNothing);
     });
 
     testWidgets('tapping a conversation opens it and popping closes it', (

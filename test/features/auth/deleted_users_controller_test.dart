@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:clock/clock.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/core/failure.dart';
@@ -22,7 +23,7 @@ class _Repo implements AccountDeletionRepository {
   }
 }
 
-ProviderContainer mount(_Repo r) {
+ProviderContainer _mount(_Repo r) {
   final c = ProviderContainer(
     overrides: [accountDeletionRepositoryProvider.overrideWithValue(r)],
   );
@@ -35,7 +36,7 @@ void main() {
     'check puts the ids the server reports missing into the state',
     () async {
       final r = _Repo((ids) async => Ok({'vic'}));
-      final c = mount(r);
+      final c = _mount(r);
       final n = c.read(deletedUsersControllerProvider.notifier);
       await n.check(['vic', 'uma']);
       expect(c.read(deletedUsersControllerProvider), unorderedEquals({'vic'}));
@@ -46,7 +47,7 @@ void main() {
 
   test('an id is asked once per run', () async {
     final r = _Repo((ids) async => Ok({'vic'}));
-    final c = mount(r);
+    final c = _mount(r);
     final n = c.read(deletedUsersControllerProvider.notifier);
     await n.check(['vic', 'uma']);
     await n.check(['vic', 'uma']);
@@ -56,7 +57,7 @@ void main() {
 
   test('only the new id is asked later', () async {
     final r = _Repo((ids) async => Ok({'vic'}));
-    final c = mount(r);
+    final c = _mount(r);
     final n = c.read(deletedUsersControllerProvider.notifier);
     await n.check(['vic', 'uma']);
     await n.check(['vic', 'wes']);
@@ -66,7 +67,7 @@ void main() {
 
   test('a failed ask is not repeated within a minute, and nothing is marked missing', () async {
     final r = _Repo((ids) async => Err(ProviderFailure('offline')));
-    final c = mount(r);
+    final c = _mount(r);
     final n = c.read(deletedUsersControllerProvider.notifier);
     await n.check(['x']);
     await n.check(['x']);
@@ -77,7 +78,7 @@ void main() {
   test('an id already in flight is not asked again', () async {
     final completer = Completer<Result<Set<String>>>();
     final r = _Repo((ids) async => completer.future);
-    final c = mount(r);
+    final c = _mount(r);
     final n = c.read(deletedUsersControllerProvider.notifier);
     final f1 = n.check(['x']);
     final f2 = n.check(['x']);
@@ -89,14 +90,14 @@ void main() {
 
   test('keepable keeps a deleted id and drops an alive one', () async {
     final r = _Repo((ids) async => Ok({'vic'}));
-    final c = mount(r);
+    final c = _mount(r);
     final n = c.read(deletedUsersControllerProvider.notifier);
     expect(await n.keepable({'vic', 'uma'}), unorderedEquals({'vic'}));
   });
 
   test('keepable keeps an id whose ask failed', () async {
     final r = _Repo((ids) async => Err(ProviderFailure('offline')));
-    final c = mount(r);
+    final c = _mount(r);
     final n = c.read(deletedUsersControllerProvider.notifier);
     expect(await n.keepable({'a', 'b'}), unorderedEquals({'a', 'b'}));
   });
@@ -111,7 +112,7 @@ void main() {
   test('keepable keeps an id whose ask is still in flight', () async {
     final completer = Completer<Result<Set<String>>>();
     final r = _Repo((ids) async => completer.future);
-    final c = mount(r);
+    final c = _mount(r);
     final n = c.read(deletedUsersControllerProvider.notifier);
     final f = n.check(['x']);
     final k = n.keepable({'x'});
@@ -125,11 +126,29 @@ void main() {
     'keepable asks the server once and an alive answer is remembered',
     () async {
       final r = _Repo((ids) async => Ok(<String>{}));
-      final c = mount(r);
+      final c = _mount(r);
       final n = c.read(deletedUsersControllerProvider.notifier);
       expect(await n.keepable({'u'}), isEmpty);
       expect(await n.keepable({'u'}), isEmpty);
       expect(r.calls.length, 1);
     },
   );
+
+  test('a failed ask is not repeated at 59 s but is asked again at 61 s', () async {
+    var now = DateTime(2026, 1, 1, 12);
+    await withClock(Clock(() => now), () async {
+      final r = _Repo((ids) async => Err(ProviderFailure('offline')));
+      final c = _mount(r);
+      final n = c.read(deletedUsersControllerProvider.notifier);
+      await n.check(['x']);
+      expect(r.calls.length, 1);
+      now = now.add(const Duration(seconds: 59));
+      await n.check(['x']);
+      expect(r.calls.length, 1);
+      now = now.add(const Duration(seconds: 2));
+      await n.check(['x']);
+      expect(r.calls.length, 2);
+      expect(c.read(deletedUsersControllerProvider), isEmpty);
+    });
+  });
 }

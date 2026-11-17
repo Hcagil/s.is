@@ -56,6 +56,12 @@ abstract interface class InviteLinkRepository {
     int? validDays,
   });
 
+  /// Admin: a new time limit (null = none, 1, 7 or 30 days) on the same link; its timer restarts. Err(InviteLinkFailure(invalid)) when the group has no link.
+  Future<Result<InviteLink>> setInviteLinkExpiry(
+    String conversationId, {
+    int? validDays,
+  });
+
   /// Admin: no link until an admin makes a new one.
   Future<Result<void>> turnOffInviteLink(String conversationId);
 

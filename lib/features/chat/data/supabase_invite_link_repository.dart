@@ -78,6 +78,31 @@ final class SupabaseInviteLinkRepository implements InviteLinkRepository {
   }
 
   @override
+  Future<Result<InviteLink>> setInviteLinkExpiry(
+    String conversationId, {
+    int? validDays,
+  }) async {
+    try {
+      final rows = await _client.rpc(
+        'set_invite_link_expiry',
+        params: {'conversation': conversationId, 'valid_days': validDays},
+      );
+      final row = (rows as List).cast<Map<String, dynamic>>().first;
+      return Ok(
+        InviteLink(
+          token: row['token'] as String,
+          createdAt: DateTime.parse(row['created_at'] as String),
+          expiresAt: row['expires_at'] != null
+              ? DateTime.parse(row['expires_at'] as String)
+              : null,
+        ),
+      );
+    } catch (e) {
+      return Err(_asFailure(e));
+    }
+  }
+
+  @override
   Future<Result<void>> turnOffInviteLink(String conversationId) async {
     try {
       await _client.rpc(

@@ -65,6 +65,18 @@ class InviteLinkController {
     return r;
   }
 
+  /// Changes the time limit ([validDays] null, 1, 7 or 30) of the same link; its timer restarts.
+  Future<Result<InviteLink>> setExpiry(
+    String conversationId, {
+    int? validDays,
+  }) async {
+    final r = await ref
+        .read(inviteLinkRepositoryProvider)
+        .setInviteLinkExpiry(conversationId, validDays: validDays);
+    if (r is Ok) ref.invalidate(inviteLinkProvider(conversationId));
+    return r;
+  }
+
   /// Turns the link off: no link until an admin makes a new one.
   Future<Result<void>> turnOff(String conversationId) async {
     final r = await ref

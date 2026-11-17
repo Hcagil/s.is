@@ -67,6 +67,7 @@ as $$
         and not c.admin_chat
         and not c.staff_b_chat
         and not c.debug_chat
+        and not c.system
         and c.staff_key is null),
     'none')
 $$;
@@ -143,6 +144,37 @@ begin
 end $$;
 revoke all on function public.turn_off_invite_link(uuid) from public, anon;
 grant execute on function public.turn_off_invite_link(uuid) to authenticated;
+
+-- A new time limit keeps the same link and restarts its timer; only reset_invite_link makes a new token.
+create function public.set_invite_link_expiry(conversation uuid, valid_days int)
+returns table (token text, created_at timestamptz, expires_at timestamptz)
+language plpgsql volatile security definer set search_path = '' as $$
+declare
+  me uuid := auth.uid();
+begin
+  perform pg_advisory_xact_lock(hashtextextended('group_admin:' || conversation::text, 0));
+  if not app_private.has_app_access() or app_private.is_bot(me) then
+    raise exception 'not permitted' using errcode = '42501';
+  end if;
+  if app_private.invite_group_state(conversation) <> 'ok'
+     or not app_private.is_admin(conversation) then
+    raise exception 'not permitted' using errcode = '42501';
+  end if;
+  if valid_days is not null and valid_days not in (1,7,30) then
+    raise exception 'invalid days' using errcode = '22023';
+  end if;
+  update app_private.group_invite_links l
+     set expires_at = case when valid_days is null then null else now() + make_interval(days => valid_days) end
+   where l.conversation_id = set_invite_link_expiry.conversation;
+  if not found then
+    raise exception 'invalid link' using errcode = 'LINK1';
+  end if;
+  return query select l.token, l.created_at, l.expires_at
+    from app_private.group_invite_links l
+   where l.conversation_id = set_invite_link_expiry.conversation;
+end $$;
+revoke all on function public.set_invite_link_expiry(uuid, int) from public, anon;
+grant execute on function public.set_invite_link_expiry(uuid, int) to authenticated;
 
 create function public.get_invite_link(conversation uuid)
 returns table (token text, created_at timestamptz, expires_at timestamptz)

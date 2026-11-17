@@ -111,15 +111,7 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
           .select('user_id, display_name, tag, avatar_path')
           .order('display_name')
           .retriedOnce();
-      return Ok([
-        for (final row in rows)
-          Member(
-            userId: row['user_id'] as String,
-            displayName: row['display_name'] as String,
-            tag: row['tag'] as String?,
-            avatarPath: row['avatar_path'] as String?,
-          ),
-      ]);
+      return Ok([for (final row in rows) Member.fromRow(row)]);
     } catch (e) {
       return Err(_asFailure(e));
     }
@@ -390,15 +382,7 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
           .select('user_id, display_name, tag, avatar_path')
           .order('display_name', ascending: true)
           .retriedOnce();
-      return Ok([
-        for (final p in profiles)
-          Member(
-            userId: p['user_id'] as String,
-            displayName: p['display_name'] as String,
-            tag: p['tag'] as String?,
-            avatarPath: p['avatar_path'] as String?,
-          ),
-      ]);
+      return Ok([for (final p in profiles) Member.fromRow(p)]);
     } catch (e) {
       return Err(_asFailure(e));
     }

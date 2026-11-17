@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -83,7 +85,7 @@ class ConversationList extends ConsumerWidget {
                       onRetry: () =>
                           ref.read(conversationListProvider.notifier).refresh(),
                     ),
-                    _ => const Center(child: SisLoadingLogo(size: 40)),
+                    _ => const _LateLoadingLogo(),
                   }
                 : const _SearchResults(),
           ),
@@ -438,5 +440,41 @@ class _SearchResults extends ConsumerWidget {
     }
     if (cursor < text.length) spans.add(TextSpan(text: text.substring(cursor)));
     return spans;
+  }
+}
+
+/// Nothing for the first 500 ms (no flash), then the loading logo.
+class _LateLoadingLogo extends StatefulWidget {
+  const _LateLoadingLogo();
+
+  @override
+  State<_LateLoadingLogo> createState() => _LateLoadingLogoState();
+}
+
+class _LateLoadingLogoState extends State<_LateLoadingLogo> {
+  Timer? _timer;
+  bool _show = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer(const Duration(milliseconds: 500), () {
+      if (!mounted) return;
+      setState(() => _show = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_show) {
+      return const Center(child: SisLoadingLogo(size: 40));
+    }
+    return const SizedBox.shrink();
   }
 }

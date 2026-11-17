@@ -19,6 +19,25 @@ private const val SIDE = 512
 // model is unbundled: Google Play services downloads it, and a request made
 // before the download finishes fails -- the caller then keeps the whole image.
 class StickerCutout(private val context: Context) {
+    private companion object {
+        // A segmenter is never close()d: after a failed inference ML Kit's close()
+        // re-throws the graph error on its own thread pool, where nobody can catch
+        // it, and that kills the app. One is kept for reuse; after a failure it is
+        // dropped (leaked, the OS frees it with the process) and the next call
+        // makes a fresh one, because a failed graph stays broken.
+        private var current: SubjectSegmenter? = null
+
+        @Synchronized
+        fun segmenter(): SubjectSegmenter = current ?: SubjectSegmentation.getClient(
+            SubjectSegmenterOptions.Builder().enableForegroundConfidenceMask().build()
+        ).also { current = it }
+
+        @Synchronized
+        fun drop(failed: SubjectSegmenter) {
+            if (current === failed) current = null
+        }
+    }
+
     // False on a phone without Google Play services (no model can be had).
     fun supported(): Boolean =
         GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context) == ConnectionResult.SUCCESS
@@ -30,12 +49,8 @@ class StickerCutout(private val context: Context) {
     // SubjectSegmenter implements OptionalModuleApi.
     fun requestModel() {
         try {
-            val seg = SubjectSegmentation.getClient(
-                SubjectSegmenterOptions.Builder().enableForegroundConfidenceMask().build()
-            )
             ModuleInstall.getClient(context)
-                .installModules(ModuleInstallRequest.newBuilder().addApi(seg).build())
-                .addOnCompleteListener { seg.close() }
+                .installModules(ModuleInstallRequest.newBuilder().addApi(segmenter()).build())
         } catch (e: Throwable) {
             // Best effort only.
         }
@@ -45,7 +60,6 @@ class StickerCutout(private val context: Context) {
     // null on any failure or when no subject was found. Called exactly once.
     fun mask(jpeg: ByteArray, onDone: (ByteArray?) -> Unit) {
         var scaled: Bitmap? = null
-        var segmenter: SubjectSegmenter? = null
         try {
             val decoded = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)
             if (decoded == null) {
@@ -56,12 +70,9 @@ class StickerCutout(private val context: Context) {
             scaled = small
             // createScaledBitmap hands back the same object when no scaling is needed.
             if (small !== decoded) decoded.recycle()
-            val seg = SubjectSegmentation.getClient(
-                SubjectSegmenterOptions.Builder().enableForegroundConfidenceMask().build()
-            )
-            segmenter = seg
+            val seg = segmenter()
             fun finish(bytes: ByteArray?) {
-                seg.close()
+                if (bytes == null) drop(seg)
                 small.recycle()
                 onDone(bytes)
             }
@@ -85,7 +96,6 @@ class StickerCutout(private val context: Context) {
                 .addOnFailureListener { finish(null) }
         } catch (e: Throwable) {
             // An OutOfMemoryError is not an Exception; the channel must still answer.
-            segmenter?.close()
             scaled?.recycle()
             onDone(null)
         }

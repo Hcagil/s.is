@@ -1148,9 +1148,8 @@ class ChatFake implements ChatRepository {
   Future<Result<List<Message>>> messages(String conversationId) async {
     await _tick('messages:$conversationId');
     if (_read != null) await _read!.future;
-    // The newest page, oldest first, without previews -- the real read's
-    // contract; anything older is reached only through messagesAround and
-    // previews only through attachmentPreviews.
+    // The newest page, oldest first, previews included -- the real read's
+    // contract; anything older is reached only through messagesAround.
     if (history[conversationId] case final rows?) return Ok(newestPage(rows));
     return switch (messagesResult) {
       Ok(:final value) => Ok(newestPage(value)),
@@ -3940,42 +3939,13 @@ class ContactsFake implements ContactsRepository {
 }
 
 /// messages() as the contract states it: the newest [messagePageSize] of
-/// [rows] (oldest first), every photo preview left off -- previews arrive
-/// only through attachmentPreviews.
+/// [rows] (oldest first), each row exactly as stored, its photo preview
+/// included.
 List<Message> newestPage(List<Message> rows) => [
-  for (final m in rows.skip(
+  ...rows.skip(
     rows.length > messagePageSize ? rows.length - messagePageSize : 0,
-  ))
-    withoutPreview(m),
+  ),
 ];
-
-/// [m] exactly as stored, minus its preview. Written here rather than
-/// through Message.withPreview so a fake does not lean on the code under test.
-Message withoutPreview(Message m) => Message(
-  id: m.id,
-  conversationId: m.conversationId,
-  senderId: m.senderId,
-  body: m.body,
-  createdAt: m.createdAt,
-  attachmentPath: m.attachmentPath,
-  localImage: m.localImage,
-  deletion: m.deletion,
-  deletedBy: m.deletedBy,
-  deletedByAdmin: m.deletedByAdmin,
-  editedAt: m.editedAt,
-  replyTo: m.replyTo,
-  forwarded: m.forwarded,
-  poll: m.poll,
-  contact: m.contact,
-  file: m.file,
-  location: m.location,
-  stickerId: m.stickerId,
-  albumCard: m.albumCard,
-  albumId: m.albumId,
-  photoGroup: m.photoGroup,
-  linkPreview: m.linkPreview,
-  sending: m.sending,
-);
 
 /// attachmentPreviews as the contract states it, over the stored [rows]:
 /// the preview of each of [ids] that has one; the rest are absent.

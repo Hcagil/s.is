@@ -12,6 +12,9 @@ import 'store_database.dart';
 MessagesCompanion messageToCompanion(Message m) {
   final extraMap = <String, Object?>{};
   if (m.attachmentPath != null) extraMap['ap'] = m.attachmentPath;
+  if (m.attachmentPreview != null) {
+    extraMap['pv'] = base64Encode(m.attachmentPreview!);
+  }
   if (m.stickerId != null) extraMap['st'] = m.stickerId;
   if (m.albumCard) extraMap['ac'] = true;
   if (m.albumId != null) extraMap['ai'] = m.albumId;
@@ -61,6 +64,16 @@ MessagesCompanion messageToCompanion(Message m) {
   );
 }
 
+/// A stored photo preview, or null when it is missing or not valid base64: one bad row must not break opening a chat.
+Uint8List? _decodePreview(Object? v) {
+  if (v is! String) return null;
+  try {
+    return base64Decode(v);
+  } on FormatException {
+    return null;
+  }
+}
+
 /// Maps a [StoredMessageRow] to a domain [Message].
 Message messageFromRow(StoredMessageRow r) {
   final x = r.extra == null
@@ -74,6 +87,7 @@ Message messageFromRow(StoredMessageRow r) {
     body: r.body,
     createdAt: DateTime.fromMicrosecondsSinceEpoch(r.createdAt),
     attachmentPath: x['ap'] as String?,
+    attachmentPreview: _decodePreview(x['pv']),
     replyTo: r.replyTo,
     forwarded: r.forwarded,
     poll: r.poll,

@@ -8,6 +8,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sis/features/chat/data/store/drift_message_store.dart';
 import 'package:sis/features/chat/domain/file_attachment.dart';
 import 'package:sis/features/chat/domain/link_preview.dart';
 import 'package:sis/features/chat/domain/message.dart';
@@ -28,6 +29,37 @@ void main() {
 
   MessageStore store([String owner = 'owner-1']) =>
       h.open(owner: owner, key: key);
+
+  /// Rewrites the stored JSON key 'pv' of every row to [jsonSql] (a SQL
+  /// expression: a quoted string or a number), as an old or damaged store
+  /// would hold it. Returns how many columns it changed.
+  Future<int> corruptPv(DriftMessageStore s, String jsonSql) {
+    const path = r'$.pv';
+    return s.run<int>(0, (db) async {
+      final tables = await db
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type = 'table' "
+            "AND name NOT LIKE 'sqlite_%'",
+          )
+          .get();
+      var n = 0;
+      for (final t in tables) {
+        final name = t.read<String>('name');
+        final cols = await db.customSelect('PRAGMA table_info($name)').get();
+        for (final c in cols) {
+          final col = c.read<String>('name');
+          if (!c.read<String>('type').toUpperCase().contains('TEXT')) {
+            continue;
+          }
+          n += await db.customUpdate(
+            "UPDATE $name SET $col = json_set($col, '$path', $jsonSql) "
+            "WHERE json_valid($col) AND json_extract($col, '$path') IS NOT NULL",
+          );
+        }
+      }
+      return n;
+    });
+  }
 
   group('reads', () {
     test('newest: the newest `limit`, oldest first, only that chat', () async {
@@ -145,93 +177,90 @@ void main() {
   });
 
   group('round trip', () {
-    test(
-      'every stored field survives; photo bytes and thumbPath do not',
-      () async {
-        final s = store();
-        final full = Message(
-          id: 'full',
-          conversationId: 'c1',
-          senderId: 'u1',
-          body: 'Merhaba İstanbul 👋',
-          createdAt: at(1),
-          attachmentPath: 'c1/photo.jpg',
-          attachmentPreview: Uint8List.fromList([9, 9, 9]),
-          localImage: Uint8List.fromList([7, 7, 7]),
-          deletion: MessageDeletion.placeholder,
-          deletedBy: 'admin-1',
-          editedAt: at(2),
-          replyTo: 'm0',
-          forwarded: true,
-          poll: true,
-          contact: true,
-          file: const AttachedFile(
-            name: 'report.pdf',
-            mime: 'application/pdf',
-            size: 123456,
-            durationMs: 4200,
-            thumbPath: '/tmp/thumb.jpg',
-            waveform: 'AQID',
-            transcript: 'said words',
-          ),
-          stickerId: 'sticker-1',
-          albumCard: true,
-          albumId: 'album-1',
-          photoGroup: 'group-1',
-          linkPreview: LinkPreview(
-            url: Uri.parse('https://example.test/a?b=1'),
-            title: 'Title',
-            description: 'Desc',
-            site: 'Example',
-            imagePath: 'previews/a.jpg',
-            video: true,
-          ),
-          adminMsg: const {
-            'kind': 'notice',
-            'n': 3,
-            'nested': {
-              'a': [1, 2],
-            },
+    test('every stored field survives; only local photo bytes and thumbPath do not', () async {
+      final s = store();
+      final full = Message(
+        id: 'full',
+        conversationId: 'c1',
+        senderId: 'u1',
+        body: 'Merhaba İstanbul 👋',
+        createdAt: at(1),
+        attachmentPath: 'c1/photo.jpg',
+        attachmentPreview: Uint8List.fromList([9, 9, 9]),
+        localImage: Uint8List.fromList([7, 7, 7]),
+        deletion: MessageDeletion.placeholder,
+        deletedBy: 'admin-1',
+        editedAt: at(2),
+        replyTo: 'm0',
+        forwarded: true,
+        poll: true,
+        contact: true,
+        file: const AttachedFile(
+          name: 'report.pdf',
+          mime: 'application/pdf',
+          size: 123456,
+          durationMs: 4200,
+          thumbPath: '/tmp/thumb.jpg',
+          waveform: 'AQID',
+          transcript: 'said words',
+        ),
+        stickerId: 'sticker-1',
+        albumCard: true,
+        albumId: 'album-1',
+        photoGroup: 'group-1',
+        linkPreview: LinkPreview(
+          url: Uri.parse('https://example.test/a?b=1'),
+          title: 'Title',
+          description: 'Desc',
+          site: 'Example',
+          imagePath: 'previews/a.jpg',
+          video: true,
+        ),
+        adminMsg: const {
+          'kind': 'notice',
+          'n': 3,
+          'nested': {
+            'a': [1, 2],
           },
-        );
-        await s.upsertAll([full]);
-        final m = (await s.newest('c1')).single;
-        expect(m.id, 'full');
-        expect(m.conversationId, 'c1');
-        expect(m.senderId, 'u1');
-        expect(m.body, 'Merhaba İstanbul 👋');
-        expect(m.createdAt.isAtSameMomentAs(at(1)), isTrue);
-        expect(m.attachmentPath, 'c1/photo.jpg');
-        expect(m.attachmentPreview, isNull);
-        expect(m.localImage, isNull);
-        expect(m.deletion, MessageDeletion.placeholder);
-        expect(m.deletedBy, 'admin-1');
-        expect(m.editedAt!.isAtSameMomentAs(at(2)), isTrue);
-        expect(m.replyTo, 'm0');
-        expect(m.forwarded, isTrue);
-        expect(m.poll, isTrue);
-        expect(m.contact, isTrue);
-        expect(m.file!.name, 'report.pdf');
-        expect(m.file!.mime, 'application/pdf');
-        expect(m.file!.size, 123456);
-        expect(m.file!.durationMs, 4200);
-        expect(m.file!.thumbPath, isNull);
-        expect(m.file!.waveform, 'AQID');
-        expect(m.file!.transcript, 'said words');
-        expect(m.stickerId, 'sticker-1');
-        expect(m.albumCard, isTrue);
-        expect(m.albumId, 'album-1');
-        expect(m.photoGroup, 'group-1');
-        expect(m.linkPreview!.url, Uri.parse('https://example.test/a?b=1'));
-        expect(m.linkPreview!.title, 'Title');
-        expect(m.linkPreview!.description, 'Desc');
-        expect(m.linkPreview!.site, 'Example');
-        expect(m.linkPreview!.imagePath, 'previews/a.jpg');
-        expect(m.linkPreview!.video, isTrue);
-        expect(jsonEncode(m.adminMsg), jsonEncode(full.adminMsg));
-        expect(m.sending, isFalse);
-      },
-    );
+        },
+      );
+      await s.upsertAll([full]);
+      final m = (await s.newest('c1')).single;
+      expect(m.id, 'full');
+      expect(m.conversationId, 'c1');
+      expect(m.senderId, 'u1');
+      expect(m.body, 'Merhaba İstanbul 👋');
+      expect(m.createdAt.isAtSameMomentAs(at(1)), isTrue);
+      expect(m.attachmentPath, 'c1/photo.jpg');
+      expect(m.attachmentPreview, Uint8List.fromList([9, 9, 9]));
+      expect(m.localImage, isNull);
+      expect(m.deletion, MessageDeletion.placeholder);
+      expect(m.deletedBy, 'admin-1');
+      expect(m.editedAt!.isAtSameMomentAs(at(2)), isTrue);
+      expect(m.replyTo, 'm0');
+      expect(m.forwarded, isTrue);
+      expect(m.poll, isTrue);
+      expect(m.contact, isTrue);
+      expect(m.file!.name, 'report.pdf');
+      expect(m.file!.mime, 'application/pdf');
+      expect(m.file!.size, 123456);
+      expect(m.file!.durationMs, 4200);
+      expect(m.file!.thumbPath, isNull);
+      expect(m.file!.waveform, 'AQID');
+      expect(m.file!.transcript, 'said words');
+      expect(m.stickerId, 'sticker-1');
+      expect(m.albumCard, isTrue);
+      expect(m.albumId, 'album-1');
+      expect(m.photoGroup, 'group-1');
+      expect(m.linkPreview!.url, Uri.parse('https://example.test/a?b=1'));
+      expect(m.linkPreview!.title, 'Title');
+      expect(m.linkPreview!.description, 'Desc');
+      expect(m.linkPreview!.site, 'Example');
+      expect(m.linkPreview!.imagePath, 'previews/a.jpg');
+      expect(m.linkPreview!.video, isTrue);
+      expect(jsonEncode(m.adminMsg), jsonEncode(full.adminMsg));
+      expect(m.sending, isFalse);
+    });
 
     test(
       'a location (name and address live in the body) round-trips',
@@ -279,6 +308,60 @@ void main() {
       expect(m.adminMsg, isNull);
       expect(m.attachmentPath, isNull);
     });
+
+    test(
+      'a stored photo whose pv is not base64 reads as no preview, no throw',
+      () async {
+        final s = h.open(owner: 'owner-1', key: key);
+        await s.upsertAll([
+          Message(
+            id: 'p1',
+            conversationId: 'c1',
+            senderId: 'u1',
+            body: 'x',
+            createdAt: at(1),
+            attachmentPath: 'c1/p1.jpg',
+            attachmentPreview: Uint8List.fromList([9, 9, 9]),
+          ),
+        ]);
+        expect(
+          await corruptPv(s, "'%%% not base64 %%%'"),
+          greaterThan(0),
+          reason: 'found the stored row',
+        );
+        final m = (await s.newest('c1')).single;
+        expect(m.id, 'p1');
+        expect(m.attachmentPath, 'c1/p1.jpg');
+        expect(m.attachmentPreview, isNull);
+      },
+    );
+
+    test(
+      'a stored photo whose pv is not a string reads as no preview, no throw',
+      () async {
+        final s = h.open(owner: 'owner-1', key: key);
+        await s.upsertAll([
+          Message(
+            id: 'p2',
+            conversationId: 'c1',
+            senderId: 'u1',
+            body: 'x',
+            createdAt: at(1),
+            attachmentPath: 'c1/p2.jpg',
+            attachmentPreview: Uint8List.fromList([9, 9, 9]),
+          ),
+        ]);
+        expect(
+          await corruptPv(s, '12345'),
+          greaterThan(0),
+          reason: 'found the stored row',
+        );
+        final m = (await s.newest('c1')).single;
+        expect(m.id, 'p2');
+        expect(m.attachmentPath, 'c1/p2.jpg');
+        expect(m.attachmentPreview, isNull);
+      },
+    );
 
     test('vanished deletion round-trips', () async {
       final s = store();

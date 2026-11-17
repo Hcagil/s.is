@@ -912,5 +912,11 @@
   "adminReasonDeskOnly": "Bunu yalnızca bilgisayarınızın başında yanıtlayabilirsiniz.",
   "adminReasonUnknownItem": "Bu öğe artık bilgisayarınızda yok.",
   "adminReasonGeneric": "Bir hata oluştu. Tekrar deneyin.",
-  "adminDashboardStale": "Bilgisayarınızdan güncel durum gelmiyor. Bilgisayarınız kapalı veya uykuda olabilir."
+  "adminDashboardStale": "Bilgisayarınızdan güncel durum gelmiyor. Bilgisayarınız kapalı veya uykuda olabilir.",
+  "settingsDeleteAccount": "Hesabımı sil",
+  "settingsDeleteAccountTitle": "Hesabın silinsin mi?",
+  "settingsDeleteAccountBody": "Tüm telefonlardan çıkış yapılır. Hesabın ve mesajların 29 gün sonra silinir. Bu süre dolmadan tekrar giriş yaparsan hesabın silinmez. Başkalarında kalan mesajların \"Silinmiş hesap\" olarak görünür.",
+  "settingsDeleteAccountCancel": "Vazgeç",
+  "settingsDeleteAccountConfirm": "Sil",
+  "failDeleteAccount": "Hesabın silinemedi. Tekrar dene."
 }

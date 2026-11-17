@@ -5383,6 +5383,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No fresh status from your computer. It may be off or asleep.'**
   String get adminDashboardStale;
+
+  /// Account settings button
+  ///
+  /// In en, this message translates to:
+  /// **'Delete my account'**
+  String get settingsDeleteAccount;
+
+  /// Delete account confirm dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Delete your account?'**
+  String get settingsDeleteAccountTitle;
+
+  /// Delete account confirm dialog text
+  ///
+  /// In en, this message translates to:
+  /// **'You will be signed out on every phone. Your account and messages are deleted after 29 days. Sign in again before then to keep it. Other people keep the messages they already have, shown as \"Deleted account\".'**
+  String get settingsDeleteAccountBody;
+
+  /// Delete account confirm dialog button
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get settingsDeleteAccountCancel;
+
+  /// Delete account confirm dialog button
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get settingsDeleteAccountConfirm;
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'Your account could not be deleted. Try again.'**
+  String get failDeleteAccount;
 }
 
 class _AppLocalizationsDelegate

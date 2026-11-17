@@ -3099,4 +3099,24 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get adminDashboardStale =>
       'No fresh status from your computer. It may be off or asleep.';
+
+  @override
+  String get settingsDeleteAccount => 'Delete my account';
+
+  @override
+  String get settingsDeleteAccountTitle => 'Delete your account?';
+
+  @override
+  String get settingsDeleteAccountBody =>
+      'You will be signed out on every phone. Your account and messages are deleted after 29 days. Sign in again before then to keep it. Other people keep the messages they already have, shown as \"Deleted account\".';
+
+  @override
+  String get settingsDeleteAccountCancel => 'Cancel';
+
+  @override
+  String get settingsDeleteAccountConfirm => 'Delete';
+
+  @override
+  String get failDeleteAccount =>
+      'Your account could not be deleted. Try again.';
 }

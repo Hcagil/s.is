@@ -33,9 +33,11 @@ import 'features/admin_panels/data/local_auth_unlock.dart';
 import 'features/admin_panels/data/secure_admin_draft_store.dart';
 import 'features/admin_panels/data/supabase_admin_panels_repository.dart';
 import 'features/admin_panels/data/supabase_admin_push.dart';
+import 'features/auth/application/account_deletion_controller.dart';
 import 'features/auth/application/session_controller.dart';
 import 'features/auth/data/file_last_session_store.dart';
 import 'features/auth/data/secure_session_storage.dart';
+import 'features/auth/data/supabase_account_deletion_repository.dart';
 import 'features/auth/data/supabase_auth_repository.dart';
 import 'features/chat/application/chat_controllers.dart';
 import 'features/chat/application/staff_registry_controller.dart';
@@ -150,14 +152,16 @@ List<Override> platformOverrides(
   RuntimeConfig config,
 ) {
   final isIos = platform == TargetPlatform.iOS;
+  final auth = SupabaseAuthRepository(
+    client,
+    GoogleSignIn.instance,
+    googleWebClientId: config.googleWebClientId,
+    useNonce: isIos,
+  );
   return [
-    authRepositoryProvider.overrideWithValue(
-      SupabaseAuthRepository(
-        client,
-        GoogleSignIn.instance,
-        googleWebClientId: config.googleWebClientId,
-        useNonce: isIos,
-      ),
+    authRepositoryProvider.overrideWithValue(auth),
+    accountDeletionRepositoryProvider.overrideWithValue(
+      SupabaseAccountDeletionRepository(client, auth),
     ),
     updateRepositoryProvider.overrideWithValue(
       // Play in-app updates exist on Android only; iOS is TestFlight.

@@ -3072,4 +3072,23 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get adminDashboardStale =>
       'Bilgisayarınızdan güncel durum gelmiyor. Bilgisayarınız kapalı veya uykuda olabilir.';
+
+  @override
+  String get settingsDeleteAccount => 'Hesabımı sil';
+
+  @override
+  String get settingsDeleteAccountTitle => 'Hesabın silinsin mi?';
+
+  @override
+  String get settingsDeleteAccountBody =>
+      'Tüm telefonlardan çıkış yapılır. Hesabın ve mesajların 29 gün sonra silinir. Bu süre dolmadan tekrar giriş yaparsan hesabın silinmez. Başkalarında kalan mesajların \"Silinmiş hesap\" olarak görünür.';
+
+  @override
+  String get settingsDeleteAccountCancel => 'Vazgeç';
+
+  @override
+  String get settingsDeleteAccountConfirm => 'Sil';
+
+  @override
+  String get failDeleteAccount => 'Hesabın silinemedi. Tekrar dene.';
 }

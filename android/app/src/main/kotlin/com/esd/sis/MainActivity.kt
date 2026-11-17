@@ -66,6 +66,18 @@ class MainActivity : FlutterFragmentActivity() {
         // Before super: the Flutter plugins read the launch intent from there. A tap without our proof is dropped.
         TapProof.admit(this, intent)
         super.onCreate(savedInstanceState)
+        // Marks cold-start timing only: a log label, no behaviour change.
+        val decor = window.decorView
+        var logged = false
+        val listener = object : android.view.ViewTreeObserver.OnDrawListener {
+            override fun onDraw() {
+                if (logged) return
+                logged = true
+                android.util.Log.i("sis.startup", "android-first-draw")
+                decor.post { decor.viewTreeObserver.removeOnDrawListener(this) }
+            }
+        }
+        decor.viewTreeObserver.addOnDrawListener(listener)
     }
 
     override fun onDestroy() {

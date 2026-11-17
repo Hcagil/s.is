@@ -245,6 +245,21 @@ class MessagesController extends AsyncNotifier<List<Message>> {
           StartupMarks.mark('chat-push-rows');
         }
       }
+      // Plain pushes saved while the app was closed follow too (the same
+      // line is never shown twice).
+      final owner = ref.read(currentUserIdProvider);
+      if (owner != null) {
+        final pending = [
+          for (final m in await _pendingLines(ref, owner, {
+            for (final s in stored) s.id,
+          }))
+            if (m.conversationId == conversationId) m,
+        ];
+        if (pending.isNotEmpty) {
+          stored = [...stored, ...pending];
+          StartupMarks.mark('chat-push-rows');
+        }
+      }
       if (alive && ref.mounted && stored.isNotEmpty) {
         final queued = ref.read(sendQueueProvider)[conversationId] ?? const [];
         state = AsyncData([

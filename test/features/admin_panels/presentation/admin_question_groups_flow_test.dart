@@ -101,13 +101,14 @@ void main() {
   scene('1 from line shown when conv set', (tester) async {
     await load(tester, [q('Q-1', conv: 'c-12')]);
     expect(convK('Q-1'), findsOneWidget);
-    expect(find.text('from c-12'), findsOneWidget);
+    expect(find.text('From c-12'), findsOneWidget);
   });
 
   scene('2 no from line when conv absent', (tester) async {
     await load(tester, [q('Q-1')]);
     expect(convK('Q-1'), findsNothing);
-    expect(find.textContaining('from c-'), findsNothing);
+    expect(find.textContaining('From c-'), findsNothing);
+    expect(find.textContaining('Kaynak:'), findsNothing);
   });
 
   scene('3 from line only on the question that has it', (tester) async {

@@ -3,9 +3,6 @@ import 'package:flutter/material.dart';
 import '../../../app/theme.dart';
 import '../../../l10n/app_localizations.dart';
 
-/// copy-lead EN+TR pending
-String adminQuestionFromLabel(String conv) => 'from $conv';
-
 class AdminQuestionGroupHeader extends StatelessWidget {
   const AdminQuestionGroupHeader({
     super.key,

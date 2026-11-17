@@ -610,6 +610,69 @@ Deno.test({
   },
 });
 
+Deno.test({
+  name: 'sender_id: only with the complete text -- 120 characters carry it, 121 (cut) do not',
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const run = Date.now().toString(36);
+    const who = ['ann', 'dfull'];
+    const people = who.map((w) => ({
+      id: crypto.randomUUID(),
+      session: crypto.randomUUID(),
+      email: `cut-${w}-${run}@edge.test`,
+      name: w === 'ann' ? 'Ann Sender' : w,
+      token: `edge-cut-${w}-${run}`.padEnd(16, '0'),
+    }));
+    const p = Object.fromEntries(who.map((w, i) => [w, people[i]]));
+    const asP = <T>(x: typeof p.ann, body: (tx: postgres.TransactionSql) => Promise<T>) =>
+      as(x.id, x.email, x.session, body);
+    try {
+      for (const x of people) {
+        await sql`insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
+                  values (${x.id}, ${x.email}, now(), ${sql.json({ full_name: x.name })})`;
+        await sql`insert into app_private.allowlist(email) values (${x.email})`;
+        await sql`insert into auth.sessions (id, user_id, created_at, updated_at)
+                  values (${x.session}, ${x.id}, now(), now())`;
+        await asP(x, (tx) => tx`select public.activate_session()`);
+        if (x !== p.ann) {
+          await asP(x, (tx) => tx`select public.register_device_token(${x.token}, 'android', true)`);
+        }
+      }
+      await sql`insert into app_private.tag_finds(finder, found_id)
+                select ${p.ann.id}::uuid, unnest(${people.slice(1).map((r) => r.id)}::uuid[])`;
+      const [{ id: direct }] = await asP(p.ann, (tx) =>
+        tx`select public.start_direct_conversation(${p.dfull.id}) as id`);
+      const send = async (conversation: string, body: string) => {
+        const [{ id }] = await asP(p.ann, (tx) =>
+          tx`insert into public.messages(conversation_id, sender_id, body)
+             values (${conversation}, ${p.ann.id}, ${body}) returning id`);
+        assertEquals(await deliver(id), { status: 204, text: '' });
+        return { id: id as string, sent: [...sent] };
+      };
+      const whole = 'a'.repeat(120);
+      const long = 'b'.repeat(121);
+      const dataOf = (s: { sent: Sent[] }) => {
+        const mine = s.sent.filter((x) => x.message.token === p.dfull.token);
+        assertEquals(mine.length, 1, `exactly one send: ${JSON.stringify(s.sent)}`);
+        return mine[0].message.data as Record<string, string>;
+      };
+      const w = await send(direct, whole);
+      assertEquals(dataOf(w).body, whole, 'fixture: 120 characters arrive whole');
+      assertEquals(dataOf(w).sender_id, p.ann.id, '120 characters: the complete text, so the sender id rides along');
+      const c = await send(direct, long);
+      assertEquals(dataOf(c).body, 'b'.repeat(119) + '…', 'fixture: 121 characters are cut to 119 plus an ellipsis');
+      assert(!('sender_id' in dataOf(c)), `a cut body carries no sender id, so the phone never saves it cut: ${JSON.stringify(dataOf(c))}`);
+    } finally {
+      await sql.begin(async (tx) => {
+        await tx`delete from app_private.tag_finds where finder in ${sql(people.map((x) => x.id))}`;
+        await tx`delete from app_private.device_tokens where user_id in ${sql(people.map((x) => x.id))}`;
+        await tx`delete from app_private.allowlist where email in ${sql(people.map((x) => x.email))}`;
+      }).catch(() => {});
+    }
+  },
+});
+
 // The contract's group test is `chat != null && sender != null`: a row with
 // neither column at all (the old schema) is not a group, and every shape
 // falls back to the server's title/body exactly as before 0.30.6.

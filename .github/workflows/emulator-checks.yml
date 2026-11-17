@@ -1,0 +1,101 @@
+# Emulator checks: a headless Android emulator (tool/emulator/Dockerfile) runs
+# tool/emulator/push_check.sh (a push shows the chat notification with its picture)
+# and tool/emulator/share_check.sh (a shared text + photo reach the app).
+# Runs once a day and by hand; not on pull requests and not a required check.
+# Run locally: build the image (see the "Build emulator image" step), build the
+# debug test APK with SIS_TEST_APP=1, then run the two scripts; set EMULATOR_LOCK
+# to a lock file path when other sessions share the machine.
+
+name: Emulator checks
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+concurrency:
+  group: emulator-checks
+  cancel-in-progress: false
+permissions:
+  contents: read
+
+jobs:
+  emulator:
+    name: Emulator checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    permissions:
+      contents: read
+      packages: read # packages read pulls the pinned base image from ghcr.io
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Log in to the base image registry
+        run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Prepare cache directories
+        run: mkdir -p .ci-cache/pub .ci-cache/gradle .ci-cache/m2
+      - name: Restore dependency caches
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: |
+            .ci-cache
+            .dart_tool/hooks_runner/shared/sqlite3
+          key: flutter-${{ runner.os }}-${{ hashFiles('pubspec.lock', 'docker/Dockerfile') }}
+          restore-keys: flutter-${{ runner.os }}-
+      - name: Build development image
+        run: |
+          # Image downloads (apt, sdkmanager) sometimes drop; retry, a real build break still fails.
+          for attempt in 1 2 3; do
+            LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose -f compose.yaml -f .github/compose.ci.yaml build && exit 0
+            echo "::warning::development image build failed (attempt $attempt of 3)"
+            if [ "$attempt" -lt 3 ]; then sleep 30; fi
+          done
+          exit 1
+      - name: Build emulator image
+        run: |
+          # Not cached: the image is about 8 GB, close to the whole repository cache limit.
+          for attempt in 1 2 3; do
+            docker build -f tool/emulator/Dockerfile -t sis-emulator:google-apis --build-arg LOCAL_UID="$(id -u)" --build-arg LOCAL_GID="$(id -g)" docker && exit 0
+            echo "::warning::emulator image build failed (attempt $attempt of 3)"
+            if [ "$attempt" -lt 3 ]; then sleep 30; fi
+          done
+          exit 1
+      - name: Write google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+      - name: Resolve dependencies
+        run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm flutter flutter pub get
+      - name: Build debug test APK
+        id: apk
+        run: docker compose -f compose.yaml -f .github/compose.ci.yaml run --rm -e SIS_TEST_APP=1 flutter flutter build apk --debug
+      - name: Push check
+        env:
+          PUSH_LOGCAT: ${{ runner.temp }}/logcat/push_check_logcat.txt
+        run: |
+          mkdir -p "$RUNNER_TEMP/logcat"
+          KVM_GID=$(stat -c %g /dev/kvm) tool/emulator/push_check.sh
+      - name: Share check
+        if: ${{ !cancelled() && steps.apk.outcome == 'success' }}
+        env:
+          SHARE_LOGCAT: ${{ runner.temp }}/logcat/share_check_logcat.txt
+        run: |
+          mkdir -p "$RUNNER_TEMP/logcat"
+          FLUTTER_IMAGE=$(docker compose -f compose.yaml -f .github/compose.ci.yaml config --images flutter) KVM_GID=$(stat -c %g /dev/kvm) tool/emulator/share_check.sh
+      - name: Upload emulator logs
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: emulator-logcat
+          path: ${{ runner.temp }}/logcat/
+          retention-days: 7
+          if-no-files-found: ignore

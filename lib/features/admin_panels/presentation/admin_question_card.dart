@@ -6,6 +6,7 @@ import '../../../app/theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../application/admin_drafts.dart';
 import '../domain/admin_models.dart';
+import 'admin_question_group_header.dart';
 
 class AdminQuestionCard extends StatelessWidget {
   const AdminQuestionCard({
@@ -62,6 +63,12 @@ class AdminQuestionCard extends StatelessWidget {
               ],
             ),
           ),
+          if (question.conv case final conv?)
+            Text(
+              adminQuestionFromLabel(conv),
+              key: ValueKey('admin-question-conv-${question.id}'),
+              style: TextStyle(color: t.muted),
+            ),
           if (expanded && question.ctx.isNotEmpty)
             Text(question.ctx, style: TextStyle(color: t.muted)),
           // The status stays on the closed header too.

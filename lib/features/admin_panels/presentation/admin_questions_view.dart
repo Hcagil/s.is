@@ -27,6 +27,8 @@ class _AdminQuestionsViewState extends ConsumerState<AdminQuestionsView> {
   final Map<String, int> _sel = {};
   final Map<String, TextEditingController> _ctl = {};
   bool _sending = false;
+  final Set<String> _open = {};
+  final Set<String> _closed = {};
 
   TextEditingController _controller(String id) =>
       _ctl.putIfAbsent(id, TextEditingController.new);
@@ -102,13 +104,17 @@ class _AdminQuestionsViewState extends ConsumerState<AdminQuestionsView> {
               _answerOf(q) != null,
         )
         .toList();
+    final topId = list
+        .where((q) => !q.waiting && !s.sentQuestions.contains(q.id))
+        .firstOrNull
+        ?.id;
 
     return Column(
       children: [
         Expanded(
           child: ListView(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            children: [for (final q in list) ..._rows(q, s)],
+            children: [for (final q in list) ..._rows(q, s, topId)],
           ),
         ),
         Padding(
@@ -127,8 +133,10 @@ class _AdminQuestionsViewState extends ConsumerState<AdminQuestionsView> {
   }
 
   // One status per question: 'sending' wins until the computer marks it waiting.
-  List<Widget> _rows(AdminQuestion q, AdminPanelsState s) {
+  List<Widget> _rows(AdminQuestion q, AdminPanelsState s, String? topId) {
     _restore(q);
+    final on =
+        _open.contains(q.id) || (q.id == topId && !_closed.contains(q.id));
     final a = s.latestAnswer('question', id: q.id);
     final sending =
         a != null && a.status == AdminAnswerStatus.sending && !q.waiting;
@@ -138,6 +146,16 @@ class _AdminQuestionsViewState extends ConsumerState<AdminQuestionsView> {
         question: q,
         waiting: !sending && (q.waiting || s.sentQuestions.contains(q.id)),
         selected: _sel[q.id] ?? -1,
+        expanded: on,
+        onToggle: () => setState(() {
+          if (on) {
+            _open.remove(q.id);
+            _closed.add(q.id);
+          } else {
+            _closed.remove(q.id);
+            _open.add(q.id);
+          }
+        }),
         controller: _controller(q.id),
         onSelected: (i) => setState(() => _sel[q.id] = i),
         onTextChanged: () {
@@ -170,6 +188,8 @@ class _AdminQuestionsViewState extends ConsumerState<AdminQuestionsView> {
         break;
       } else {
         _sel.remove(q.id);
+        _open.remove(q.id);
+        _closed.remove(q.id);
         _controller(q.id).clear();
         unawaited(_drafts.remove(adminQuestionDraftKey(q.id)));
       }

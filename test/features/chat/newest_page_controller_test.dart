@@ -1,7 +1,7 @@
 // MessagesController's newest-page open (0.30.14), from its contract:
-// - the first read is the newest page without previews; one batched
-//   attachmentPreviews call for the photo rows lacking one follows the first
-//   paint; rows get their preview by id; a failure is silent; an answer for a
+// - the first read is the newest page, each photo row with its stored preview;
+//   one batched attachmentPreviews call for the photo rows lacking one follows
+//   the first paint; rows get their preview by id; a failure is silent; an answer for a
 //   chat since left is dropped; known previews survive a rebuild.
 // - loadOlder() pages through messagesAround(oldest shown), adding only
 //   unseen rows not newer than the anchor; a page with fewer than
@@ -9,7 +9,7 @@
 //   time; olderLoadingProvider is true only during the call; an answer that
 //   arrives after a rebuild or a jump is dropped.
 // - jumpToAround resets the older-paging state.
-// Against ChatFake, whose messages() answers the newest page without
+// Against ChatFake, whose messages() answers the newest page with its
 // previews and whose messagesAround answers the real window (up to 50
 // older, the anchor, up to 50 newer).
 import 'dart:typed_data';
@@ -93,11 +93,18 @@ void main() {
   tearDown(() => c.dispose());
 
   group('first read', () {
-    test('the newest page only, oldest first, no previews yet', () async {
-      chat.holdPreviews(); // previews never arrive in this test
+    test('the newest page only, oldest first, previews as stored', () async {
+      chat.holdPreviews(); // the separate preview read never answers here
       await open('c1');
       expect(shown(), [for (var i = 70; i < 120; i++) 'c1-$i']);
-      expect(rows().every((m) => m.attachmentPreview == null), isTrue);
+      for (final m in rows()) {
+        final i = int.parse(m.id.substring(3));
+        expect(
+          m.attachmentPreview,
+          _isPhoto(i) ? _previewOf(i) : null,
+          reason: '${m.id}: the page read itself carries the stored preview',
+        );
+      }
       expect(messages().hasOlder, isTrue, reason: 'a full page: maybe more');
     });
 
@@ -114,16 +121,20 @@ void main() {
         if (_isPhoto(i)) 'c1-$i',
     ];
 
-    test('one batched call for the photo rows of the page, then each row '
-        'carries its own preview by id', () async {
+    test('one batched call for the photo rows lacking a preview, then each '
+        'row carries its own preview by id', () async {
+      final lacking = [
+        for (var i = 70; i < 120; i++)
+          if (_isPhoto(i) && _previewOf(i) == null) 'c1-$i',
+      ];
       await open('c1');
       await _until(() => chat.previewCalls.isNotEmpty, reason: 'no batch');
       expect(
         chat.previewCalls.first.toSet(),
-        photosInPage.toSet(),
-        reason: 'every photo row of the page, and only those, in one call',
+        lacking.toSet(),
+        reason: 'only the photo rows the page read left without a preview',
       );
-      expect(chat.previewCalls.first, hasLength(photosInPage.length));
+      expect(chat.previewCalls.first, hasLength(lacking.length));
       await _until(
         () => row('c1-83').attachmentPreview != null,
         reason: 'preview never applied',
@@ -193,7 +204,16 @@ void main() {
       expect(chat.previewCalls, isNotEmpty);
       expect(c.read(messagesProvider).hasError, isFalse);
       expect(shown(), hasLength(messagePageSize));
-      expect(rows().every((m) => m.attachmentPreview == null), isTrue);
+      expect(
+        row('c1-73').attachmentPreview,
+        isNull,
+        reason: 'a photo the page left without a preview stays without one',
+      );
+      expect(
+        row('c1-83').attachmentPreview,
+        equals(_previewOf(83)),
+        reason: 'a preview the page carried survives the failed read',
+      );
     });
 
     test('an answer for a chat since left is dropped', () async {
@@ -217,11 +237,11 @@ void main() {
       await c.read(messagesProvider.future);
       await quiet();
       final marker = Uint8List.fromList([9, 9, 9]);
-      chat.previewsResult = Ok({'c1-83': marker});
+      chat.previewsResult = Ok({'c1-73': marker});
       stale.complete();
       await quiet();
       expect(
-        row('c1-83').attachmentPreview,
+        row('c1-73').attachmentPreview,
         isNull,
         reason: 'the replaced build\'s answer must not land',
       );

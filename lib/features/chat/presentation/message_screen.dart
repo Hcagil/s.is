@@ -439,6 +439,9 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
       }
       final nearest = _nearestBuiltIndex(list, matchIndex);
       if (nearest == null) return;
+      // The extent is only an estimate until rows are built: let the upper bound follow it.
+      final extent = _scroll.position.maxScrollExtent;
+      if (extent > high) high = extent;
       // Larger matchIndex = newer = fewer pixels. A built neighbour newer
       // than the target means the target needs MORE pixels (scroll deeper);
       // older means it needs fewer.

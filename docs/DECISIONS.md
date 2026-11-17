@@ -705,3 +705,7 @@ Nothing contacts the site before that tap.
 - The raise runs in `publish` after the Play upload, so the new build is on Play before older ones are blocked.
 - The local stack's minimum (from migrations) can be lower than production after a raise; the PR check then replays an older build than needed, which costs time only.
 - A failed `old_app` job stops the release before the database changes.
+
+## 2026-11-17 — Private chat notifications offer Mark as read
+
+Owner Q-M-00277: encrypted chat notifications get the same Mark as read button as every other chat, on Android and iPhone. The server token of a private chat already signs `mark_read` only, and Mark as read sends no message text, so nothing is weakened. Reply stays the locked Reply handed to the app.

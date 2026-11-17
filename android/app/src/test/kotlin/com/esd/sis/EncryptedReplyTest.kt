@@ -35,10 +35,10 @@ import java.util.UUID
 
 /**
  * Private Chats 4b Group I: Reply on an encrypted push. Written from the contract, not the code:
- * - an encrypted push with a user_id gets exactly one Reply (no Mark as read): SEMANTIC_ACTION_REPLY,
+ * - an encrypted push with a user_id, token and https url gets Mark as read then Reply (owner 2026-11-17); without token or https url Reply only; Reply is SEMANTIC_ACTION_REPLY,
  *   RemoteInput "sis_reply", needs an unlock, shows UI; its PendingIntent is an activity one, the only
  *   mutable one on the notification, aimed at EncryptedReplyActivity with conversation_id + user_id;
- * - no Reply without a user_id, or on API 30 behind a secure lock;
+ * - no Reply without a user_id, or on API 30 behind a secure lock (Mark as read stays: it has no lock gate);
  * - EncryptedReplyActivity hands the trimmed text to EncryptedReplyInbox (memory only) under an id made
  *   at that tap, clears its extras, cancels the notification, opens MainActivity on the chat;
  *   anything missing, blank or over 4000 chars: nothing stored, nothing opened;
@@ -86,7 +86,13 @@ class EncryptedReplyTest {
     private fun locked(on: Boolean) =
         shadowOf(app.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager).setIsDeviceLocked(on)
 
-    private fun drawOrNull(chat: String, encrypted: String? = "true", user: String? = OWNER): Notification? {
+    private fun drawOrNull(
+        chat: String,
+        encrypted: String? = "true",
+        user: String? = OWNER,
+        token: String? = fixtureActionToken("mark_read", "reply"),
+        url: String? = "https://project.example/functions/v1/notification-action",
+    ): Notification? {
         val b = Bundle().apply {
             putString("message_id", "00000000-0000-4000-8000-%012d".format(++seq))
             putString("conversation_id", chat)
@@ -97,21 +103,29 @@ class EncryptedReplyTest {
             if (user != null) putString("user_id", user)
             putString("google.original_priority", "normal")
             putString("google.delivered_priority", "normal")
-            putString("action_token", fixtureActionToken("mark_read", "reply"))
-            putString("action_url", "https://project.example/functions/v1/notification-action")
+            if (token != null) putString("action_token", token)
+            if (url != null) putString("action_url", url)
             if (encrypted != null) putString("encrypted", encrypted)
         }
         PushArrivalReceiver().onReceive(app, Intent("com.google.android.c2dm.intent.RECEIVE").apply { putExtras(b) })
         return shadowOf(manager).getNotification(InstantPush.notificationId(chat))
     }
 
-    private fun draw(chat: String, encrypted: String? = "true", user: String? = OWNER) = drawOrNull(chat, encrypted, user)!!
+    private fun draw(
+        chat: String,
+        encrypted: String? = "true",
+        user: String? = OWNER,
+        token: String? = fixtureActionToken("mark_read", "reply"),
+        url: String? = "https://project.example/functions/v1/notification-action",
+    ) = drawOrNull(chat, encrypted, user, token, url)!!
 
     private fun titles(n: Notification) = n.actions.orEmpty().map { it.title.toString() }
 
+    private fun replyAction(n: Notification) = n.actions.single { it.title.toString() == "Reply" }
+
     /** The intent the Reply button would start, with [text] typed into it as the system does. */
     private fun replyIntent(n: Notification, text: String): Intent {
-        val saved = shadowOf(n.actions.single().actionIntent).savedIntent
+        val saved = shadowOf(replyAction(n).actionIntent).savedIntent
         val intent = Intent(saved)
         RemoteInput.addResultsToIntent(
             arrayOf(RemoteInput.Builder(NotificationActionReceiver.KEY_REPLY).build()),
@@ -142,16 +156,16 @@ class EncryptedReplyTest {
     // ---- the button ----
 
     @Test
-    fun `an encrypted push has one Reply that goes to EncryptedReplyActivity`() {
+    fun `an encrypted push has Mark as read then a Reply that goes to EncryptedReplyActivity`() {
         val n = draw("c-er-1")
-        assertEquals(listOf("Reply"), titles(n))
-        val compat = NotificationCompat.getAction(n, 0)!!
+        assertEquals(listOf("Mark as read", "Reply"), titles(n))
+        val compat = NotificationCompat.getAction(n, 1)!!
         assertEquals(NotificationCompat.Action.SEMANTIC_ACTION_REPLY, compat.semanticAction)
         assertTrue("opens UI", compat.showsUserInterface)
-        assertEquals(listOf(NotificationActionReceiver.KEY_REPLY), n.actions[0].remoteInputs.map { it.resultKey })
-        assertTrue("Reply needs an unlock", n.actions[0].isAuthenticationRequired)
+        assertEquals(listOf(NotificationActionReceiver.KEY_REPLY), n.actions[1].remoteInputs.map { it.resultKey })
+        assertTrue("Reply needs an unlock", n.actions[1].isAuthenticationRequired)
 
-        val pi = shadowOf(n.actions[0].actionIntent)
+        val pi = shadowOf(n.actions[1].actionIntent)
         assertTrue("an activity PendingIntent", pi.isActivityIntent)
         val sent = pi.savedIntent
         assertEquals(EncryptedReplyActivity::class.java.name, sent.component?.className)
@@ -161,17 +175,23 @@ class EncryptedReplyTest {
         assertEquals("sis-action://encrypted-reply/c-er-1", sent.dataString)
         // No id, text or token rides in the button: the id is made at the tap.
         assertEquals(setOf("conversation_id", "user_id"), sent.extras!!.keySet())
+        val mark = n.actions[0]
+        assertTrue("Mark as read is a broadcast", shadowOf(mark.actionIntent).isBroadcastIntent)
+        assertEquals(NotificationCompat.Action.SEMANTIC_ACTION_MARK_AS_READ, NotificationCompat.getAction(n, 0)!!.semanticAction)
+        assertEquals(NotificationActionReceiver::class.java.name, shadowOf(mark.actionIntent).savedIntent.component?.className)
+        assertFalse("Mark as read needs no unlock", mark.isAuthenticationRequired)
     }
 
     @Test
     fun `FLAG_MUTABLE is on the encrypted Reply only, never on the tap intent`() {
         val n = draw("c-er-flags")
-        val reply = shadowOf(n.actions.single().actionIntent).flags
+        val reply = shadowOf(replyAction(n).actionIntent).flags
         assertTrue("Reply is mutable (RemoteInput)", reply and PendingIntent.FLAG_MUTABLE != 0)
         assertTrue("Reply is UPDATE_CURRENT", reply and PendingIntent.FLAG_UPDATE_CURRENT != 0)
         val tap = shadowOf(n.contentIntent).flags
         assertEquals("the tap intent stays immutable", 0, tap and PendingIntent.FLAG_MUTABLE)
         assertTrue(tap and PendingIntent.FLAG_IMMUTABLE != 0)
+        assertEquals("Mark as read is never mutable", 0, shadowOf(n.actions[0].actionIntent).flags and PendingIntent.FLAG_MUTABLE)
     }
 
     @Test
@@ -180,16 +200,16 @@ class EncryptedReplyTest {
 
     @Test
     @Config(sdk = [30])
-    fun `API 30 behind a secure lock - no Reply on an encrypted push`() {
+    fun `API 30 behind a secure lock - no Reply but Mark as read stays`() {
         secureLock(true)
-        assertEquals(emptyList<String>(), titles(draw("c-er-30s")))
+        assertEquals(listOf("Mark as read"), titles(draw("c-er-30s")))
     }
 
     @Test
     @Config(sdk = [30])
     fun `API 30 with no secure lock - Reply on an encrypted push`() {
         secureLock(false)
-        assertEquals(listOf("Reply"), titles(draw("c-er-30o")))
+        assertEquals(listOf("Mark as read", "Reply"), titles(draw("c-er-30o")))
     }
 
     @Test
@@ -197,9 +217,17 @@ class EncryptedReplyTest {
     fun `API 31 behind a secure lock - Reply offered behind an unlock`() {
         secureLock(true)
         val n = draw("c-er-31s")
-        assertEquals(listOf("Reply"), titles(n))
-        assertTrue(n.actions[0].isAuthenticationRequired)
+        assertEquals(listOf("Mark as read", "Reply"), titles(n))
+        assertTrue(n.actions[1].isAuthenticationRequired)
     }
+
+    @Test
+    fun `an encrypted push without a token has Reply only`() =
+        assertEquals(listOf("Reply"), titles(draw("c-er-notoken", token = null)))
+
+    @Test
+    fun `an encrypted push with a non-https url has Reply only`() =
+        assertEquals(listOf("Reply"), titles(draw("c-er-http", url = "http://project.example/functions/v1/notification-action")))
 
     @Test
     fun `a plain push keeps Mark as read and Reply as broadcasts`() {

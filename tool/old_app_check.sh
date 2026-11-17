@@ -15,14 +15,21 @@ replay_tag() {
   fi
 
   # 1b. Fresh database: the old suite expects a clean stack (rate limits, one-time identities).
+  # New migrations, but the build's own seed.sql (test fixture data, never on production): a later seed may rename accounts the old suite signs in with.
   if [ -n "${OLD_APP_RESET_CMD:-}" ]; then
     pg=$(mktemp)
-    if ! $OLD_APP_RESET_CMD >"$pg" 2>&1; then
+    if ! $OLD_APP_RESET_CMD --no-seed >"$pg" 2>&1; then
+      tail -n 20 "$pg" >&2
+      rm -f "$pg"
+      return 2
+    fi
+    if [ -f "$dir/supabase/seed.sql" ] && ! docker exec -i "$db" psql -U postgres -v ON_ERROR_STOP=1 -qAt <"$dir/supabase/seed.sql" >"$pg" 2>&1; then
       tail -n 20 "$pg" >&2
       rm -f "$pg"
       return 2
     fi
     rm -f "$pg"
+    reset_done=true
   fi
 
   # 2. Flutter pub get and optional rust build
@@ -179,6 +186,7 @@ say "old app check: minimum supported build $OLD_APP_MIN; checking: ${selected[*
 
 # Run tests
 dirs=()
+reset_done=false
 trap 'rm -rf "${dirs[@]}"' EXIT
 any_fail=false
 
@@ -221,6 +229,12 @@ for tag in "${selected[@]}"; do
       ;;
   esac
 done
+
+# Put the current seed back, so later steps (pgTAP, the next suite) see this branch's fixtures.
+if $reset_done && ! $OLD_APP_RESET_CMD >/dev/null 2>&1; then
+  say "ERROR: could not restore the current seed after the replays"
+  any_fail=true
+fi
 
 if $any_fail; then
   exit 1

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Phone half of a push: an FCM-shaped broadcast reaches SIS's receiver and the chat notification is
 # posted with its picture, which SIS fetches over https from a server inside the lane (no public host).
-# Usage: tool/emulator/push_check.sh [APK]. Mutation knobs: PIC_PATH (default pic.png), SKIP_CA=1.
+# Usage: tool/emulator/push_check.sh [APK]. Mutation knobs: PIC_PATH (default pic.png), SKIP_CA=1. Logcat is saved to $PUSH_LOGCAT (default /tmp/push_check_logcat.txt).
 
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
@@ -11,7 +11,13 @@ PIC_PATH="${PIC_PATH:-pic.png}"
 SKIP_CA="${SKIP_CA:-0}"
 
 emu_lock
-trap emu_stop EXIT
+cleanup() {
+  adbe logcat -d > "${PUSH_LOGCAT:-/tmp/push_check_logcat.txt}" 2>/dev/null || true
+  emu_stop
+}
+trap cleanup EXIT
+trap 'exit 143' TERM
+trap 'exit 130' INT
 
 # Start emulator with required mounts
 emu_start \

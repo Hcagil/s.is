@@ -103,7 +103,7 @@ select is((select due from _r where uid = '00000000-0000-0000-0000-00000000de05'
 select test_as('00000000-0000-0000-0000-00000000de01', 'a1a1a1a1-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
 insert into _r select '00000000-0000-0000-0000-00000000de01', public.request_account_deletion();
 reset role;
-select ok((select due from _r where uid = '00000000-0000-0000-0000-00000000de01') between now() + interval '28 days 23 hours' and now() + interval '29 days 1 hour', 'Ann due is about 29 days away');
+select ok((select due from _r where uid = '00000000-0000-0000-0000-00000000de01') between now() + interval '29 days 22 hours 30 minutes' and now() + interval '29 days 23 hours 30 minutes', 'Ann due is 30 days minus 1 hour away');
 select is((select count(*)::int from app_private.account_deletions where user_id = '00000000-0000-0000-0000-00000000de01'), 1, 'Ann has one account_deletions row');
 select is((select count(*)::int from app_private.account_deletion_log where request_id = (select request_id from app_private.account_deletions where user_id = '00000000-0000-0000-0000-00000000de01') and outcome = 'pending' and done_at is null and email_hmac is not null and email_hmac not like '%ann%'), 1, 'Ann has one pending log row');
 

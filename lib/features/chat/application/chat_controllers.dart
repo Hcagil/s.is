@@ -39,6 +39,8 @@ import '../domain/location_services.dart';
 import '../domain/location_share_repository.dart';
 import '../domain/message.dart';
 import '../domain/message_store.dart';
+import '../domain/pending_push_messages.dart';
+import 'pending_push_messages_provider.dart';
 import '../domain/push_inbox_store.dart';
 import '../domain/vanished_store.dart';
 import '../domain/phone_book.dart';
@@ -277,6 +279,31 @@ MessageStore? _storeOf(Ref ref) {
     return ref.read(messageStoreProvider);
   } catch (_) {
     return null;
+  }
+}
+
+/// Lines a plain push saved while the app was closed (see
+/// [PendingPushMessages]) for [ownerId], oldest first. Dropped: a line
+/// without a sender id, the locked placeholder, and any id in [known]
+/// (already a push row or a stored message). Never throws.
+Future<List<Message>> _pendingLines(
+  Ref ref,
+  String ownerId,
+  Set<String> known,
+) async {
+  try {
+    final all = await ref
+        .read(pendingPushMessagesProvider)
+        .pendingPushMessages(ownerId);
+    return [
+      for (final m in all)
+        if (m.senderId.isNotEmpty &&
+            !isLockedPlaceholder(m.body) &&
+            !known.contains(m.id))
+          m,
+    ]..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+  } catch (_) {
+    return const [];
   }
 }
 

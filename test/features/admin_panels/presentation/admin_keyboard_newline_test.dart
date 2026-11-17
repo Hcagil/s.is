@@ -66,6 +66,8 @@ void main() {
           selected: 0,
           controller: controller,
           onSelected: (_) {},
+          expanded: true,
+          onToggle: () {},
           onTextChanged: () {},
         ),
       );
@@ -95,6 +97,8 @@ void main() {
           selected: 0,
           controller: controller,
           onSelected: (_) {},
+          expanded: true,
+          onToggle: () {},
           onTextChanged: () => changes++,
         ),
       );

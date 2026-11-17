@@ -29,7 +29,7 @@ import org.robolectric.annotation.Config
  * - the notification line shows the peeked text;
  * - the push inbox (FlutterSharedPreferences) only ever holds the locked text;
  * - visibility PRIVATE; the public version: title "SIS", text the fallback, same icon and colour;
- * - one Reply (the app sends it locked) and no Mark as read (Group I);
+ * - Mark as read then Reply when the push has an action token and an https action_url (owner 2026-11-17);
  * - a null peek draws today's locked notification;
  * - without ct/ot, or when not encrypted, the peek is never asked.
  */
@@ -144,8 +144,8 @@ class EncryptedPushPeekTest {
     }
 
     @Test
-    fun `a peeked push has one Reply and no Mark as read`() =
-        assertEquals(listOf("Reply"), show(extras("c-peek-4")).actions.orEmpty().map { it.title.toString() })
+    fun `a peeked push has Mark as read then Reply`() =
+        assertEquals(listOf("Mark as read", "Reply"), show(extras("c-peek-4")).actions.orEmpty().map { it.title.toString() })
 
     @Test
     fun `a null peek draws today's locked notification`() {
@@ -153,7 +153,7 @@ class EncryptedPushPeekTest {
         val n = show(extras("c-peek-5"))
         assertEquals(1, asked.size)
         assertEquals(LOCKED, line(n).text.toString())
-        assertEquals(listOf("Reply"), n.actions.orEmpty().map { it.title.toString() })
+        assertEquals(listOf("Mark as read", "Reply"), n.actions.orEmpty().map { it.title.toString() })
     }
 
     @Test

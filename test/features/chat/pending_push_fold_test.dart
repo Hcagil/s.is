@@ -30,8 +30,14 @@ import '../../support/video_fakes.dart';
 import 'data/store/store_harness.dart';
 
 const _me = Member(userId: 'me', displayName: 'Maya');
-const _alice = Member(userId: 'alice', displayName: 'Alice');
-const _carol = Member(userId: 'carol', displayName: 'Carol');
+const _aliceId = 'a11ce000-0000-4000-8000-000000000001';
+const _carolId = 'ca401000-0000-4000-8000-000000000002';
+const _p0 = '00000000-0000-4000-8000-0000000000f0';
+const _p1 = '00000000-0000-4000-8000-0000000000f1';
+const _p2 = '00000000-0000-4000-8000-0000000000f2';
+const _p3 = '00000000-0000-4000-8000-0000000000f3';
+const _alice = Member(userId: _aliceId, displayName: 'Alice');
+const _carol = Member(userId: _carolId, displayName: 'Carol');
 
 class _SignedIn extends SessionController {
   @override
@@ -96,7 +102,7 @@ void main() {
       Message(
         id: 'm1',
         conversationId: 'c1',
-        senderId: 'alice',
+        senderId: _aliceId,
         body: 'old',
         createdAt: _t0,
       ),
@@ -111,7 +117,7 @@ void main() {
       keyHex: key,
       conversationId: conv,
       messageId: id,
-      peerUserId: conv == 'c1' ? 'alice' : 'carol',
+      peerUserId: conv == 'c1' ? _aliceId : _carolId,
       body: body,
       sealed: 'ab' * 32,
       receivedAtMicros: _t0
@@ -199,9 +205,9 @@ void main() {
     final s = driftStore('me', h.dir, key);
     await s.upsertAll([
       Message(
-        id: 'p1',
+        id: _p1,
         conversationId: 'c1',
-        senderId: 'alice',
+        senderId: _aliceId,
         body: 'new',
         createdAt: _t0.add(const Duration(minutes: 1)),
       ),
@@ -215,14 +221,14 @@ void main() {
 
   group('chat list, first AsyncData, server never answers', () {
     test('a pending line is the preview and +1 unread in the first list; list-push-rows is marked', () async {
-      final p = _Pending([_line('p1', 'c1', 'alice', 'new', 1)]);
+      final p = _Pending([_line(_p1, 'c1', _aliceId, 'new', 1)]);
       final log = <String>[];
       final c = await app(p);
       final l = await logged(log, () => firstList(c));
       final c1 = byId(l, 'c1');
       expect(c1.lastMessage, 'new');
       expect(c1.unread, 1);
-      expect(c1.lastSenderId, 'alice');
+      expect(c1.lastSenderId, _aliceId);
       final c2 = byId(l, 'c2');
       expect(c2.lastMessage, 'carol old');
       expect(c2.unread, 0);
@@ -234,8 +240,8 @@ void main() {
 
     test('a line without a sender id is skipped', () async {
       final p = _Pending([
-        _line('p0', 'c1', '', 'no sender', 1),
-        _line('p2', 'c2', 'carol', 'carol new', 2),
+        _line(_p0, 'c1', '', 'no sender', 1),
+        _line(_p2, 'c2', _carolId, 'carol new', 2),
       ]);
       final c = await app(p);
       final l = await firstList(c);
@@ -252,8 +258,8 @@ void main() {
       'a placeholder line from a preview-none push (no "u") is skipped',
       () async {
         final p = _Pending([
-          _line('p0', 'c1', '', 'Yeni mesaj', 1),
-          _line('p2', 'c2', 'carol', 'carol new', 2),
+          _line(_p0, 'c1', '', 'Yeni mesaj', 1),
+          _line(_p2, 'c2', _carolId, 'carol new', 2),
         ]);
         final c = await app(p);
         final l = await firstList(c);
@@ -269,8 +275,8 @@ void main() {
 
     test('a locked placeholder line is skipped', () async {
       final p = _Pending([
-        _line('p0', 'c1', 'alice', lockedBodyPlaceholder, 1),
-        _line('p2', 'c2', 'carol', 'carol new', 2),
+        _line(_p0, 'c1', _aliceId, lockedBodyPlaceholder, 1),
+        _line(_p2, 'c2', _carolId, 'carol new', 2),
       ]);
       final c = await app(p);
       final l = await firstList(c);
@@ -284,8 +290,8 @@ void main() {
     });
 
     test('a line already saved as a push row counts once', () async {
-      push('p1', 'new', minutes: 1);
-      final p = _Pending([_line('p1', 'c1', 'alice', 'new', 1)]);
+      push(_p1, 'new', minutes: 1);
+      final p = _Pending([_line(_p1, 'c1', _aliceId, 'new', 1)]);
       final c = await app(p);
       final l = await firstList(c);
       final c1 = byId(l, 'c1');
@@ -296,7 +302,7 @@ void main() {
 
     test('a line whose real row is already stored counts nothing', () async {
       await seedReadRow();
-      final p = _Pending([_line('p1', 'c1', 'alice', 'new', 1)]);
+      final p = _Pending([_line(_p1, 'c1', _aliceId, 'new', 1)]);
       final c = await app(p);
       final l = await firstList(c);
       final c1 = byId(l, 'c1');
@@ -304,20 +310,34 @@ void main() {
       expect(c1.unread, 0);
       chat.releaseList();
     });
+
+    test('a line whose id or sender id is not UUID-shaped is skipped; a UUID one is kept', () async {
+      final p = _Pending([
+        _line('n1', 'c1', _aliceId, 'bad id', 1),
+        _line(_p0, 'c1', 'alice', 'bad sender', 2),
+        _line(_p2, 'c2', _carolId, 'carol new', 3),
+      ]);
+      final c = await app(p);
+      final l = await firstList(c);
+      final c1 = byId(l, 'c1');
+      expect(c1.lastMessage, 'old');
+      expect(c1.unread, 0);
+      final c2 = byId(l, 'c2');
+      expect(c2.lastMessage, 'carol new');
+      expect(c2.unread, 1);
+      chat.releaseList();
+    });
   });
 
   group('chat, first messages, server never answers', () {
     test('the pending line follows the stored rows', () async {
-      final p = _Pending([_line('p1', 'c1', 'alice', 'new', 1)]);
+      final p = _Pending([_line(_p1, 'c1', _aliceId, 'new', 1)]);
       final c = await app(p);
       final ids = await firstPaint(c, 'c1');
-      expect(ids, ['m1', 'p1']);
-      final p1 = c
-          .read(messagesProvider)
-          .value!
-          .firstWhere((m) => m.id == 'p1');
+      expect(ids, ['m1', _p1]);
+      final p1 = c.read(messagesProvider).value!.firstWhere((m) => m.id == _p1);
       expect(p1.body, 'new');
-      expect(p1.senderId, 'alice');
+      expect(p1.senderId, _aliceId);
       chat.releaseMessages();
     });
 
@@ -325,32 +345,32 @@ void main() {
       'lines without a sender id or with the locked placeholder are not shown',
       () async {
         final p = _Pending([
-          _line('p0', 'c1', '', 'no sender', 1),
-          _line('p3', 'c1', 'alice', lockedBodyPlaceholder, 2),
-          _line('p1', 'c1', 'alice', 'new', 3),
+          _line(_p0, 'c1', '', 'no sender', 1),
+          _line(_p3, 'c1', _aliceId, lockedBodyPlaceholder, 2),
+          _line(_p1, 'c1', _aliceId, 'new', 3),
         ]);
         final c = await app(p);
         final ids = await firstPaint(c, 'c1');
-        expect(ids, ['m1', 'p1']);
+        expect(ids, ['m1', _p1]);
         chat.releaseMessages();
       },
     );
 
     test('a line already saved as a push row is shown once', () async {
-      push('p1', 'new', minutes: 1);
-      final p = _Pending([_line('p1', 'c1', 'alice', 'new', 1)]);
+      push(_p1, 'new', minutes: 1);
+      final p = _Pending([_line(_p1, 'c1', _aliceId, 'new', 1)]);
       final c = await app(p);
       final ids = await firstPaint(c, 'c1');
-      expect(ids, ['m1', 'p1']);
+      expect(ids, ['m1', _p1]);
       chat.releaseMessages();
     });
 
     test('a line whose real row is stored is shown once', () async {
       await seedReadRow();
-      final p = _Pending([_line('p1', 'c1', 'alice', 'new', 1)]);
+      final p = _Pending([_line(_p1, 'c1', _aliceId, 'new', 1)]);
       final c = await app(p);
       final ids = await firstPaint(c, 'c1');
-      expect(ids, ['m1', 'p1']);
+      expect(ids, ['m1', _p1]);
       chat.releaseMessages();
     });
   });

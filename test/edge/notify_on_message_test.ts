@@ -663,6 +663,29 @@ Deno.test({
       const c = await send(direct, long);
       assertEquals(dataOf(c).body, 'b'.repeat(119) + '…', 'fixture: 121 characters are cut to 119 plus an ellipsis');
       assert(!('sender_id' in dataOf(c)), `a cut body carries no sender id, so the phone never saves it cut: ${JSON.stringify(dataOf(c))}`);
+      const deliverData = async (id: string) => {
+        assertEquals(await deliver(id), { status: 204, text: '' });
+        return dataOf({ sent: [...sent] });
+      };
+      // A photo without a caption: the push body is a label, messages.body is ''.
+      const photoId = crypto.randomUUID();
+      await sql`insert into public.messages(id, conversation_id, sender_id, body, attachment_path)
+                values (${photoId}, ${direct}, ${p.ann.id}, '', ${`${direct}/${photoId}/p.jpg`})`;
+      const ph = await deliverData(photoId);
+      assert(ph.body !== '', `fixture: a photo push has a label body: ${JSON.stringify(ph)}`);
+      assert(!('sender_id' in ph), `a label is not the message text: no sender id: ${JSON.stringify(ph)}`);
+      // A contact: the push body is a label plus the name, messages.body is name + phone.
+      const [{ id: contactId }] = await sql`insert into public.messages(conversation_id, sender_id, body, contact)
+                values (${direct}, ${p.ann.id}, ${'Zed Quill\n5551234567'}, true) returning id`;
+      const ct = await deliverData(contactId);
+      assert(ct.body.endsWith('Zed Quill'), `fixture: a contact push names the contact: ${JSON.stringify(ct)}`);
+      assert(!('sender_id' in ct), `a contact label is not the message text: no sender id: ${JSON.stringify(ct)}`);
+      // A contact whose long name the label cuts to 60 characters.
+      const [{ id: longContactId }] = await sql`insert into public.messages(conversation_id, sender_id, body, contact)
+                values (${direct}, ${p.ann.id}, ${'Q'.repeat(500) + '\n5551234567'}, true) returning id`;
+      const lc = await deliverData(longContactId);
+      assert(lc.body.endsWith('Q'.repeat(60)) && !lc.body.endsWith('Q'.repeat(61)), `fixture: the name is cut to 60: ${JSON.stringify(lc)}`);
+      assert(!('sender_id' in lc), `a cut contact label carries no sender id: ${JSON.stringify(lc)}`);
     } finally {
       await sql.begin(async (tx) => {
         await tx`delete from app_private.tag_finds where finder in ${sql(people.map((x) => x.id))}`;

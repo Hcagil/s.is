@@ -1,4 +1,4 @@
-# Emulator checks: a headless Android emulator (docker/Emulator.Dockerfile) runs
+# Emulator checks: a headless Android emulator (tool/emulator/Dockerfile) runs
 # tool/emulator/push_check.sh (a push shows the chat notification with its picture)
 # and tool/emulator/share_check.sh (a shared text + photo reach the app).
 # Runs once a day and by hand; not on pull requests and not a required check.
@@ -64,7 +64,7 @@ jobs:
         run: |
           # Not cached: the image is about 8 GB, close to the whole repository cache limit.
           for attempt in 1 2 3; do
-            docker build -f docker/Emulator.Dockerfile -t sis-emulator:google-apis --build-arg LOCAL_UID="$(id -u)" --build-arg LOCAL_GID="$(id -g)" docker && exit 0
+            docker build -f tool/emulator/Dockerfile -t sis-emulator:google-apis --build-arg LOCAL_UID="$(id -u)" --build-arg LOCAL_GID="$(id -g)" docker && exit 0
             echo "::warning::emulator image build failed (attempt $attempt of 3)"
             if [ "$attempt" -lt 3 ]; then sleep 30; fi
           done

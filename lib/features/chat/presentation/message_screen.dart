@@ -590,6 +590,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
             .firstOrNull,
       ),
     );
+    final deletedIds = ref.watch(deletedUsersControllerProvider);
     final registry = ref.watch(staffRegistryProvider);
     final title =
         widget.title ??
@@ -601,7 +602,11 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                     Localizations.localeOf(context).languageCode,
                   ) ??
                   AppLocalizations.of(context).staffChatTitleFallback
-            : conversationLabel(AppLocalizations.of(context), listed));
+            : conversationLabel(
+                AppLocalizations.of(context),
+                listed,
+                deleted: deletedIds,
+              ));
     final isGroup = widget.group || (listed?.isGroup ?? false);
     final isSystem = listed?.isSystem ?? false;
     final isAdminChat = listed?.isAdminChat ?? false;
@@ -636,7 +641,12 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
       if (!isGroup && otherUserId != null && title != null) otherUserId: title,
     };
     // A sender the roster cannot name may be an account that no longer exists: ask the server once per id.
-    final deletedIds = ref.watch(deletedUsersControllerProvider);
+    // A 1:1 partner with no name may be a deleted account: ask the server once.
+    if (!isGroup &&
+        listed?.other != null &&
+        listed!.other!.displayName.isEmpty) {
+      askDeletedAccounts(ref, [listed.other!.userId]);
+    }
     final unnamed = {
       for (final m in messages.value ?? const <Message>[])
         if (isGroup &&

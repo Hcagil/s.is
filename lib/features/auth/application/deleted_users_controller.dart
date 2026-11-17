@@ -3,27 +3,43 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/failure.dart';
 import 'account_deletion_controller.dart';
 
-/// Which account ids the server says no longer exist. Ids are asked once per run of the app (the answer cannot change back); a failed ask is retried the next time.
+/// Which account ids the server says no longer exist. Ids are asked once per run of the app; a failed ask is retried at most once a minute per id.
 class DeletedUsersController extends Notifier<Set<String>> {
-  final _asked = <String>{};
+  final _answered = <String>{};
+  final _inFlight = <String>{};
+  final _retryAt = <String, DateTime>{};
 
   @override
   Set<String> build() => const {};
 
   /// Asks the server about [ids] not asked before (200 per call, done by the repository); adds the ones reported missing to the state.
   Future<void> check(Iterable<String> ids) async {
-    final fresh = ids.where((id) => !_asked.contains(id)).toSet();
+    final now = DateTime.now();
+    final fresh = ids
+        .where(
+          (id) =>
+              !_answered.contains(id) &&
+              !_inFlight.contains(id) &&
+              (_retryAt[id] == null || !now.isBefore(_retryAt[id]!)),
+        )
+        .toSet();
     if (fresh.isEmpty) return;
-    _asked.addAll(fresh);
+    _inFlight.addAll(fresh);
     final r = await ref
         .read(accountDeletionRepositoryProvider)
         .missingUsers(fresh.toList());
+    _inFlight.removeAll(fresh);
     if (!ref.mounted) return;
     switch (r) {
       case Ok(:final value):
+        _answered.addAll(fresh);
+        fresh.forEach(_retryAt.remove);
         if (value.isNotEmpty) state = {...state, ...value};
       case Err():
-        _asked.removeAll(fresh);
+        final retry = DateTime.now().add(const Duration(minutes: 1));
+        for (final id in fresh) {
+          _retryAt[id] = retry;
+        }
     }
   }
 }

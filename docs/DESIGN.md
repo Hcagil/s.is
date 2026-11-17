@@ -160,14 +160,16 @@ exist only in GitHub Actions secrets and in the maintainer's offline backup.
 
 - On launch the app reads `app_config`.
 - `installed < min_supported_build` → blocking "update required" screen with a
-  Play link. Raising `min_supported_build` is a manual, recorded decision,
-  used only when an older build would break against the current backend.
+  Play link. The release raises `min_supported_build` by itself to the oldest
+  build that still passes the old app test against the new server (usually the
+  new release itself); the owner can still raise it by hand. It is never
+  lowered. The blocking screen is the warning; there is no earlier banner.
 - Otherwise, if Play reports a newer version → **flexible** in-app update:
   dismissible banner, background download, install on tap. The check runs at
   launch and every time the app returns to the foreground; a dismissed banner
   stays away until then, never while the member is using the app. An update
   that finished downloading earlier is offered for install at once.
-- Publishing a build never changes `min_supported_build`.
+- Publishing a build raises `min_supported_build` only when a build between the old minimum and the new release fails the old app test against the new server (docs/DELIVERY.md, "Raise the minimum supported build"). It never lowers it.
 - On its first start after an update the app asks the server for the "What's new" notes due for its build; they arrive as messages from SIS in a read-only chat (docs/DECISIONS.md, 2026-09-30).
 - Migrations must remain compatible with every build ≥ `min_supported_build`.
 

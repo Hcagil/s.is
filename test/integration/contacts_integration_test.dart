@@ -165,7 +165,7 @@ void main() {
     expect(answered, 20);
     expect(refused, hasLength(180));
     for (final r in refused) {
-      expect(r.failure, isA<ProviderFailure>());
+      expect(r.failure, isA<SearchLimitFailure>());
       expect(r.failure.message, _rateLimited);
     }
     // A separate budget: availability still answers.

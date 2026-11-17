@@ -693,6 +693,19 @@ Nothing contacts the site before that tap.
 - Only the owner account sees the entry point; other accounts never see the screen.
 - RPCs that update or delete always carry a WHERE clause, because the API runs with safe updates on (a pgTAP test loads it).
 
+## 2026-11-17 — The release raises the oldest allowed build by itself
+
+**Decision.** When supabase/ changed, the release replays the oldest allowed build and the newest build against the new server (`old_app` job, `tool/old_app_check.sh` in release mode) and raises `app_config.min_supported_build` to the oldest build that still passes, usually the release itself. The owner can still raise it by hand; it is never lowered (the update has a `< N` guard). A build with no server tests counts as passing, so only a real failing test blocks a version (owner 2026-11-16). The existing "Update required" screen is the warning; no new screen.
+
+**Removing a feature on purpose.** The PR adds `-- old-app-break: <test file under test/integration> -- <reason>` to its own migration. The PR check then reports failures of that file as EXPECTED BREAK, for builds older than that migration only; other failures and errors still fail it. The release then raises the minimum past the broken builds.
+
+**Why.** A feature removed on purpose made the old-app check fail forever, so the PR could never merge (owner Q-M-00195, Q-M-00239, Q-M-00258, Q-M-00259). Limit: between the merge and the release, a second real break in the same test file of an older build stays hidden; the raise blocks those builds within hours.
+
+**Consequences.**
+- The raise runs in `publish` after the Play upload, so the new build is on Play before older ones are blocked.
+- The local stack's minimum (from migrations) can be lower than production after a raise; the PR check then replays an older build than needed, which costs time only.
+- A failed `old_app` job stops the release before the database changes.
+
 ## 2026-11-17 — Private chat notifications offer Mark as read
 
 Owner Q-M-00277: encrypted chat notifications get the same Mark as read button as every other chat, on Android and iPhone. The server token of a private chat already signs `mark_read` only, and Mark as read sends no message text, so nothing is weakened. Reply stays the locked Reply handed to the app.

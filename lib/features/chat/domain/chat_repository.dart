@@ -90,8 +90,9 @@ abstract interface class ChatRepository {
   Future<Result<List<Message>>> sharedLinks(String conversationId);
 
   /// The newest [messagePageSize] messages in [conversationId], oldest first,
-  /// WITHOUT their photo previews (see [attachmentPreviews]); older history is
-  /// read with [messagesAround]. A page shorter than [messagePageSize] means
+  /// WITH their photo previews (so each photo has its final size at the first
+  /// paint); older history is read with [messagesAround], whose previews come
+  /// from [attachmentPreviews]. A page shorter than [messagePageSize] means
   /// nothing is older.
   Future<Result<List<Message>>> messages(String conversationId);
 
@@ -289,7 +290,7 @@ abstract interface class ChatRepository {
   Future<Result<ChangeCursor?>> newestChange();
 
   /// Up to [limit] messages of [conversationId] created at or before [before],
-  /// oldest first, WITHOUT photo previews: a backfill page. At-or-before, so a
+  /// oldest first, with photo previews: a backfill page. At-or-before, so a
   /// message sharing the instant is never skipped; the caller dedupes by id.
   Future<Result<List<Message>>> messagesBefore(
     String conversationId,

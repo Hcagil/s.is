@@ -552,8 +552,8 @@ void main() {
   });
 
   group('attachment_preview round trip', () {
-    test('sendImage stores it, and it comes back through attachmentPreviews() '
-        'for the other member (0.30.14: not through messages())', () async {
+    test('sendImage stores it, and it comes back through messages() and '
+        'attachmentPreviews() for the other member', () async {
       final image = PickedImage(
         bytes: _png,
         contentType: 'image/png',
@@ -574,8 +574,8 @@ void main() {
       );
       expect(
         seen.attachmentPreview,
-        isNull,
-        reason: 'the first read leaves the preview column out',
+        _png,
+        reason: 'the newest-page read carries the preview',
       );
       final previews = await mia.attachmentPreviews([sent.value.id]);
       expect(

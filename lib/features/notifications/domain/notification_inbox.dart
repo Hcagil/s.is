@@ -1,3 +1,11 @@
+final _uuidShape = RegExp(
+  r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+);
+
+/// True for a lowercase UUID; the only shape of a message or sender id the
+/// closed-app save trusts.
+bool isUuidShape(String s) => _uuidShape.hasMatch(s);
+
 /// One message line in a chat's notification.
 final class InboxLine {
   const InboxLine({
@@ -143,7 +151,7 @@ List<InboxChat> addToInbox(
       text: body,
       at: at.millisecondsSinceEpoch,
       id: messageId,
-      senderId: senderId,
+      senderId: senderId != null && isUuidShape(senderId) ? senderId : null,
     ),
   ];
   return [

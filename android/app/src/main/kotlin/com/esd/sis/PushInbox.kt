@@ -13,6 +13,7 @@ import org.json.JSONObject
  */
 object PushInbox {
     const val MAX_LINES = 25
+    private val UUID_SHAPE = Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
     /** Chats parsed from [raw]; empty on null or unreadable text. */
     fun parse(raw: String?): JSONArray {
@@ -65,7 +66,7 @@ object PushInbox {
 
         val line = JSONObject().put("s", lineSender).put("x", text).put("a", at)
         if (messageId != null) line.put("m", messageId)
-        if (senderId != null) line.put("u", senderId)
+        if (senderId != null && UUID_SHAPE.matches(senderId)) line.put("u", senderId)
         val all = (0 until old.length()).map { old.getJSONObject(it) }.filter { !reaction || it.optString("m") != messageId } + line
         val lines = JSONArray(all.takeLast(MAX_LINES))
 

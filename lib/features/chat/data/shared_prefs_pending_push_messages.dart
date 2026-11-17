@@ -27,8 +27,8 @@ final class SharedPrefsPendingPushMessages implements PendingPushMessages {
         for (final line in chat.lines) {
           final id = line.id;
           final senderId = line.senderId;
-          if (id == null || id.startsWith('r:')) continue;
-          if (senderId == null || senderId.isEmpty) continue;
+          if (id == null || !isUuidShape(id)) continue;
+          if (senderId == null || !isUuidShape(senderId)) continue;
           out.add(
             Message(
               id: id,

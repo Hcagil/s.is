@@ -39,6 +39,7 @@ import '../domain/location_services.dart';
 import '../domain/location_share_repository.dart';
 import '../domain/message.dart';
 import '../domain/message_store.dart';
+import '../../notifications/domain/notification_inbox.dart' show isUuidShape;
 import '../domain/pending_push_messages.dart';
 import 'pending_push_messages_provider.dart';
 import '../domain/push_inbox_store.dart';
@@ -297,7 +298,8 @@ Future<List<Message>> _pendingLines(
         .pendingPushMessages(ownerId);
     return [
       for (final m in all)
-        if (m.senderId.isNotEmpty &&
+        if (isUuidShape(m.senderId) &&
+            isUuidShape(m.id) &&
             !isLockedPlaceholder(m.body) &&
             !known.contains(m.id))
           m,

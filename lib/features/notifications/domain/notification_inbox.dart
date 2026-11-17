@@ -5,6 +5,7 @@ final class InboxLine {
     required this.text,
     required this.at,
     this.id,
+    this.senderId,
   });
 
   final String sender;
@@ -16,7 +17,17 @@ final class InboxLine {
   /// The push's message id, used to drop a line stored twice.
   final String? id;
 
-  Map<String, Object> toJson() => {'s': sender, 'x': text, 'a': at, 'm': ?id};
+  /// Who wrote it (the user id), kept only for a plain push whose body is the
+  /// real text; the closed-app save reads it. Null otherwise.
+  final String? senderId;
+
+  Map<String, Object> toJson() => {
+    's': sender,
+    'x': text,
+    'a': at,
+    'm': ?id,
+    'u': ?senderId,
+  };
 
   /// [j] is a stored map, or a bare string (the format before per-line
   /// senders existed).
@@ -28,6 +39,7 @@ final class InboxLine {
       text: m['x'] as String,
       at: m['a'] as int,
       id: m['m'] as String?,
+      senderId: m['u'] as String?,
     );
   }
 }
@@ -110,6 +122,7 @@ List<InboxChat> addToInbox(
   String? sender,
   String? chat,
   String? messageId,
+  String? senderId,
   required DateTime at,
 }) {
   final parsed = sender != null && chat != null
@@ -130,6 +143,7 @@ List<InboxChat> addToInbox(
       text: body,
       at: at.millisecondsSinceEpoch,
       id: messageId,
+      senderId: senderId,
     ),
   ];
   return [

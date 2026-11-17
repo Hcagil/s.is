@@ -223,24 +223,26 @@ for case in "1793485800|26.10.2" "1804248000|27.3.2"; do
 done
 
 # 2 publish: needs exactly scope, uses scope's version, computes none itself.
-[ "$(key "$tmp/publish" needs)" = 'scope' ] || fail "publish must need exactly scope, got [$(key "$tmp/publish" needs)]"
+pneeds=$(key "$tmp/publish" needs | tr -d '[] ' | tr , '\n' | sort | paste -sd,)
+[ "$pneeds" = old_app,scope ] || fail "publish must need exactly scope and old_app, got [$(key "$tmp/publish" needs)]"
 grep -q 'run_number' "$tmp/publish" && fail "publish computes its own version (run_number)"
 grep -qE 'pubspec\.yaml|steps\.v\.' "$tmp/publish" && fail "publish reads the version itself instead of from scope"
 grep -q -- '--build-number=${{ needs.scope.outputs.code }} --build-name=${{ needs.scope.outputs.name }}' "$tmp/publish" \
   || fail "the AAB is not built with scope's code and name"
 grep -q 'BUILD: ${{ needs.scope.outputs.code }}' "$tmp/publish" || fail "the note step does not use scope's code"
 grep -q 'v${{ needs.scope.outputs.name }}+${{ needs.scope.outputs.code }}' "$tmp/publish" || fail "the release tag does not use scope's version"
-# Only distribute waits on the iOS job; nothing waits on distribute.
+# Only distribute and raise_own wait on the iOS job; only raise_own waits on distribute (it raises the oldest allowed build after both).
 for j in $(sed -n 's/^  \([A-Za-z0-9_-]*\):$/\1/p' "$release"); do
-  [ "$j" = distribute ] && continue
+  { [ "$j" = distribute ] || [ "$j" = raise_own ]; } && continue
   needs=$(job "$release" "$j" | awk '/^    needs:/ && !n++')
   if grep -qE '\bios\b' <<<"$needs"; then fail "job $j needs ios: Play must never wait on Apple ($needs)"; fi
   if grep -qE '\bdistribute\b' <<<"$needs"; then fail "job $j needs distribute: nothing may wait on TestFlight groups ($needs)"; fi
 done
 
 # 3 ios: needs scope only; ships and is not quiet; IOS_RELEASE=off skips, unset runs.
-[ "$(key "$tmp/ios" needs)" = scope ] || fail "ios must need exactly scope, got [$(key "$tmp/ios" needs)]"
-[ "$(norm "$(key "$tmp/ios" if)")" = "needs.scope.outputs.ship == 'true' && vars.IOS_RELEASE != 'off' && needs.scope.outputs.quiet != 'true'" ] \
+ineeds=$(key "$tmp/ios" needs | tr -d '[] ' | tr , '\n' | sort | paste -sd,)
+[ "$ineeds" = old_app,scope ] || fail "ios must need exactly scope and old_app, got [$(key "$tmp/ios" needs)]"
+[ "$(norm "$(key "$tmp/ios" if)")" = "needs.scope.outputs.ship == 'true' && vars.IOS_RELEASE != 'off' && needs.scope.outputs.quiet != 'true' && !failure() && !cancelled()" ] \
   || fail "ios if is [$(key "$tmp/ios" if)]"
 [ "$(key "$tmp/ios" uses)" = ./.github/workflows/ios-ipa.yml ] || fail "ios does not call ios-ipa.yml"
 [ "$(with "$tmp/ios" upload)" = true ] || fail "the release ios job must upload"

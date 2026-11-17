@@ -64,6 +64,16 @@ MessagesCompanion messageToCompanion(Message m) {
   );
 }
 
+/// A stored photo preview, or null when it is missing or not valid base64: one bad row must not break opening a chat.
+Uint8List? _decodePreview(Object? v) {
+  if (v is! String) return null;
+  try {
+    return base64Decode(v);
+  } on FormatException {
+    return null;
+  }
+}
+
 /// Maps a [StoredMessageRow] to a domain [Message].
 Message messageFromRow(StoredMessageRow r) {
   final x = r.extra == null
@@ -77,9 +87,7 @@ Message messageFromRow(StoredMessageRow r) {
     body: r.body,
     createdAt: DateTime.fromMicrosecondsSinceEpoch(r.createdAt),
     attachmentPath: x['ap'] as String?,
-    attachmentPreview: x['pv'] is String
-        ? base64Decode(x['pv'] as String)
-        : null,
+    attachmentPreview: _decodePreview(x['pv']),
     replyTo: r.replyTo,
     forwarded: r.forwarded,
     poll: r.poll,

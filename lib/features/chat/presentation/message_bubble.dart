@@ -15,6 +15,9 @@ class _Bubble extends StatelessWidget {
     this.isCurrentHit = false,
     this.album = const [],
     this.quotedCount = 0,
+    this.onQuoteTap,
+    this.flash = false,
+    this.onFlashEnd,
   });
 
   final Message message;
@@ -25,6 +28,13 @@ class _Bubble extends StatelessWidget {
 
   /// How many photos the quoted message stands for (an album's size); 0 or 1 for a single message.
   final int quotedCount;
+
+  /// Called when the quote is tapped; null = the tap does nothing.
+  final VoidCallback? onQuoteTap;
+
+  /// True while the bubble shows the temporary jump highlight (fades in; [onFlashEnd] then clears it so it fades out).
+  final bool flash;
+  final VoidCallback? onFlashEnd;
 
   /// The delivery tick of your own message (sending, sent, delivered,
   /// read); null on someone else's message.
@@ -133,10 +143,19 @@ class _Bubble extends StatelessWidget {
           );
     final bubble = Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
+      child: AnimatedContainer(
         key: ValueKey('message-${message.id}'),
         constraints: const BoxConstraints(maxWidth: _maxWidth),
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        duration: const Duration(milliseconds: 300),
+        onEnd: flash ? onFlashEnd : null,
+        foregroundDecoration: flash
+            ? BoxDecoration(
+                color: Theme.of(context).colorScheme.primary
+                    .withValues(alpha: 0.25),
+                borderRadius: BorderRadius.circular(brand.bubbleRadius),
+              )
+            : null,
         padding: _boxless || _locationCard || _stickerBox || _albumBox
             ? EdgeInsets.zero
             : const EdgeInsets.symmetric(horizontal: _hPad, vertical: 8),
@@ -239,8 +258,8 @@ class _Bubble extends StatelessWidget {
                 ),
               if (message.replyTo != null && !message.isDeleted)
                 GestureDetector(
-                  // A tap on a quote is its own (it opens nothing); it must not reach the bubble's menu tap.
-                  onTap: () {},
+                  // A tap on a quote is its own; it must not reach the bubble's menu tap.
+                  onTap: onQuoteTap ?? () {},
                   child: Container(
                     key: ValueKey('quote-${message.id}'),
                     margin: const EdgeInsets.only(bottom: 6),

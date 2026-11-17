@@ -21,10 +21,7 @@ void main() {
                 appBar: AppBar(title: const Text('Title')),
                 body: Column(
                   children: [
-                    FilledButton(
-                      onPressed: () {},
-                      child: const Text('Go'),
-                    ),
+                    FilledButton(onPressed: () {}, child: const Text('Go')),
                     const Text('Plain'),
                   ],
                 ),
@@ -38,8 +35,11 @@ void main() {
           void checkFontFamily(String? family, String what) {
             if (systemFont) {
               expect(family, isNotNull, reason: what);
-              expect(family!.startsWith('CupertinoSystem'), isTrue,
-                  reason: '$what=$family');
+              expect(
+                family!.startsWith('CupertinoSystem'),
+                isTrue,
+                reason: '$what=$family',
+              );
             } else {
               expect(family, equals('Manrope'), reason: what);
             }
@@ -77,8 +77,11 @@ void main() {
 
           // Helper to get rendered font family from RichText
           String? renderedFamily(String text) {
-            final rt = tester.widget<RichText>(find.byWidgetPredicate(
-                (w) => w is RichText && w.text.toPlainText() == text));
+            final rt = tester.widget<RichText>(
+              find.byWidgetPredicate(
+                (w) => w is RichText && w.text.toPlainText() == text,
+              ),
+            );
             return rt.text.style?.fontFamily;
           }
 

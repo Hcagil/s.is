@@ -212,5 +212,57 @@ void main() {
         );
       },
     );
+
+    testWidgets(
+      'the original flashes a highlight after the jump, then it clears',
+      (tester) async {
+        final messages = <Message>[
+          msg('m1', from: bob, body: 'first', minute: 0),
+          for (var i = 1; i <= 40; i++)
+            msg('f$i', from: bob, body: 'filler $i', minute: i),
+          msg('m42', body: 'sure', replyTo: 'm1', minute: 41),
+        ];
+        await pump(tester, messages);
+
+        final quoteFinder = find.byKey(const ValueKey('quote-m42'));
+        expect(quoteFinder, findsOneWidget);
+
+        bool flashing() {
+          final key = find.byKey(const ValueKey('message-m1'));
+          final containers = <Element>[
+            ...find
+                .descendant(
+                  of: key,
+                  matching: find.byType(AnimatedContainer),
+                  matchRoot: true,
+                )
+                .evaluate(),
+            // removed ancestor spread
+          ];
+          return containers.any(
+            (e) => (e.widget as AnimatedContainer).foregroundDecoration != null,
+          );
+        }
+
+        expect(flashing(), isFalse, reason: 'no highlight before the tap');
+        await tester.tap(quoteFinder);
+        await tester.pump(); // start tap animation
+
+        // Wait until highlight appears, up to 30 * 50ms = 1500ms
+        for (var i = 0; i < 30; i++) {
+          await tester.pump(const Duration(milliseconds: 50));
+          if (flashing()) break;
+        }
+        expect(flashing(), isTrue, reason: 'highlight shows after the jump');
+
+        await tester.pumpAndSettle();
+        expect(flashing(), isFalse, reason: 'highlight cleared after settle');
+        expect(
+          tester.binding.hasScheduledFrame,
+          isFalse,
+          reason: 'no frames scheduled after settle',
+        );
+      },
+    );
   });
 }

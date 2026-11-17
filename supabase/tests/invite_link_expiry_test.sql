@@ -1,5 +1,5 @@
 begin;
-select plan(31);
+select plan(33);
 
 -- invite_link_admin (Invite link admin, server slice): skeleton test
 --   tests function and table privileges for invite link administration.
@@ -106,8 +106,8 @@ select throws_ok(format('select * from public.reset_invite_link(%L, null)', g('E
 select throws_ok(format('select public.turn_off_invite_link(%L)', g('ES')), '42501', null, 'turn off: a system chat is refused');
 reset role;
 select as_('02');
-select throws_ok(format('select public.join_by_link(%L)', 'ssssssssssssssssssssssss'), 'LINK1', null, 'join: a system chat link is invalid');
-select throws_ok(format('select * from public.preview_invite_link(%L)', 'ssssssssssssssssssssssss'), 'LINK1', null, 'preview: a system chat link is invalid');
+select is((select error from public.join_by_link('ssssssssssssssssssssssss')), 'LINK1', 'join: a system chat link is invalid');
+select is((select error from public.preview_invite_link('ssssssssssssssssssssssss')), 'LINK1', 'preview: a system chat link is invalid');
 reset role;
 -- validity and missing link
 select as_('01');
@@ -127,17 +127,19 @@ select ok((select expires_at is null from public.set_invite_link_expiry(g('E1'),
 select ok((select abs(extract(epoch from expires_at - (now() + interval '7 days'))) < 60 from public.set_invite_link_expiry(g('E1'), 7)), 'validity 7 days');
 reset role;
 select as_('04');
-select is(public.join_by_link((select token from t1)), g('E1'), 'the old link still joins after the limit changed');
+select is((select conversation_id from public.join_by_link((select token from t1))), g('E1'), 'the old link still joins after the limit changed');
+select is((select error from public.join_by_link((select token from t1))), null, 'the old link still joins after the limit changed');
 reset role;
 update app_private.group_invite_links set expires_at = now() - interval '1 hour' where conversation_id = g('E1');
 select as_('03');
-select throws_ok(format('select public.join_by_link(%L)', (select token from t1)), 'LINK2', null, 'an expired link answers LINK2');
+select is((select error from public.join_by_link((select token from t1))), 'LINK2', 'an expired link answers LINK2');
 reset role;
 select as_('01');
 select public.set_invite_link_expiry(g('E1'), 7);
 reset role;
 select as_('03');
-select is(public.join_by_link((select token from t1)), g('E1'), 'a new limit brings the same link back to life');
+select is((select conversation_id from public.join_by_link((select token from t1))), g('E1'), 'a new limit brings the same link back to life');
+select is((select error from public.join_by_link((select token from t1))), null, 'a new limit brings the same link back to life');
 reset role;
 select ok(not has_function_privilege('anon','public.set_invite_link_expiry(uuid,int)','execute'), 'anon cannot execute set_invite_link_expiry');
 select ok(has_function_privilege('authenticated','public.set_invite_link_expiry(uuid,int)','execute'), 'authenticated can execute set_invite_link_expiry');

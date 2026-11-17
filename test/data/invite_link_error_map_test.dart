@@ -304,7 +304,9 @@ void main() {
     });
 
     test('joinByInvite success returns conversation id', () async {
-      final body = jsonEncode('c1');
+      final body = jsonEncode([
+        {'conversation_id': 'c1', 'error': null},
+      ]);
       final repo = repoWithStub(200, body);
       final result = await repo.joinByInvite(code);
       final convId = valueOf(result);
@@ -331,7 +333,9 @@ void main() {
     });
 
     test('paths recorded correctly for joinByInvite', () async {
-      final body = jsonEncode('c1');
+      final body = jsonEncode([
+        {'conversation_id': 'c1', 'error': null},
+      ]);
       final stub = await run(200, body, (repo) => repo.joinByInvite(code));
       expect(stub.paths.last, endsWith('/rpc/join_by_link'));
     });
@@ -449,6 +453,91 @@ void main() {
         (r) => r.setInviteLinkExpiry(conv, validDays: 7),
       );
       expect(stub.paths.last, endsWith('/rpc/set_invite_link_expiry'));
+    });
+  });
+
+  group('returned refusals', () {
+    final Map<String, InviteLinkProblem> errorMap = {
+      'LINK1': InviteLinkProblem.invalid,
+      'LINK2': InviteLinkProblem.expired,
+      'LINK3': InviteLinkProblem.closed,
+      'LINK4': InviteLinkProblem.removed,
+      'LINK9': InviteLinkProblem.invalid,
+    };
+
+    errorMap.forEach((errCode, expectedProblem) {
+      test('previewInvite returns $errCode', () async {
+        final body =
+            '''
+        [
+          {
+            "conversation_id": null,
+            "title": null,
+            "avatar_path": null,
+            "member_count": null,
+            "error": "$errCode"
+          }
+        ]
+      ''';
+        final repo = repoWithStub(200, body);
+        final result = await repo.previewInvite(code);
+        final failure = failureOf(result);
+        expect(failure, isA<InviteLinkFailure>());
+        expect((failure as InviteLinkFailure).problem, expectedProblem);
+      });
+
+      test('joinByInvite returns $errCode', () async {
+        final body =
+            '''
+        [
+          {
+            "conversation_id": null,
+            "error": "$errCode"
+          }
+        ]
+      ''';
+        final repo = repoWithStub(200, body);
+        final result = await repo.joinByInvite(code);
+        final failure = failureOf(result);
+        expect(failure, isA<InviteLinkFailure>());
+        expect((failure as InviteLinkFailure).problem, expectedProblem);
+      });
+    });
+
+    test('previewInvite success row with error null', () async {
+      final body = '''
+      [
+        {
+          "conversation_id": "c1",
+          "title": "Team",
+          "avatar_path": null,
+          "member_count": 3,
+          "error": null
+        }
+      ]
+    ''';
+      final repo = repoWithStub(200, body);
+      final result = await repo.previewInvite(code);
+      final preview = valueOf(result);
+      expect(preview.conversationId, 'c1');
+      expect(preview.title, 'Team');
+      expect(preview.memberCount, 3);
+      expect(preview.avatarPath, isNull);
+    });
+
+    test('joinByInvite success row with error null', () async {
+      final body = '''
+      [
+        {
+          "conversation_id": "c1",
+          "error": null
+        }
+      ]
+    ''';
+      final repo = repoWithStub(200, body);
+      final result = await repo.joinByInvite(code);
+      final conversationId = valueOf(result);
+      expect(conversationId, 'c1');
     });
   });
 }

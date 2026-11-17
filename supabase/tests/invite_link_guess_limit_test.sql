@@ -1,5 +1,5 @@
 begin;
-select plan(11);
+select plan(15);
 
 -- invite_link_admin (Invite link admin, server slice): skeleton test
 --   tests function and table privileges for invite link administration.
@@ -91,11 +91,18 @@ select throws_ok(format('select public.join_by_link(%L)', repeat('y', 24)), 'RLM
 reset role;
 select as_('02');
 select lives_ok(format('select * from public.preview_invite_link(%L)', (select token from rt)), 'another person is not limited');
-select throws_ok(format('select public.join_by_link(%L)', repeat('z', 24)), 'LINK1', null, 'another person still gets LINK1 for a wrong token');
+select is((select error from public.join_by_link(repeat('z', 24))), 'LINK1', 'another person still gets LINK1 for a wrong token');
 reset role;
 update app_private.invite_link_attempts set called_at = called_at - interval '11 minutes' where user_id = u('04');
 select as_('04');
-select throws_ok(format('select public.join_by_link(%L)', repeat('z', 24)), 'LINK1', null, 'attempts older than ten minutes no longer count');
+select is((select error from public.join_by_link(repeat('z', 24))), 'LINK1', 'attempts older than ten minutes no longer count');
 reset role;
+-- new tests for refused join
+select is((select count(*)::int from public.conversation_members where conversation_id = g('R1') and user_id = u('02')), 0, 'before: bob is not a member');
+select as_('02');
+select is((select error from public.join_by_link(repeat('q', 24))), 'LINK1', 'a refused join returns LINK1');
+reset role;
+select is((select count(*)::int from public.conversation_members where conversation_id = g('R1') and user_id = u('02')), 0, 'a refused join adds no member row');
+select is((select count(*)::int from public.group_events where conversation_id = g('R1') and kind = 'joined'), 0, 'a refused join writes no event');
 select * from finish();
 rollback;

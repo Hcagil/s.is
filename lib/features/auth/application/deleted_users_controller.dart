@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/failure.dart';
@@ -27,7 +28,7 @@ class DeletedUsersController extends Notifier<Set<String>> {
 
   /// Asks the server about [ids] not asked before (200 per call, done by the repository); adds the ones reported missing to the state.
   Future<void> check(Iterable<String> ids) async {
-    final now = DateTime.now();
+    final now = clock.now();
     final fresh = ids
         .where(
           (id) =>
@@ -49,7 +50,7 @@ class DeletedUsersController extends Notifier<Set<String>> {
         fresh.forEach(_retryAt.remove);
         if (value.isNotEmpty) state = {...state, ...value};
       case Err():
-        final retry = DateTime.now().add(const Duration(minutes: 1));
+        final retry = clock.now().add(const Duration(minutes: 1));
         for (final id in fresh) {
           _retryAt[id] = retry;
         }

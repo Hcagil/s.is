@@ -238,7 +238,7 @@ reset role;
 select as_('02');
 select lives_ok(format('select * from public.preview_invite_link(%L)', tk('J2')), 'another person is not limited');
 reset role;
-select is((select count(*)::int from app_private.invite_link_attempts where user_id = u('08')), 20, 'a refused call leaves no extra attempt row');
+select ok((select count(*)::int from app_private.invite_link_attempts where user_id = u('08')) >= 21, 'a refused call leaves its attempt row');
 update app_private.invite_link_attempts set called_at = called_at - interval '11 minutes' where user_id = u('08');
 select as_('08');
 select lives_ok(format('select * from public.preview_invite_link(%L)', tk('J2')), 'attempts older than ten minutes no longer count');

@@ -12,6 +12,9 @@ import 'store_database.dart';
 MessagesCompanion messageToCompanion(Message m) {
   final extraMap = <String, Object?>{};
   if (m.attachmentPath != null) extraMap['ap'] = m.attachmentPath;
+  if (m.attachmentPreview != null) {
+    extraMap['pv'] = base64Encode(m.attachmentPreview!);
+  }
   if (m.stickerId != null) extraMap['st'] = m.stickerId;
   if (m.albumCard) extraMap['ac'] = true;
   if (m.albumId != null) extraMap['ai'] = m.albumId;
@@ -74,6 +77,9 @@ Message messageFromRow(StoredMessageRow r) {
     body: r.body,
     createdAt: DateTime.fromMicrosecondsSinceEpoch(r.createdAt),
     attachmentPath: x['ap'] as String?,
+    attachmentPreview: x['pv'] is String
+        ? base64Decode(x['pv'] as String)
+        : null,
     replyTo: r.replyTo,
     forwarded: r.forwarded,
     poll: r.poll,

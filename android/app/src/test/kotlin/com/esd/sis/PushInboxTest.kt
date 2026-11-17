@@ -37,7 +37,7 @@ class PushInboxTest {
             for (s in objects("steps", v)) {
                 raw = PushInbox.add(
                     raw, s.getString("conversation_id"), s.getString("title"), s.str("sender"),
-                    s.str("chat"), s.getString("text"), s.getLong("at"), s.str("message_id"),
+                    s.str("chat"), s.getString("text"), s.getLong("at"), s.str("message_id"), s.str("sender_id"),
                 )
             }
             assertEquals(v.getString("name"), plain(v.getJSONArray("inbox")), plain(JSONArray(raw)))
@@ -66,6 +66,17 @@ class PushInboxTest {
         assertEquals("Team", PushInbox.find(chats, "g1")!!.getString("t"))
         assertEquals("Ava", PushInbox.find(chats, "c1")!!.getString("t"))
         assertNull(PushInbox.find(chats, "nope"))
+    }
+
+    @Test
+    fun `parse keeps a line's sender id u, and a line without u still parses`() {
+        val chats = PushInbox.parse(
+            """[{"c":"c1","t":"Ava","g":false,"l":[{"s":"Ava","x":"old","a":500,"m":"m0"},{"s":"Ava","x":"new","a":1000,"m":"m1","u":"u-ava"}],"n":2,"p":1}]""",
+        )
+        val lines = PushInbox.find(chats, "c1")!!.getJSONArray("l")
+        assertEquals(false, lines.getJSONObject(0).has("u"))
+        assertEquals("old", lines.getJSONObject(0).getString("x"))
+        assertEquals("u-ava", lines.getJSONObject(1).getString("u"))
     }
 
     @Test

@@ -327,6 +327,28 @@ void main() {
       expect(c2.unread, 1);
       chat.releaseList();
     });
+
+    test('a line of a message that vanished (deleted for everyone) counts nothing and is not the preview', () async {
+      final s = driftStore('me', h.dir, key);
+      await s.markVanished(_p1, 'c1');
+      expect(
+        await s.vanishedIds('c1'),
+        contains(_p1),
+        reason: 'fixture: the tombstone is stored',
+      );
+      await s.close();
+      final p = _Pending([_line(_p1, 'c1', _aliceId, 'gone', 1)]);
+      final c = await app(p);
+      final l = await firstList(c);
+      final c1 = byId(l, 'c1');
+      expect(
+        c1.lastMessage,
+        'old',
+        reason: 'a vanished message is never the preview',
+      );
+      expect(c1.unread, 0, reason: 'a vanished message never counts as unread');
+      chat.releaseList();
+    });
   });
 
   group('chat, first messages, server never answers', () {
@@ -371,6 +393,22 @@ void main() {
       final c = await app(p);
       final ids = await firstPaint(c, 'c1');
       expect(ids, ['m1', _p1]);
+      chat.releaseMessages();
+    });
+
+    test('a line of a message that vanished is not shown', () async {
+      final s = driftStore('me', h.dir, key);
+      await s.markVanished(_p1, 'c1');
+      expect(
+        await s.vanishedIds('c1'),
+        contains(_p1),
+        reason: 'fixture: the tombstone is stored',
+      );
+      await s.close();
+      final p = _Pending([_line(_p1, 'c1', _aliceId, 'gone', 1)]);
+      final c = await app(p);
+      final ids = await firstPaint(c, 'c1');
+      expect(ids, ['m1'], reason: 'a vanished message is never shown');
       chat.releaseMessages();
     });
   });

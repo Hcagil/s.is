@@ -160,7 +160,7 @@ class ChatSelectionBar extends ConsumerWidget implements PreferredSizeWidget {
               PopupMenuItem(
                 key: const ValueKey('selection-unread'),
                 value: 'unread',
-                child: Text(l.chatSelMarkUnread),
+                child: Text(l.chatMenuMarkUnread),
               ),
           ],
         ),

@@ -1473,7 +1473,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatSelMarkRead => 'Mark as read';
 
   @override
-  String get chatSelMarkUnread => 'Mark as unread';
+  String get chatMenuMarkUnread => 'Mark as unread';
+
+  @override
+  String get chatMarkedUnread => 'Chat marked as unread';
 
   @override
   String get chatDeleteAction => 'Delete';

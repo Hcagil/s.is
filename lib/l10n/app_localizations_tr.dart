@@ -1461,7 +1461,10 @@ class AppLocalizationsTr extends AppLocalizations {
   String get chatSelMarkRead => 'Okundu olarak işaretle';
 
   @override
-  String get chatSelMarkUnread => 'Okunmadı olarak işaretle';
+  String get chatMenuMarkUnread => 'Okunmadı olarak işaretle';
+
+  @override
+  String get chatMarkedUnread => 'Sohbet okunmadı olarak işaretlendi';
 
   @override
   String get chatDeleteAction => 'Sil';

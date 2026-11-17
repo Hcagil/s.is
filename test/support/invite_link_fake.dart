@@ -86,6 +86,37 @@ class InviteLinkFake implements InviteLinkRepository {
   }
 
   @override
+  Future<Result<InviteLink>> setInviteLinkExpiry(
+    String conversationId, {
+    int? validDays,
+  }) async {
+    calls.add('expiry:$conversationId:${validDays ?? '-'}');
+    await _wait();
+    if (failNext != null) {
+      final f = failNext!;
+      failNext = null;
+      return Err(f);
+    }
+    if (!admins.contains(conversationId)) return const Err(DeniedFailure());
+    if (validDays != null && !{1, 7, 30}.contains(validDays)) {
+      return const Err(DeniedFailure());
+    }
+    final existing = _links[conversationId];
+    if (existing == null) {
+      return const Err(InviteLinkFailure(InviteLinkProblem.invalid));
+    }
+    final updated = InviteLink(
+      token: existing.token,
+      createdAt: existing.createdAt,
+      expiresAt: validDays == null
+          ? null
+          : DateTime.now().add(Duration(days: validDays)),
+    );
+    _links[conversationId] = updated;
+    return Ok(updated);
+  }
+
+  @override
   Future<Result<void>> turnOffInviteLink(String conversationId) async {
     calls.add('off:$conversationId');
     await _wait();

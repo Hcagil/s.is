@@ -347,4 +347,108 @@ void main() {
       expect(stub.paths.last, endsWith('/rpc/turn_off_invite_link'));
     });
   });
+
+  group('setInviteLinkExpiry', () {
+    final body = jsonEncode([
+      {
+        'token': code,
+        'created_at': '2026-11-17T10:00:00+00:00',
+        'expires_at': '2026-11-24T10:00:00+00:00',
+      },
+    ]);
+
+    test('returns DeniedFailure for 42501', () async {
+      final result = await repoWithStub(
+        403,
+        jsonEncode({
+          'code': '42501',
+          'message': 'x',
+          'details': null,
+          'hint': null,
+        }),
+      ).setInviteLinkExpiry(conv, validDays: 7);
+      expect(failureOf(result), isA<DeniedFailure>());
+    });
+
+    test('returns InviteLinkFailure.invalid for LINK1', () async {
+      final result = await repoWithStub(
+        400,
+        jsonEncode({
+          'code': 'LINK1',
+          'message': 'x',
+          'details': null,
+          'hint': null,
+        }),
+      ).setInviteLinkExpiry(conv, validDays: 7);
+      expect(
+        failureOf(result),
+        isA<InviteLinkFailure>().having(
+          (f) => f.problem,
+          'problem',
+          InviteLinkProblem.invalid,
+        ),
+      );
+    });
+
+    test('returns SearchLimitFailure for RLMT1', () async {
+      final result = await repoWithStub(
+        400,
+        jsonEncode({
+          'code': 'RLMT1',
+          'message': 'x',
+          'details': null,
+          'hint': null,
+        }),
+      ).setInviteLinkExpiry(conv, validDays: 7);
+      expect(failureOf(result), isA<SearchLimitFailure>());
+    });
+
+    test('returns generic Err for unknown code', () async {
+      final result = await repoWithStub(
+        400,
+        jsonEncode({
+          'code': '22023',
+          'message': 'x',
+          'details': null,
+          'hint': null,
+        }),
+      ).setInviteLinkExpiry(conv, validDays: 7);
+      expect(result, isA<Err>());
+    });
+
+    test('returns InviteLink on success', () async {
+      final result = await repoWithStub(
+        200,
+        body,
+      ).setInviteLinkExpiry(conv, validDays: 7);
+      final link = valueOf(result);
+      expect(link.token, code);
+      expect(link.expiresAt!.toUtc(), DateTime.utc(2026, 11, 24, 10));
+    });
+
+    test('handles null expires_at', () async {
+      final nullBody = jsonEncode([
+        {
+          'token': code,
+          'created_at': '2026-11-17T10:00:00+00:00',
+          'expires_at': null,
+        },
+      ]);
+      final result = await repoWithStub(
+        200,
+        nullBody,
+      ).setInviteLinkExpiry(conv, validDays: 7);
+      final link = valueOf(result);
+      expect(link.expiresAt, isNull);
+    });
+
+    test('calls correct RPC path', () async {
+      final stub = await run(
+        200,
+        body,
+        (r) => r.setInviteLinkExpiry(conv, validDays: 7),
+      );
+      expect(stub.paths.last, endsWith('/rpc/set_invite_link_expiry'));
+    });
+  });
 }

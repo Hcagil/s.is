@@ -243,4 +243,62 @@ void main() {
       expect(f, isA<DeniedFailure>());
     });
   });
+
+  group('setExpiry', () {
+    test('keeps the same token and shows the new limit', () async {
+      await listenProvider('c1');
+      final r1 = await ctl.reset('c1', validDays: 1);
+      final first = (r1 as Ok).value;
+      expect(await c.read(inviteLinkProvider('c1').future), isNotNull);
+      final r2 = await ctl.setExpiry('c1', validDays: 30);
+      expect(r2, isA<Ok>());
+      final second = (r2 as Ok).value;
+      expect(second.token, first.token);
+      expect(second.createdAt, first.createdAt);
+      expect(second.expiresAt, isNotNull);
+      final p = await c.read(inviteLinkProvider('c1').future);
+      expect(p!.token, first.token);
+      expect(p.expiresAt, second.expiresAt);
+    });
+
+    test('null removes the limit', () async {
+      await listenProvider('c1');
+      await ctl.reset('c1', validDays: 7);
+      final before = await c.read(inviteLinkProvider('c1').future);
+      expect(before!.expiresAt, isNotNull);
+      final r = await ctl.setExpiry('c1');
+      expect(r, isA<Ok>());
+      final after = await c.read(inviteLinkProvider('c1').future);
+      expect(after!.expiresAt, isNull);
+    });
+
+    test('no link answers invalid and does not refresh', () async {
+      await listenProvider('c1');
+      await c.read(inviteLinkProvider('c1').future);
+      final beforeCalls = fake.calls.where((x) => x == 'get:c1').length;
+      final r = await ctl.setExpiry('c1', validDays: 7);
+      expect(r, isA<Err>());
+      final f = (r as Err).failure;
+      expect(f, isA<InviteLinkFailure>());
+      expect((f as InviteLinkFailure).problem, InviteLinkProblem.invalid);
+      final afterCalls = fake.calls.where((x) => x == 'get:c1').length;
+      expect(afterCalls, equals(beforeCalls));
+    });
+
+    test('non-admin is denied and does not refresh', () async {
+      final r = await ctl.setExpiry('c2', validDays: 7);
+      expect(r, isA<Err>());
+      final f = (r as Err).failure;
+      expect(f, isA<DeniedFailure>());
+      expect(fake.calls.where((x) => x == 'get:c2'), isEmpty);
+    });
+
+    test('invalid days is refused', () async {
+      await ctl.reset('c1');
+      final r = await ctl.setExpiry('c1', validDays: 5);
+      expect(r, isA<Err>());
+      final f = (r as Err).failure;
+      expect(f, isA<DeniedFailure>());
+    });
+  });
 }

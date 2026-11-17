@@ -157,7 +157,7 @@ select is(public.join_by_link(tk('J1')), g('J1'), 'a second join returns the id'
 reset role;
 select is((select count(*)::int from public.conversation_members where conversation_id = g('J1') and user_id = u('02')), 1, 'no second member row');
 select is((select count(*)::int from public.group_events where conversation_id = g('J1') and kind = 'joined'), 1, 'no second event');
-select as_('02');
+select as_('01');
 select is((select count(*)::int from public.group_events where kind = 'joined'), 0, 'the old read policy hides joined events');
 select is((select count(*)::int from public.group_join_events(g('J1'))), 1, 'group_join_events shows the event to a member');
 reset role;

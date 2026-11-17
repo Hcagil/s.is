@@ -33,7 +33,7 @@ const _key = String.fromEnvironment(
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
 // The suite's shared seed password (supabase/seed.sql).
-const _pw = 'integration-password';
+const _pw = 'int-pw';
 
 /// A relay to the stack whose replies can be held back and let through.
 class _Relay {
@@ -133,8 +133,8 @@ void main() {
 
   setUpAll(() async {
     relay = await _Relay.start();
-    sigClient = await _signedIn('sig@integration.test');
-    rhoClient = await _signedIn('rho@integration.test', relay.url);
+    sigClient = await _signedIn('sig@mail.test');
+    rhoClient = await _signedIn('rho@mail.test', relay.url);
     await findByTag(rhoClient, [sigClient]);
     rho = SupabaseChatRepository(rhoClient);
     sig = SupabaseChatRepository(sigClient);

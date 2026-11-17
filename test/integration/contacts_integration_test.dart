@@ -37,7 +37,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 const _rateLimited = 'Too many searches. Try again in a little while.';
 
 Future<SupabaseClient> signedIn(String email) async {
@@ -87,12 +87,12 @@ void main() {
   String id(SupabaseClient c) => c.auth.currentUser!.id;
 
   setUpAll(() async {
-    selin = await signedIn('selin@integration.test');
-    tuna = await signedIn('tuna@integration.test');
-    ulas = await signedIn('ulas@integration.test');
-    veli = await signedIn('veli@integration.test');
-    yunus = await signedIn('yunus@integration.test');
-    zehra = await signedIn('zehra@integration.test');
+    selin = await signedIn('selin@mail.test');
+    tuna = await signedIn('tuna@mail.test');
+    ulas = await signedIn('ulas@mail.test');
+    veli = await signedIn('veli@mail.test');
+    yunus = await signedIn('yunus@mail.test');
+    zehra = await signedIn('zehra@mail.test');
   });
 
   tearDownAll(() async {

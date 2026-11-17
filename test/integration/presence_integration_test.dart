@@ -46,7 +46,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 SupabaseClient _client() => SupabaseClient(
   _url,
@@ -220,9 +220,9 @@ void main() {
   final extra = <SupabaseClient>[];
 
   setUpAll(() async {
-    yara = Account(await _signedIn('yara@integration.test'));
-    zane = Account(await _signedIn('zane@integration.test'));
-    abby = Account(await _signedIn('abby@integration.test'));
+    yara = Account(await _signedIn('yara@mail.test'));
+    zane = Account(await _signedIn('zane@mail.test'));
+    abby = Account(await _signedIn('abby@mail.test'));
     await findByTag(yara.client, [zane.client]);
     final started = await SupabaseChatRepository(yara.client)
         .startDirectConversation(zane.id);
@@ -489,10 +489,10 @@ void main() {
       'stranger': () async {
         await ensureUninvitedUser(
           _url,
-          'stranger-presence@integration.test',
+          'stranger-presence@mail.test',
           _password,
         );
-        final c = await _signIn('stranger-presence@integration.test');
+        final c = await _signIn('stranger-presence@mail.test');
         expect(
           await c.rpc('activate_session'),
           isFalse,

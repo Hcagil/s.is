@@ -51,7 +51,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 SupabaseClient _client(String url) => SupabaseClient(
   url,
@@ -137,9 +137,9 @@ void main() {
   late Account offline;
 
   setUpAll(() async {
-    veraClient = await signedIn('vera@integration.test');
-    waltClient = await signedIn('walt@integration.test');
-    xenaClient = await signedIn('xena@integration.test');
+    veraClient = await signedIn('vera@mail.test');
+    waltClient = await signedIn('walt@mail.test');
+    xenaClient = await signedIn('xena@mail.test');
     deadClient = await deadButSignedIn(veraClient!);
     vera = Account(veraClient!);
     walt = Account(waltClient!);

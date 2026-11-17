@@ -55,7 +55,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 /// A real 1x1 PNG, used as both the photo and its own "preview": the
 /// constraint only cares that a preview decodes as base64 PNG data starting
@@ -158,8 +158,8 @@ void main() {
   late Directory tempRoot;
 
   setUpAll(() async {
-    waltClient = await _signedIn('walt@integration.test');
-    xenaClient = await _signedIn('xena@integration.test');
+    waltClient = await _signedIn('walt@mail.test');
+    xenaClient = await _signedIn('xena@mail.test');
     walt = SupabaseChatRepository(waltClient);
     xenaMember = Member(
       userId: xenaClient.auth.currentUser!.id,

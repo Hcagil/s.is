@@ -56,7 +56,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 SupabaseClient _client(String url) => SupabaseClient(
   url,
   _key,
@@ -373,9 +373,9 @@ void main() {
   late String piaOtto;
 
   setUpAll(() async {
-    unaClient = await _signedIn('una@integration.test');
-    ottoClient = await _signedIn('otto@integration.test');
-    piaClient = await _signedIn('pia@integration.test');
+    unaClient = await _signedIn('una@mail.test');
+    ottoClient = await _signedIn('otto@mail.test');
+    piaClient = await _signedIn('pia@mail.test');
     deadClient = deadHostClient();
     una = SupabaseChatRepository(unaClient!);
     otto = SupabaseChatRepository(ottoClient!);

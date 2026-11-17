@@ -44,7 +44,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 /// "About a second": one retry's 1 s backoff, with CI headroom. The default
 /// three retries take 1 + 2 + 4 = 7 s.
@@ -174,8 +174,8 @@ void main() {
   final recorder = _Flaky(0);
 
   setUpAll(() async {
-    tove = await _signedIn('tove@integration.test', recorder);
-    final ugo = await _signedIn('ugo@integration.test');
+    tove = await _signedIn('tove@mail.test', recorder);
+    final ugo = await _signedIn('ugo@mail.test');
     clients.addAll([tove, ugo]);
     await findByTag(tove, [ugo]);
     final chat = SupabaseChatRepository(tove);
@@ -249,7 +249,7 @@ void main() {
   test('one failed attempt, then fine: every read is still Ok, with the same '
       'result a clean connection gets', () async {
     final flaky = _Flaky(1);
-    final client = await _signedIn('tove@integration.test', flaky);
+    final client = await _signedIn('tove@mail.test', flaky);
     clients.add(client);
 
     for (final MapEntry(key: name, value: read) in _reads(
@@ -275,7 +275,7 @@ void main() {
   test('two failed attempts in a row: every read is an Err (at most one '
       'retry)', () async {
     final flaky = _Flaky(2);
-    final client = await _signedIn('tove@integration.test', flaky);
+    final client = await _signedIn('tove@mail.test', flaky);
     clients.add(client);
 
     for (final MapEntry(key: name, value: read) in _reads(

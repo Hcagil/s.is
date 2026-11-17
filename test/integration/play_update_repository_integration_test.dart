@@ -30,7 +30,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 SupabaseClient _client(String url) => SupabaseClient(
   url,
@@ -66,7 +66,7 @@ void main() {
   });
 
   test('minSupportedBuild() reads the real singleton row', () async {
-    final client = await signedIn('cleo@integration.test');
+    final client = await signedIn('cleo@mail.test');
     clients.add(client);
 
     final result = await PlayUpdateRepository(client).minSupportedBuild();

@@ -38,8 +38,8 @@ const _key = String.fromEnvironment(
 );
 const _password = 'gate-test-password-1';
 const _bot = 'sis-destek-bot@example.com';
-const _invited = 'gate-invited@integration.test';
-const _plus = 'gate-invited+x@integration.test';
+const _invited = 'gate-invited@mail.test';
+const _plus = 'gate-invited+x@mail.test';
 const _notInvited = {
   'code': 403,
   'error_code': 'unknown',
@@ -165,7 +165,7 @@ void main() {
   HttpOverrides.global = null;
 
   final stranger =
-      'gate-stranger-${DateTime.now().microsecondsSinceEpoch}@integration.test';
+      'gate-stranger-${DateTime.now().microsecondsSinceEpoch}@mail.test';
 
   setUpAll(() async {
     // A run against a broken gate may have created any of these.

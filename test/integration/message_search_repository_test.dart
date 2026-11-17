@@ -29,7 +29,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 SupabaseClient _client(String key) => SupabaseClient(
   _url,
@@ -84,9 +84,9 @@ void main() {
   late String umutTarik;
 
   setUpAll(() async {
-    sofiClient = await _signedIn('sofi@integration.test');
-    tarikClient = await _signedIn('tarik@integration.test');
-    umutClient = await _signedIn('umut@integration.test');
+    sofiClient = await _signedIn('sofi@mail.test');
+    tarikClient = await _signedIn('tarik@mail.test');
+    umutClient = await _signedIn('umut@mail.test');
     service = _client(serviceKey());
     sofi = SupabaseChatRepository(sofiClient!);
     tarik = SupabaseChatRepository(tarikClient!);
@@ -316,7 +316,7 @@ void main() {
       // Umut is not in sofiTarik; tarik is. Tarik's own old client is what
       // app access must refuse once his second sign-in takes over.
       final oldTarik = tarikClient!;
-      final newTarikClient = await _signedIn('tarik@integration.test');
+      final newTarikClient = await _signedIn('tarik@mail.test');
       laterClients.add(newTarikClient);
       final newTarik = SupabaseChatRepository(newTarikClient);
 

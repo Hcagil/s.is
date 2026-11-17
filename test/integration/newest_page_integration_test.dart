@@ -40,7 +40,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 final _png = base64Decode(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
@@ -99,8 +99,8 @@ void main() {
   final ids = <String>[];
 
   setUpAll(() async {
-    odoClient = await _signedIn('odo@integration.test');
-    namiClient = await _signedIn('nami@integration.test');
+    odoClient = await _signedIn('odo@mail.test');
+    namiClient = await _signedIn('nami@mail.test');
     nami = SupabaseChatRepository(namiClient);
     final odo = SupabaseChatRepository(odoClient);
     await findByTag(odoClient, [namiClient]);
@@ -200,7 +200,7 @@ void main() {
 
     test('another member\'s chat yields nothing', () async {
       // Row-level security applies: a stranger asking by id gets no bytes.
-      final stranger = await _signedIn('pim@integration.test');
+      final stranger = await _signedIn('pim@mail.test');
       addTearDown(stranger.dispose);
       final r = await SupabaseChatRepository(stranger)
           .attachmentPreviews([ids[85]]);

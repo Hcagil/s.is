@@ -91,9 +91,9 @@ void main() {
   late String g3; // reid+beth+cora group: a second forward target
 
   setUpAll(() async {
-    reidClient = await _signedIn('priya@integration.test');
-    bethClient = await _signedIn('quinlan@integration.test');
-    coraClient = await _signedIn('vp-ada@integration.test');
+    reidClient = await _signedIn('priya@mail.test');
+    bethClient = await _signedIn('quinlan@mail.test');
+    coraClient = await _signedIn('vp-ada@mail.test');
     reid = SupabaseChatRepository(reidClient);
     beth = SupabaseChatRepository(bethClient);
     cora = SupabaseChatRepository(coraClient);

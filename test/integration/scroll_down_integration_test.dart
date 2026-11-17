@@ -38,7 +38,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 const _total = 160;
 
@@ -129,8 +129,8 @@ void main() {
   }
 
   setUpAll(() async {
-    sdb = await _signedIn('sdb@integration.test');
-    sda = await _signedIn('sda@integration.test');
+    sdb = await _signedIn('sdb@mail.test');
+    sda = await _signedIn('sda@mail.test');
     await findByTag(sdb, [sda]);
     // A group: always a fresh conversation, so a rerun starts clean.
     chat = _ok(
@@ -233,7 +233,7 @@ void main() {
   test('verifyNewest picks up a row written while Realtime was gone', () async {
     // Its own reader: dropping Realtime must not touch the other tests.
     final line = _Line();
-    final reader = await _signedIn('sda@integration.test', line: line);
+    final reader = await _signedIn('sda@mail.test', line: line);
     addTearDown(reader.dispose);
     final c = open(reader);
     addTearDown(c.dispose);

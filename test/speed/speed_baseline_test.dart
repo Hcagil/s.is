@@ -31,7 +31,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 const _n = 7;
 const _rows = 560; // past the repository's read limit of 500
@@ -152,9 +152,9 @@ void main() {
   }
 
   setUpAll(() async {
-    quill = await _signedIn('quill@integration.test');
-    rush = await _signedIn('rush@integration.test');
-    pace = await _signedIn('pace@integration.test', wire);
+    quill = await _signedIn('quill@mail.test');
+    rush = await _signedIn('rush@mail.test');
+    pace = await _signedIn('pace@mail.test', wire);
     repo = SupabaseChatRepository(pace);
     paceId = pace.auth.currentUser!.id;
     final quillId = quill.auth.currentUser!.id;

@@ -30,7 +30,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 /// Well inside joinChannel's default 15 s, and inside the SDK's own 10 s join
 /// timeout, so a helper that ignores `channelError` and waits for either
@@ -61,7 +61,7 @@ Future<SupabaseClient> _signIn(String email) async {
 }
 
 Future<SupabaseClient> _member() async {
-  final c = await _signIn('cleo@integration.test');
+  final c = await _signIn('cleo@mail.test');
   expect(
     await c.rpc('activate_session'),
     isTrue,
@@ -71,12 +71,8 @@ Future<SupabaseClient> _member() async {
 }
 
 Future<SupabaseClient> _stranger() async {
-  await ensureUninvitedUser(
-    _url,
-    'stranger-channels@integration.test',
-    _password,
-  );
-  final c = await _signIn('stranger-channels@integration.test');
+  await ensureUninvitedUser(_url, 'stranger-channels@mail.test', _password);
+  final c = await _signIn('stranger-channels@mail.test');
   expect(
     await c.rpc('activate_session'),
     isFalse,

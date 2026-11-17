@@ -55,7 +55,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 SupabaseClient _client(String key) => SupabaseClient(
   _url,
@@ -137,7 +137,7 @@ void main() {
 
   setUpAll(() async {
     service = _client(serviceKey());
-    wynn = await _signedIn('wynn@integration.test');
+    wynn = await _signedIn('wynn@mail.test');
     uid = wynn.auth.currentUser!.id;
     prefKey = 'release_notes_served_build_$uid';
     await wynn

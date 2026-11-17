@@ -65,7 +65,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 typedef _Send = Future<Result<Message>> Function({
   required String id,
@@ -303,8 +303,8 @@ void main() {
   late String conversationId;
 
   setUpAll(() async {
-    umutClient = await _signedIn('umut@integration.test');
-    zaneClient = await _signedIn('zane@integration.test');
+    umutClient = await _signedIn('umut@mail.test');
+    zaneClient = await _signedIn('zane@mail.test');
     umut = Member(userId: umutClient.auth.currentUser!.id, displayName: 'Umut');
     await findByTag(umutClient, [zaneClient]);
     final started = await SupabaseChatRepository(umutClient)

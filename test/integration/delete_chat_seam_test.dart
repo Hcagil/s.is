@@ -42,7 +42,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 Future<SupabaseClient> _signedIn(String email) async {
   final client = SupabaseClient(
@@ -155,9 +155,9 @@ void main() {
   String idOf(SupabaseClient c) => c.auth.currentUser!.id;
 
   setUpAll(() async {
-    ash = await _signedIn('dc-ash@integration.test');
-    bea = await _signedIn('dc-bea@integration.test');
-    cyd = await _signedIn('dc-cyd@integration.test');
+    ash = await _signedIn('dc-ash@mail.test');
+    bea = await _signedIn('dc-bea@mail.test');
+    cyd = await _signedIn('dc-cyd@mail.test');
     service = SupabaseClient(_url, serviceKey());
     for (final c in [ash, bea, cyd]) {
       await c

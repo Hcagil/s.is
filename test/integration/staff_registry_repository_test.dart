@@ -25,7 +25,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _seedPw = 'integration-password';
+const _seedPw = 'int-pw';
 const _prefix = 'sis.staff.registry.';
 
 Future<SupabaseClient> _signIn(String email) async {

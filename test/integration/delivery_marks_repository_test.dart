@@ -104,9 +104,9 @@ void main() {
   }
 
   setUpAll(() async {
-    priyaClient = await _signedIn('priya@integration.test');
-    quinlanClient = await _signedIn('quinlan@integration.test');
-    remyClient = await _signedIn('remy@integration.test');
+    priyaClient = await _signedIn('priya@mail.test');
+    quinlanClient = await _signedIn('quinlan@mail.test');
+    remyClient = await _signedIn('remy@mail.test');
     priya = SupabaseChatRepository(priyaClient);
     quinlan = SupabaseChatRepository(quinlanClient);
     remy = SupabaseChatRepository(remyClient);

@@ -37,7 +37,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 SupabaseClient _client() => SupabaseClient(
   _url,
@@ -75,7 +75,7 @@ void main() {
   final extra = <SupabaseClient>[];
 
   setUpAll(() async {
-    irisClient = await _signedIn('iris@integration.test');
+    irisClient = await _signedIn('iris@mail.test');
   });
 
   tearDown(() async {
@@ -168,9 +168,9 @@ void main() {
 
     setUpAll(() async {
       service = SupabaseClient(_url, serviceKey());
-      ione = await _signedIn('ione@integration.test');
-      ilka = await _signedIn('ilka@integration.test');
-      isak = await _signedIn('isak@integration.test');
+      ione = await _signedIn('ione@mail.test');
+      ilka = await _signedIn('ilka@mail.test');
+      isak = await _signedIn('isak@mail.test');
       await findByTag(ione, [ilka, isak]);
       final started = await SupabaseChatRepository(ione).startGroupConversation(
         title: 'ios push ${DateTime.now().microsecondsSinceEpoch}',

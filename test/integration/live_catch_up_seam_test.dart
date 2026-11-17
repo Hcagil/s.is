@@ -39,7 +39,7 @@ const _key = String.fromEnvironment(
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
 // The suite's shared seed password (supabase/seed.sql).
-const _pw = 'integration-password';
+const _pw = 'int-pw';
 
 Future<SupabaseClient> _signedIn(String email) async {
   final client = SupabaseClient(
@@ -88,8 +88,8 @@ void main() {
   late String chat;
 
   setUpAll(() async {
-    sigClient = await _signedIn('sig@integration.test');
-    rhoClient = await _signedIn('rho@integration.test');
+    sigClient = await _signedIn('sig@mail.test');
+    rhoClient = await _signedIn('rho@mail.test');
     sig = SupabaseChatRepository(sigClient!);
     await findByTag(rhoClient!, [sigClient!]);
     chat = (await SupabaseChatRepository(rhoClient!).startDirectConversation(

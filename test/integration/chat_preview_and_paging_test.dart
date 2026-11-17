@@ -33,7 +33,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 /// A real 1x1 PNG: the bucket checks the mime type, so fake bytes are refused
 /// before they can produce an attachment to preview.
@@ -122,9 +122,9 @@ void main() {
   }
 
   setUpAll(() async {
-    quinnClient = await _signedIn('quinn@integration.test');
-    peteClient = await _signedIn('pete@integration.test');
-    oliveClient = await _signedIn('olive@integration.test');
+    quinnClient = await _signedIn('quinn@mail.test');
+    peteClient = await _signedIn('pete@mail.test');
+    oliveClient = await _signedIn('olive@mail.test');
     olive = SupabaseChatRepository(oliveClient!);
 
     await findByTag(oliveClient!, [peteClient!, quinnClient!]);

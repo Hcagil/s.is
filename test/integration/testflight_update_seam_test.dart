@@ -36,7 +36,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 const _inAppUpdate = MethodChannel('de.ffuf.in_app_update/methods');
 
 Future<SupabaseClient> signedIn(String email) async {
@@ -71,7 +71,7 @@ void main() {
   late FakeUrlLauncherPlatform urls;
   late List<String> playCalls;
 
-  setUpAll(() async => client = await signedIn('cleo@integration.test'));
+  setUpAll(() async => client = await signedIn('cleo@mail.test'));
   tearDownAll(() => client.dispose());
 
   setUp(() {

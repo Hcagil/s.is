@@ -41,7 +41,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
-const _password = 'integration-password';
+const _password = 'int-pw';
 
 SupabaseClient _client(String url) => SupabaseClient(
   url,
@@ -99,9 +99,9 @@ void main() {
   late String sharedConversation;
 
   setUpAll(() async {
-    cleoClient = await _signedIn('cleo@integration.test');
-    annClient = await _signedIn('ann@integration.test');
-    inesClient = await _signedIn('ines@integration.test');
+    cleoClient = await _signedIn('cleo@mail.test');
+    annClient = await _signedIn('it-ann@mail.test');
+    inesClient = await _signedIn('ines@mail.test');
     // Reaches the real, reachable server, but carries no session: the
     // `anon` role every table here has `revoke all` from.
     anonClient = _client(_url);

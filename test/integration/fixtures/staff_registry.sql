@@ -12,7 +12,7 @@ insert into auth.users (instance_id, id, aud, role, email, encrypted_password, e
                         raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
                         confirmation_token, recovery_token, email_change_token_new, email_change)
 select '00000000-0000-0000-0000-000000000000', u.id, 'authenticated', 'authenticated', u.email,
-       extensions.crypt('integration-password', extensions.gen_salt('bf')), now(),
+       extensions.crypt('int-pw', extensions.gen_salt('bf')), now(),
        '{"provider":"email","providers":["email"]}', jsonb_build_object('full_name', u.name), now(), now(),
        '', '', '', ''
   from (values ('5a0f0000-0000-0000-0000-0000000005a1'::uuid, 'staffreg-member@sis.test', 'Staffreg Member'),

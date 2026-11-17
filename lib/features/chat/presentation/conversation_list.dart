@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/loading.dart';
 import '../../../app/notice.dart';
 import '../../../core/failure.dart';
 import '../../../core/startup_marks.dart';
@@ -83,7 +82,7 @@ class ConversationList extends ConsumerWidget {
                       onRetry: () =>
                           ref.read(conversationListProvider.notifier).refresh(),
                     ),
-                    _ => const Center(child: SisLoadingLogo(size: 40)),
+                    _ => const SizedBox.shrink(),
                   }
                 : const _SearchResults(),
           ),

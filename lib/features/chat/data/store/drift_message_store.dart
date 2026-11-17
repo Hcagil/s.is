@@ -47,6 +47,11 @@ final class DriftMessageStore
   static String? _earlyKey;
   static int _earlyErasures = 0;
 
+  /// The result of warmOpen's preload read, the owner_id of the file it came from, and the erase count it began under. Taken once by [takePreloaded].
+  static String? _preloadOwner;
+  static Object? _preloadValue;
+  static int _preloadErasures = 0;
+
   /// Test seam: forgets the prefetched key and the "first open ran" flag.
   @visibleForTesting
   static void resetPrefetchForTest() {
@@ -68,7 +73,12 @@ final class DriftMessageStore
   }
 
   /// Cold start: opens the EXISTING store file with the prefetched key ahead of the first read, in parallel with Supabase, so the isolate, sqlite3mc and PRAGMAs are ready. It reads only the owner_id meta row (dropped, never returned) and never creates a file or a key: no prefetched key, a key already taken, or no file means nothing happens (the lazy open runs as before). An erase meanwhile drops it. The owner check still runs in [_create].
-  static Future<void> warmOpen(Future<File> Function() file) async {
+  ///
+  /// With [preload] it also runs that read once on the opened database and keeps the result for [takePreloaded].
+  static Future<void> warmOpen(
+    Future<File> Function() file, {
+    Future<Object?> Function(StoreDatabase db)? preload,
+  }) async {
     final key = _prefetchedKey;
     if (key == null || _keyTaken || _early != null) return;
     final erasuresAtStart = _erasures;
@@ -87,9 +97,18 @@ final class DriftMessageStore
         );
         var ok = false;
         try {
-          await (db.select(
+          final owner = await (db.select(
             db.meta,
           )..where((t) => t.key.equals('owner_id'))).getSingleOrNull();
+          if (preload != null && owner != null) {
+            Object? value;
+            try {
+              value = await preload(db);
+            } catch (_) {}
+            _preloadOwner = owner.value;
+            _preloadValue = value;
+            _preloadErasures = erasuresAtStart;
+          }
           ok = true;
           return db;
         } finally {
@@ -110,6 +129,21 @@ final class DriftMessageStore
         _earlyPath = null;
       }
     }
+  }
+
+  /// The preload result of [warmOpen] if the file belongs to [ownerId] and no erase happened since; waits for the early open still running. Single use; null otherwise.
+  static Future<Object?> takePreloaded(String ownerId) async {
+    final pending = _early;
+    if (pending != null) {
+      try {
+        await pending;
+      } catch (_) {}
+    }
+    final value = _preloadValue;
+    final valid = _preloadOwner == ownerId && _preloadErasures == _erasures;
+    _preloadValue = null;
+    _preloadOwner = null;
+    return valid ? value : null;
   }
 
   /// The early open, if it is still valid for [path] and [key] (no erase since it began); otherwise it is closed and null is returned. Single use.
@@ -138,6 +172,8 @@ final class DriftMessageStore
   static Future<void> _discardEarly() {
     final pending = _early;
     _early = null;
+    _preloadValue = null;
+    _preloadOwner = null;
     _earlyKey = null;
     _earlyPath = null;
     if (pending == null) return Future<void>.value();

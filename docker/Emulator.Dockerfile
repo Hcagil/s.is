@@ -12,12 +12,13 @@ ENV ANDROID_HOME=/opt/android-sdk \
     JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 \
     PATH=/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools:/opt/android-sdk/emulator:${PATH}
 
-# Install runtime dependencies for the emulator and headless display.
+# Runtime libraries for the headless emulator; openssl serves the push check picture over https.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl unzip openjdk-17-jre-headless \
     libpulse0 libnss3 libxcomposite1 libxcursor1 libxi6 libxtst6 \
     libxdamage1 libxrandr2 libxkbfile1 libgl1 libegl1 libdrm2 libgbm1 \
     libasound2t64 libbsd0 libxkbcommon0 libdbus-1-3 \
+    openssl \
     && rm -rf /var/lib/apt/lists/*
 
 # Create the ubuntu user with the provided host IDs for volume mounting.

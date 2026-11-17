@@ -393,6 +393,7 @@ void main() {
         'profiles',
         'previews',
         'unread',
+        'marked_unread',
       });
       List<String> ids(Object? rows, String col) =>
           [for (final r in rows as List) (r as Map)[col] as String]..sort();

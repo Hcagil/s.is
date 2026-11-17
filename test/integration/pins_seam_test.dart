@@ -333,10 +333,10 @@ void main() {
     final row = byKey('conversation-$direct');
     await until(t, () async => row.evaluate().isNotEmpty, 'the chat row');
 
-    // Long-press selects the row; the selection bar pins it.
+    // Long-press opens the chat card; its Pin row pins the chat.
     await t.longPress(row);
     await t.pumpAndSettle();
-    await t.tap(byKey('selection-pin'));
+    await t.tap(byKey('chat-menu-pin'));
     await t.pumpAndSettle();
     await until(
       t,
@@ -350,12 +350,7 @@ void main() {
     expect(list.firstWhere((c) => c.id == direct).pinned, isTrue);
     expect(byKey('pinned-$direct'), findsOneWidget);
 
-    // Pinning ends the selection here (the real reload rebuilds the list);
-    // leave it if it is still on, so the tap below opens the chat.
-    if (byKey('selection-back').evaluate().isNotEmpty) {
-      await t.tap(byKey('selection-back'));
-      await t.pumpAndSettle();
-    }
+    // The card closes on the pick, so the tap below opens the chat.
     await t.tap(row);
     final bubble = byKey('message-${msg.id}');
     await until(t, () async => bubble.evaluate().isNotEmpty, 'the message');

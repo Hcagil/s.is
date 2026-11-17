@@ -2819,6 +2819,16 @@ class AppLocalizationsTr extends AppLocalizations {
   String get adminQuestionsEmpty => 'Açık soru yok';
 
   @override
+  String adminQuestionFromLabel(String conv) {
+    return 'Kaynak: $conv';
+  }
+
+  @override
+  String adminQuestionCountText(int n) {
+    return '$n soru yanıt bekliyor';
+  }
+
+  @override
   String get adminBoxM => 'Manager';
 
   @override

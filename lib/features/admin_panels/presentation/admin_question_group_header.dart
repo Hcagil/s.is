@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/theme.dart';
+import '../../../l10n/app_localizations.dart';
 
 /// copy-lead EN+TR pending
 String adminQuestionFromLabel(String conv) => 'from $conv';
-
-/// copy-lead EN+TR pending
-String adminQuestionCountText(int n) => '$n to answer';
 
 class AdminQuestionGroupHeader extends StatelessWidget {
   const AdminQuestionGroupHeader({
@@ -43,7 +41,7 @@ class AdminQuestionGroupHeader extends StatelessWidget {
               ),
             ),
             Text(
-              adminQuestionCountText(count),
+              AppLocalizations.of(context).adminQuestionCountText(count),
               style: TextStyle(color: t.muted),
             ),
             const SizedBox(width: 8),

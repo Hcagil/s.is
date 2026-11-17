@@ -286,7 +286,7 @@ MessageStore? _storeOf(Ref ref) {
 /// Lines a plain push saved while the app was closed (see
 /// [PendingPushMessages]) for [ownerId], oldest first. Dropped: a line
 /// without a sender id, the locked placeholder, and any id in [known]
-/// (already a push row or a stored message). Never throws.
+/// (already a push row or a stored message), and any vanished (deleted for everyone) id. Never throws.
 Future<List<Message>> _pendingLines(
   Ref ref,
   String ownerId,
@@ -296,12 +296,20 @@ Future<List<Message>> _pendingLines(
     final all = await ref
         .read(pendingPushMessagesProvider)
         .pendingPushMessages(ownerId);
+    // A message deleted for everyone stays gone: its tombstone beats a saved line.
+    final store = _storeOf(ref);
+    final vanished = <String>{
+      if (store is VanishedStore)
+        for (final c in {for (final m in all) m.conversationId})
+          ...await (store as VanishedStore).vanishedIds(c),
+    };
     return [
       for (final m in all)
         if (isUuidShape(m.senderId) &&
             isUuidShape(m.id) &&
             !isLockedPlaceholder(m.body) &&
-            !known.contains(m.id))
+            !known.contains(m.id) &&
+            !vanished.contains(m.id))
           m,
     ]..sort((a, b) => a.createdAt.compareTo(b.createdAt));
   } catch (_) {

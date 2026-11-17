@@ -357,11 +357,10 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
   static const _messageColumns =
       'id, conversation_id, sender_id, body, created_at, attachment_path, attachment_preview, deleted, deleted_by, deleted_by_admin, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size, attachment_duration_ms, location_lat, location_lng, attachment_waveform, voice_transcript, sticker_id, sticker_album_id, sticker_album, photo_group, link_preview, admin_msg, ciphertext, olm_type';
 
-  /// The columns of a page read (open chat): no photo preview -- those arrive
-  /// separately, see [attachmentPreviews], so the first paint never waits on
-  /// them.
-  static const _pageColumns =
-      'id, conversation_id, sender_id, body, created_at, attachment_path, deleted, deleted_by, deleted_by_admin, reply_to, forwarded, edited_at, poll, contact, attachment_name, attachment_mime, attachment_size, attachment_duration_ms, location_lat, location_lng, attachment_waveform, voice_transcript, sticker_id, sticker_album_id, sticker_album, photo_group, link_preview, admin_msg, ciphertext, olm_type';
+  /// The columns of a page read (open chat): the tiny photo preview rides
+  /// along, so a photo's bubble has its final size at the first paint (a few
+  /// hundred bytes, and only photo rows have one).
+  static const _pageColumns = _messageColumns;
 
   @override
   Future<Result<List<Member>>> conversationMembers(

@@ -149,7 +149,7 @@ void main() {
   });
 
   group('messages()', () {
-    test('the newest page only, oldest first, without previews', () async {
+    test('the newest page only, oldest first, with each photo preview', () async {
       final rows = _ok(await nami.messages(chat));
       expect(rows, hasLength(messagePageSize));
       expect(
@@ -158,10 +158,19 @@ void main() {
         reason: 'exactly the newest $messagePageSize, oldest first',
       );
       expect(
-        rows.where((m) => m.attachmentPreview != null).map((m) => m.id),
-        isEmpty,
-        reason: 'previews come only from attachmentPreviews',
+        rows.where((m) => m.attachmentPreview != null).map((m) => m.id).toSet(),
+        {ids[85], ids[100], ids[125]},
+        reason:
+            'the page read itself carries attachment_preview of each photo '
+            'that has one; the photo without a preview and text rows have none',
       );
+      for (final i in [85, 100, 125]) {
+        expect(
+          rows.firstWhere((m) => m.id == ids[i]).attachmentPreview,
+          _previewFor(i),
+          reason: 'the stored bytes of row $i, not another row',
+        );
+      }
       expect(
         rows.where((m) => m.hasAttachment),
         hasLength(4),

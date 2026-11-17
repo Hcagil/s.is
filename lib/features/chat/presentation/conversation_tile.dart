@@ -413,6 +413,8 @@ class ConversationTile extends ConsumerWidget {
           ..showSnackBar(
             SnackBar(
               duration: const Duration(seconds: 5),
+              // A SnackBar with an action stays up by default; it must time out.
+              persist: false,
               content: Text(l.chatMarkedUnread),
               action: SnackBarAction(
                 label: l.chatDeleteUndo,

@@ -248,6 +248,25 @@ void main() {
       chat.releaseList();
     });
 
+    test(
+      'a placeholder line from a preview-none push (no "u") is skipped',
+      () async {
+        final p = _Pending([
+          _line('p0', 'c1', '', 'Yeni mesaj', 1),
+          _line('p2', 'c2', 'carol', 'carol new', 2),
+        ]);
+        final c = await app(p);
+        final l = await firstList(c);
+        final c1 = byId(l, 'c1');
+        expect(c1.lastMessage, 'old');
+        expect(c1.unread, 0);
+        final c2 = byId(l, 'c2');
+        expect(c2.lastMessage, 'carol new');
+        expect(c2.unread, 1);
+        chat.releaseList();
+      },
+    );
+
     test('a locked placeholder line is skipped', () async {
       final p = _Pending([
         _line('p0', 'c1', 'alice', lockedBodyPlaceholder, 1),

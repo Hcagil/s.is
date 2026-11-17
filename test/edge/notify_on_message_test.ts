@@ -430,7 +430,8 @@ Deno.test({
           badge: String(badges[x.id]),
           user_id: x.id,
           message_id: messageId,
-          sender_id: sender.id,
+          // Only with the real text (preview full): nothing wrong can be saved.
+          ...(x === p.iossender || x === p.iosnone ? {} : { sender_id: sender.id }),
           conversation_id: conversationId,
           title: t.title,
           body: t.body,
@@ -587,13 +588,13 @@ Deno.test({
         assertEquals(Object.keys(m).sort(), ['android', 'data', 'token'], `data only: ${JSON.stringify(m)}`);
         return m;
       };
-      const ids = (x: typeof p.ann, conversation: string, message: string) =>
-        ({ conversation_id: conversation, user_id: x.id, message_id: message, sender_id: p.ann.id });
+      const ids = (x: typeof p.ann, conversation: string, message: string, full = true) =>
+        ({ conversation_id: conversation, user_id: x.id, message_id: message, ...(full ? { sender_id: p.ann.id } : {}) });
       assertEquals(placeholders(onlyTo(g.sent, p.gfull), ids(p.gfull, group, g.id)), fixture.group_full,
         'group, preview full');
-      assertEquals(placeholders(onlyTo(g.sent, p.gsender), ids(p.gsender, group, g.id)), fixture.group_sender,
+      assertEquals(placeholders(onlyTo(g.sent, p.gsender), ids(p.gsender, group, g.id, false)), fixture.group_sender,
         'group, preview sender');
-      assertEquals(placeholders(onlyTo(g.sent, p.gnone), ids(p.gnone, group, g.id)), fixture.group_none,
+      assertEquals(placeholders(onlyTo(g.sent, p.gnone), ids(p.gnone, group, g.id, false)), fixture.group_none,
         'group, preview none: no sender, no chat');
       const direct1 = placeholders(onlyTo(d.sent, p.dfull), ids(p.dfull, direct, d.id));
       assertEquals(direct1, fixture.direct_full, '1:1: the five keys it always had, plus the badge');

@@ -22,9 +22,8 @@ final class SupabaseProfileRepository implements ProfileRepository {
     ),
     PostgrestException(:final code) when code == '42501' =>
       const DeniedFailure(),
-    PostgrestException(:final code) when code == 'RLMT1' => ProviderFailure(
-      failureStrings.failSearchLimit,
-    ),
+    PostgrestException(:final code) when code == 'RLMT1' =>
+      const SearchLimitFailure(),
     _ => readableFailure(e),
   };
 

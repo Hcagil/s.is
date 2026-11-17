@@ -8,6 +8,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../auth/domain/member.dart';
 import '../application/chat_controllers.dart';
 import 'find_from_contacts_page.dart';
+import 'join_with_link_page.dart';
 import 'person_avatar.dart';
 import 'picker_widgets.dart';
 
@@ -115,6 +116,12 @@ class _NewChatPageState extends ConsumerState<NewChatPage> {
                   : const Icon(Icons.search),
               onPressed: _searching ? null : _search,
             ),
+          ),
+          ListTile(
+            key: const ValueKey('join-with-link'),
+            leading: const Icon(Icons.link),
+            title: Text(l.joinLinkTitle),
+            onTap: () => showJoinWithLinkPage(context),
           ),
           if (_searchError != null)
             Padding(

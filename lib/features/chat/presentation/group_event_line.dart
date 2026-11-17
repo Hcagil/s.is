@@ -33,8 +33,7 @@ class GroupEventLine extends StatelessWidget {
       GroupEventKind.picture => l.eventPictureChanged(subject),
       GroupEventKind.pinned => l.eventPinned(subject),
       GroupEventKind.closed => l.eventClosed(subject),
-      // Placeholder until copy-lead's "joined by link" text exists.
-      GroupEventKind.joined => l.eventAdded(subject),
+      GroupEventKind.joined => l.eventJoinedByLink(subject),
     };
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),

@@ -140,6 +140,14 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
                     conversationId: conversationId,
                     amAdmin: amAdmin,
                   ),
+                  if (amAdmin)
+                    SisSettingsRow(
+                      key: const ValueKey('setting-invite-link'),
+                      icon: Icons.link,
+                      title: AppLocalizations.of(context).groupInviteTitle,
+                      onTap: () =>
+                          showGroupInvitePage(context, conversationId, title),
+                    ),
                   const SizedBox(height: 12),
                   TabBar(
                     tabs: [

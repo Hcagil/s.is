@@ -3072,4 +3072,188 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get adminDashboardStale =>
       'Bilgisayarınızdan güncel durum gelmiyor. Bilgisayarınız kapalı veya uykuda olabilir.';
+
+  @override
+  String get groupInviteTitle => 'Davet bağlantısı';
+
+  @override
+  String get groupInviteHelp =>
+      'Bu bağlantıyla yalnızca SIS\'e davet edilen hesaplar katılabilir.';
+
+  @override
+  String get groupInviteTimeLimit => 'Geçerlilik süresi';
+
+  @override
+  String get groupInviteNoLimit => 'Süresiz';
+
+  @override
+  String groupInviteDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count gün',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get groupInviteTimeNote => 'Süre, kaydettiğiniz anda başlar.';
+
+  @override
+  String groupInviteValidUntil(String date, String time) {
+    return '$date $time saatine kadar geçerli.';
+  }
+
+  @override
+  String get groupInviteShare => 'Bağlantıyı paylaş';
+
+  @override
+  String get groupInviteReset => 'Bağlantıyı sıfırla';
+
+  @override
+  String get groupInviteTurnOff => 'Bağlantıyı kapat';
+
+  @override
+  String get groupInviteResetDone => 'Bağlantı sıfırlandı';
+
+  @override
+  String get groupInviteTurnedOff => 'Bağlantı kapatıldı';
+
+  @override
+  String get groupInviteResetTitle => 'Bağlantı sıfırlansın mı?';
+
+  @override
+  String get groupInviteResetBody =>
+      'Eski bağlantı artık çalışmayacak. Aynı geçerlilik süresiyle yeni bir bağlantı oluşturulacak ve süre yeniden başlayacak.';
+
+  @override
+  String get groupInviteTurnOffTitle => 'Bağlantı kapatılsın mı?';
+
+  @override
+  String get groupInviteTurnOffBody =>
+      'Bu bağlantıyla artık kimse katılamaz. Daha sonra yeni bir bağlantı oluşturabilirsiniz.';
+
+  @override
+  String get groupInviteTurnOffAction => 'Kapat';
+
+  @override
+  String get groupInviteNoneTitle => 'Henüz bağlantı yok';
+
+  @override
+  String get groupInviteNoneBody =>
+      'Bir bağlantı oluşturun ve SIS\'e davet edilen hesaplarla paylaşın.';
+
+  @override
+  String get groupInviteCreate => 'Bağlantı oluştur';
+
+  @override
+  String get groupInviteExpiredNote =>
+      'Süresi doldu · Bu bağlantıyla artık kimse katılamaz.';
+
+  @override
+  String get groupInviteCreateNew => 'Yeni bağlantı oluştur';
+
+  @override
+  String get groupInviteSaveFailed =>
+      'Değişiklik kaydedilemedi. Mevcut bağlantı değişmedi.';
+
+  @override
+  String get groupInviteOffline =>
+      'İnternet bağlantısı yok. Bağlantıyı kopyalayıp paylaşabilirsiniz, ancak şu an değiştiremezsiniz.';
+
+  @override
+  String get groupInviteNoneOfflineBody =>
+      'Bağlantı oluşturmak için internete bağlanın.';
+
+  @override
+  String get inviteNoInternet => 'İnternet bağlantısı yok';
+
+  @override
+  String groupInviteShareText(String link) {
+    return 'SIS grup daveti. SIS\'te \"Bağlantıyla katıl\"ı seçip bu bağlantıyı yapıştırın: $link';
+  }
+
+  @override
+  String get joinLinkTitle => 'Bağlantıyla katıl';
+
+  @override
+  String get joinLinkHint => 'Davet bağlantısını yapıştırın';
+
+  @override
+  String get joinLinkHelp =>
+      'Davet bağlantısını bir grup yöneticisinden isteyin, sonra buraya yapıştırın.';
+
+  @override
+  String get commonPaste => 'Yapıştır';
+
+  @override
+  String get joinLinkNotInvite =>
+      'Bu bir SIS davet bağlantısı değil. Kontrol edip tekrar deneyin.';
+
+  @override
+  String get joinLinkTooManyTries =>
+      'Çok fazla deneme yapıldı. Daha sonra tekrar deneyin.';
+
+  @override
+  String get joinLinkOffline =>
+      'İnternet bağlantısı yok. İnternete bağlanıp tekrar deneyin.';
+
+  @override
+  String get inviteInvalidPageTitle => 'Bağlantı kullanılamıyor';
+
+  @override
+  String get inviteInvalidTitle => 'Bu davet bağlantısı geçersiz';
+
+  @override
+  String get inviteInvalidBody =>
+      'Süresi dolmuş ya da bir yönetici bağlantıyı sıfırlamış veya kapatmış olabilir.';
+
+  @override
+  String get inviteJoinGroup => 'Gruba katıl';
+
+  @override
+  String get inviteJoinNoHistory => 'Yeni üyeler önceki mesajları göremez.';
+
+  @override
+  String get inviteJoiningStatus => 'Gruba katılınıyor…';
+
+  @override
+  String get inviteJoining => 'Katılınıyor…';
+
+  @override
+  String get inviteJoinFailed => 'Gruba katılınamadı. Tekrar deneyin.';
+
+  @override
+  String get inviteJoinOfflineBody =>
+      'Gruba katılmak için internet bağlantısı gerekiyor.';
+
+  @override
+  String get inviteJoinNotDone => 'Henüz gruba katılmadınız.';
+
+  @override
+  String get inviteJoinedToast => 'Gruba katıldınız';
+
+  @override
+  String eventJoinedByLink(String name) {
+    return '$name davet bağlantısıyla gruba katıldı';
+  }
+
+  @override
+  String get inviteAlreadyTitle => 'Zaten üyesiniz';
+
+  @override
+  String get inviteAlreadyBody => 'Bu grubun zaten üyesisiniz.';
+
+  @override
+  String get inviteOpenGroup => 'Gruba git';
+
+  @override
+  String get inviteClosedBody => 'Bu gruba artık kimse katılamaz.';
+
+  @override
+  String get inviteRemovedTitle => 'Gruptan çıkarıldınız';
+
+  @override
+  String get inviteRemovedBody =>
+      'Sizi yalnızca bir grup yöneticisi yeniden ekleyebilir.';
 }

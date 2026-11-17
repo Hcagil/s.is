@@ -274,6 +274,8 @@ Deno.test({
           // The message itself, so the phone's push receipt can be matched
           // to it on the server.
           message_id: messageId,
+          // Who wrote it, so the phone can save the line as a message.
+          sender_id: sender.id,
           // 0.30.6: a group message names its sender and the group apart,
           // on both Android shapes.
           sender: target.sender,
@@ -428,6 +430,7 @@ Deno.test({
           badge: String(badges[x.id]),
           user_id: x.id,
           message_id: messageId,
+          sender_id: sender.id,
           conversation_id: conversationId,
           title: t.title,
           body: t.body,
@@ -585,7 +588,7 @@ Deno.test({
         return m;
       };
       const ids = (x: typeof p.ann, conversation: string, message: string) =>
-        ({ conversation_id: conversation, user_id: x.id, message_id: message });
+        ({ conversation_id: conversation, user_id: x.id, message_id: message, sender_id: p.ann.id });
       assertEquals(placeholders(onlyTo(g.sent, p.gfull), ids(p.gfull, group, g.id)), fixture.group_full,
         'group, preview full');
       assertEquals(placeholders(onlyTo(g.sent, p.gsender), ids(p.gsender, group, g.id)), fixture.group_sender,
@@ -595,7 +598,7 @@ Deno.test({
       const direct1 = placeholders(onlyTo(d.sent, p.dfull), ids(p.dfull, direct, d.id));
       assertEquals(direct1, fixture.direct_full, '1:1: the five keys it always had, plus the badge');
       // As before 0.30.6, plus only 0.30.8's badge: no sender, no chat.
-      assertEquals(Object.keys(direct1).sort(), ['badge', 'body', 'conversation_id', 'message_id', 'title', 'user_id']);
+      assertEquals(Object.keys(direct1).sort(), ['badge', 'body', 'conversation_id', 'message_id', 'sender_id', 'title', 'user_id']);
     } finally {
       await sql.begin(async (tx) => {
         await tx`delete from app_private.tag_finds where finder in ${sql(people.map((x) => x.id))}`;
@@ -662,6 +665,7 @@ Deno.test({
       const data = (x: typeof p.ann) => ({
         user_id: x.id,
         message_id: messageId,
+        sender_id: p.ann.id,
         conversation_id: group,
         title: t(x).title,
         body: t(x).body,
@@ -1433,7 +1437,7 @@ Deno.test({
         assertEquals(mine.length, 1, `exactly one send to ${x.name}: ${JSON.stringify(sent)}`);
         return mine[0].message;
       };
-      const baseKeys = ['badge', 'body', 'conversation_id', 'message_id', 'title', 'user_id'];
+      const baseKeys = ['badge', 'body', 'conversation_id', 'message_id', 'sender_id', 'title', 'user_id'];
 
       // iPhone 1:1 plain
       const id1 = await send(toIos, 'dt plain words');

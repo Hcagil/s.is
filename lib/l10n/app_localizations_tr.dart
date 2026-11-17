@@ -2355,7 +2355,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get adminKeep => 'İptal edildi: bu kart artık geçerli değil.';
 
   @override
-  String get adminErr => 'Bir şeyler ters gitti. Hiçbir şey değiştirilmedi.';
+  String get adminErr => 'Bir hata oluştu. Hiçbir şey değiştirilmedi.';
 
   @override
   String get adminNoLink =>
@@ -2682,7 +2682,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get failKeysSave => 'Şifreleme anahtarları bu telefona kaydedilemedi.';
 
   @override
-  String get failGeneric => 'Bir şeyler ters gitti. Tekrar deneyin.';
+  String get failGeneric => 'Bir hata oluştu. Tekrar deneyin.';
 
   @override
   String get failOffline =>

@@ -10,18 +10,27 @@ import '../../notifications/presentation/notification_pages.dart';
 import 'message_menu_card.dart';
 
 /// Shows a chat menu card at [anchor] and returns the selected mute length,
-/// or 'off' to unmute, 'pin' / 'unpin', or null if cancelled.
+/// or 'off' to unmute, 'pin' / 'unpin', 'read', 'unread', 'select', 'archive',
+/// 'delete', or null if cancelled.
 Future<String?> showChatMenuCard(
   BuildContext context, {
   required Rect anchor,
   required bool muted,
   required bool pinned,
   bool canPin = true,
+  bool? unread,
+  bool? archived,
 }) => showFloatingCard<String>(
   context,
   anchor: anchor,
   cardKey: const ValueKey('chat-menu'),
-  child: _ChatMenuBody(muted: muted, pinned: pinned, canPin: canPin),
+  child: _ChatMenuBody(
+    muted: muted,
+    pinned: pinned,
+    canPin: canPin,
+    unread: unread,
+    archived: archived,
+  ),
 );
 
 class _ChatMenuBody extends StatefulWidget {
@@ -29,11 +38,15 @@ class _ChatMenuBody extends StatefulWidget {
     required this.muted,
     required this.pinned,
     required this.canPin,
+    this.unread,
+    this.archived,
   });
 
   final bool muted;
   final bool pinned;
   final bool canPin;
+  final bool? unread;
+  final bool? archived;
 
   @override
   State<_ChatMenuBody> createState() => _ChatMenuBodyState();
@@ -109,6 +122,37 @@ class _ChatMenuBodyState extends State<_ChatMenuBody> {
               ),
             ),
           ),
+        if (widget.unread != null)
+          _IconRow(
+            key: const ValueKey('chat-menu-unread'),
+            icon: widget.unread!
+                ? Icons.mark_chat_read_outlined
+                : Icons.mark_chat_unread_outlined,
+            label: widget.unread! ? l.chatSelMarkRead : l.chatMenuMarkUnread,
+            onTap: () =>
+                Navigator.of(context).pop(widget.unread! ? 'read' : 'unread'),
+          ),
+        if (widget.archived != null) ...[
+          _IconRow(
+            key: const ValueKey('chat-menu-select'),
+            icon: Icons.check_circle_outline,
+            label: l.commonSelect,
+            onTap: () => Navigator.of(context).pop('select'),
+          ),
+          _IconRow(
+            key: const ValueKey('chat-menu-archive'),
+            icon: Icons.archive_outlined,
+            label: widget.archived! ? l.chatUnarchive : l.chatArchive,
+            onTap: () => Navigator.of(context).pop('archive'),
+          ),
+          _IconRow(
+            key: const ValueKey('chat-menu-delete'),
+            icon: Icons.delete_outline,
+            label: l.chatDeleteChat,
+            onTap: () => Navigator.of(context).pop('delete'),
+            color: Theme.of(context).colorScheme.error,
+          ),
+        ],
       ],
     );
   }
@@ -126,6 +170,38 @@ class _MenuRow extends StatelessWidget {
     child: Padding(
       padding: const EdgeInsets.fromLTRB(52, 10, 16, 10),
       child: Text(label),
+    ),
+  );
+}
+
+class _IconRow extends StatelessWidget {
+  const _IconRow({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Icon(icon, size: 22, color: color),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(label, style: TextStyle(color: color)),
+          ),
+        ],
+      ),
     ),
   );
 }

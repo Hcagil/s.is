@@ -2624,6 +2624,12 @@ abstract class AppLocalizations {
   /// **'Mark as unread'**
   String get chatMenuMarkUnread;
 
+  /// Chat menu row that starts selecting chats
+  ///
+  /// In en, this message translates to:
+  /// **'Select'**
+  String get commonSelect;
+
   /// Snackbar after marking a chat unread, with the Undo button
   ///
   /// In en, this message translates to:

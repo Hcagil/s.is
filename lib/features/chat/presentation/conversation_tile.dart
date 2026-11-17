@@ -11,8 +11,10 @@ import '../domain/message.dart';
 import '../domain/poll.dart';
 import '../../presence/application/presence_controllers.dart';
 import '../application/chat_controllers.dart';
+import '../application/chat_delete_controller.dart';
 import '../application/staff_registry_controller.dart';
 import '../application/chat_selection_controller.dart';
+import 'chat_delete_dialog.dart';
 import '../application/message_opener.dart';
 import '../domain/conversation.dart';
 import '../domain/encrypted_message_repository.dart';
@@ -114,6 +116,7 @@ class ConversationTile extends ConsumerWidget {
     final unread = conversation.isUnread;
     // The count pill shows only real unread messages; a hand mark only makes the row look unread (bold).
     final showPill = conversation.unread > 0 && !inArchive;
+    final showDot = conversation.markedUnread && conversation.unread == 0;
     final muted = ref.watch(
       mutesProvider.select(
         (m) =>
@@ -232,7 +235,11 @@ class ConversationTile extends ConsumerWidget {
                 style: previewStyle,
               ),
         trailing:
-            conversation.lastMessageAt == null && !muted && !showPill && !pinned
+            conversation.lastMessageAt == null &&
+                !muted &&
+                !showPill &&
+                !showDot &&
+                !pinned
             ? null
             : Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -247,7 +254,7 @@ class ConversationTile extends ConsumerWidget {
                         fontWeight: unread ? FontWeight.w700 : null,
                       ),
                     ),
-                  if (muted || showPill || pinned) ...[
+                  if (muted || showPill || showDot || pinned) ...[
                     if (conversation.lastMessageAt != null)
                       const SizedBox(height: 4),
                     Row(
@@ -260,7 +267,7 @@ class ConversationTile extends ConsumerWidget {
                             size: 14,
                             color: scheme.onSurfaceVariant,
                           ),
-                        if (pinned && (muted || showPill))
+                        if (pinned && (muted || showPill || showDot))
                           const SizedBox(width: 4),
                         if (muted)
                           Icon(
@@ -271,7 +278,20 @@ class ConversationTile extends ConsumerWidget {
                             semanticLabel: AppLocalizations.of(context)
                                 .chatMutedLabel,
                           ),
-                        if (muted && showPill) const SizedBox(width: 4),
+                        if (muted && (showPill || showDot))
+                          const SizedBox(width: 4),
+                        if (showDot)
+                          Container(
+                            key: ValueKey('marked-dot-${conversation.id}'),
+                            width: 10,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              color: muted
+                                  ? scheme.onSurfaceVariant
+                                  : scheme.primary,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
                         if (showPill)
                           Container(
                             key: ValueKey('unread-${conversation.id}'),
@@ -313,7 +333,7 @@ class ConversationTile extends ConsumerWidget {
                   ],
                 ],
               ),
-        onLongPress: inArchive ? () => _openMenu(context, ref, muted) : toggle,
+        onLongPress: selecting ? toggle : () => _openMenu(context, ref, muted),
         onTap: () => selecting
             ? toggle()
             : openConversation(
@@ -355,8 +375,54 @@ class ConversationTile extends ConsumerWidget {
       muted: muted,
       pinned: conversation.pinned,
       canPin: !inArchive,
+      unread: conversation.isUnread,
+      archived: inArchive,
     );
     if (choice == null || !context.mounted) return;
+    if (choice == 'select') {
+      ref.read(chatSelectionProvider.notifier).toggle(conversation.id);
+      return;
+    }
+    if (choice == 'archive') {
+      await _toggleArchive(context, ref);
+      return;
+    }
+    if (choice == 'delete') {
+      final ok = await showDeleteChatsDialog(context, [conversation]);
+      if (ok == null || !context.mounted) return;
+      ref.read(chatDeleteProvider.notifier).start([conversation]);
+      return;
+    }
+    if (choice == 'read') {
+      await ref
+          .read(conversationListProvider.notifier)
+          .markRead(conversation.id);
+      return;
+    }
+    if (choice == 'unread') {
+      final l = AppLocalizations.of(context);
+      final list = ref.read(conversationListProvider.notifier);
+      final result = await list.markUnread(conversation.id);
+      if (result case Err(:final failure) when context.mounted) {
+        showSisNotice(context, failure.message, isError: true);
+        return;
+      }
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              duration: const Duration(seconds: 5),
+              content: Text(l.chatMarkedUnread),
+              action: SnackBarAction(
+                label: l.chatDeleteUndo,
+                onPressed: () => list.markRead(conversation.id),
+              ),
+            ),
+          );
+      }
+      return;
+    }
     if (choice == 'pin' || choice == 'unpin') {
       final result = await ref
           .read(conversationListProvider.notifier)

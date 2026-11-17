@@ -1082,6 +1082,8 @@
   "@chatSelMarkRead": {"description": "Selection bar menu: mark the selected chats read"},
   "chatMenuMarkUnread": "Mark as unread",
   "@chatMenuMarkUnread": {"description": "Chat menu and selection bar: mark the chat unread by hand (shows a dot until the chat is opened)"},
+  "commonSelect": "Select",
+  "@commonSelect": {"description": "Chat menu row that starts selecting chats"},
   "chatMarkedUnread": "Chat marked as unread",
   "@chatMarkedUnread": {"description": "Snackbar after marking a chat unread, with the Undo button"},
   "chatDeleteAction": "Delete",

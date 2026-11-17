@@ -36,6 +36,7 @@ Future<DeleteChoice> showMessageDeleteBox(
         context,
         anchor: anchor,
         highlightAnchor: false,
+        centered: true,
         cardKey: const ValueKey('delete-card'),
         child: Builder(
           builder: (card) {

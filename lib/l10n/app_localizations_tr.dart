@@ -3097,7 +3097,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get failDeleteAccountReauth =>
-      'Oturumu kapatıp yeniden açın, sonra hesabınızı silin.';
+      'Önce oturumu kapatıp yeniden oturum açın. Sonra hesabınızı silin.';
 
   @override
   String get failDeleteAccountApple =>

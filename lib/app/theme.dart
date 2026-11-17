@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 
 import '../features/appearance/domain/appearance_settings.dart';
@@ -96,7 +97,9 @@ ThemeData sisTheme(
             minimumSize: const Size(64, 50),
             shape: const RoundedRectangleBorder(borderRadius: r12),
             textStyle: TextStyle(
-              fontFamily: family,
+              // The button style replaces the ambient style, so on iPhone the
+              // phone's font (SF) must be named here when the switch is on.
+              fontFamily: family ?? _phoneButtonFamily(text),
               fontWeight: FontWeight.w700,
               fontSize: 16,
             ),
@@ -607,3 +610,9 @@ abstract final class SisTokens {
   /// GreyOption: the disabled look.
   static const greyOpacity = 0.4;
 }
+
+/// The platform text theme's font on iPhone (null elsewhere, as before).
+String? _phoneButtonFamily(TextTheme text) =>
+    defaultTargetPlatform == TargetPlatform.iOS
+    ? text.labelLarge?.fontFamily
+    : null;

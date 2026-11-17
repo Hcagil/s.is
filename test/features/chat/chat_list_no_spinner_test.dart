@@ -38,6 +38,7 @@ Future<NotificationSettingsFake> pumpList(
   ChatFake? chat,
   ChatArchiveFake? archive,
   int unread = 0,
+  int pumps = 10,
 }) async {
   final notif = NotificationSettingsFake(
     mutes: mutes,
@@ -84,7 +85,7 @@ Future<NotificationSettingsFake> pumpList(
       ),
     ),
   );
-  for (var i = 0; i < 10; i++) {
+  for (var i = 0; i < pumps; i++) {
     await t.pump(const Duration(milliseconds: 100));
   }
   return notif;
@@ -114,17 +115,13 @@ List<Conversation> chats({int unread = 0}) {
 
 void main() {
   group('chat list no spinner', () {
-    testWidgets('loading with no value: no loading logo on the list', (
+    testWidgets('loading with no value: no loading logo for the first 500 ms', (
       t,
     ) async {
       final chat = ChatFake()
         ..conversationsResult = Ok(chats())
         ..holdList();
-      await pumpList(t, chat: chat);
-      // Pump a few times without releasing the list
-      for (var i = 0; i < 5; i++) {
-        await t.pump(const Duration(seconds: 1));
-      }
+      await pumpList(t, chat: chat, pumps: 4);
       expect(find.byType(SisLoadingLogo), findsNothing);
       expect(byKey('conversation-c1'), findsNothing);
     });

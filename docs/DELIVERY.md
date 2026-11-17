@@ -4,14 +4,16 @@ Source of truth: [DESIGN.md §5–6](DESIGN.md).
 
 - On launch the app reads `app_config`.
 - `installed < min_supported_build` → blocking "update required" screen with a
-  Play link. Raising `min_supported_build` is a manual, recorded decision,
-  used only when an older build would break against the current backend.
+  Play link. The release raises `min_supported_build` by itself to the oldest
+  build that still passes the old app test against the new server (usually the
+  new release itself); the owner can still raise it by hand. It is never
+  lowered. The blocking screen is the warning; there is no earlier banner.
 - Otherwise, if Play reports a newer version → **flexible** in-app update:
   dismissible banner, background download, install on tap. The check runs at
   launch and every time the app returns to the foreground; a dismissed banner
   stays away until then, never while the member is using the app. An update
   that finished downloading earlier is offered for install at once.
-- Publishing a build never changes `min_supported_build`.
+- Publishing a build raises `min_supported_build` only when a build between the old minimum and the new release fails the old app test against the new server (see "Raise the minimum supported build" below). It never lowers it.
 - Migrations must remain compatible with every build ≥ `min_supported_build`.
 
 ### Branching and commits
@@ -293,7 +295,7 @@ tool/ci_local.sh --database
   it; the next time SIS comes to the foreground it offers the update. Never
   uninstall to update: that signs the phone out and drops its local cache.
 - **versionCode** is `run_number + 100` of the Release workflow — never edit it by hand, never reuse one. `versionName` is set by the release run (`<yy>.<month>.<commit count>`); the `pubspec.yaml` version is for local builds only and is not edited per release.
-- **Raise the minimum supported build** only when an older build would break against the current backend: a migration `update public.app_config set min_supported_build = <code> where id = 1;` with the reason in a SQL comment, plus a DECISIONS entry. Every migration must remain compatible with all builds ≥ the current minimum.
+- **Raise the minimum supported build.** (1) By the release, automatically: job `old_app` in `.github/workflows/release.yml` runs `tool/old_app_check.sh` in release mode when `supabase/` changed since the last release: it replays the oldest allowed build and the newest build against the release's server (a build with no server tests counts as passing; only a real failing test blocks a version). Both pass: nothing changes. The oldest fails: binary search for the lowest build whose tests, and the newest's, pass. The newest fails: the minimum becomes this release's own build. The job `publish` then runs `update public.app_config set min_supported_build = N where id = 1 and min_supported_build < N` after the Play upload (the `< N` guard means it is never lowered); the reason is in the job summary and the release notes. (2) By hand, when an older build would break for another reason (e.g. after a security fix): a migration `update public.app_config set min_supported_build = <code> where id = 1;` with the reason in a SQL comment, plus a DECISIONS entry. (3) A PR that removes a feature on purpose adds the line `-- old-app-break: <test file under test/integration> -- <reason>` to its own migration; the PR check then reports a failing test of that file as EXPECTED BREAK for builds older than that migration only; any other failing test, or an ERROR, still fails the check. Every migration must remain compatible with all builds ≥ the current minimum.
 - **Register a signing fingerprint with Google:** download the certificate
   archive from Play Console → Test and release → Setup → App signing, then hash
   it locally (`deployment_cert.der` is the app's signing identity). Do not copy

@@ -184,26 +184,60 @@ fi
 
 say "old app check: minimum supported build $OLD_APP_MIN; checking: ${selected[*]:-none}"
 
-# Run tests
-dirs=()
-reset_done=false
-trap 'rm -rf "${dirs[@]}"' EXIT
-any_fail=false
+break_markers() {
+  local f
+  while IFS= read -r f; do
+    local commit
+    commit=$(git log --no-renames --diff-filter=A --format=%H -- "$f" | tail -n 1)
+    [ -z "$commit" ] && commit="$OLD_APP_HEAD"
+    while IFS= read -r name; do
+      echo "$name $commit"
+    done < <(grep -hE '^-- old-app-break: [^ ]+ -- .+' "$f" | sed -E 's/^-- old-app-break: ([^ ]+) -- .*/\1/')
+  done < <(grep -rlE '^-- old-app-break: [^ ]+ -- .+' supabase/migrations 2>/dev/null || true)
+}
 
-for tag in "${selected[@]}"; do
+excused() {
+  local tag="$1" logfile="$2"
+  local markers count line testfile commit ok
+  markers=$(break_markers)
+  count=0
+  while IFS= read -r line; do
+    count=$((count+1))
+    ok=false
+    while read -r testfile commit; do
+      [ -n "$testfile" ] || continue
+      case "$line" in
+        *"/test/integration/$testfile: "*)
+          # strictly older: a build made on the migration's own commit already has the removal
+          if [ "$(git rev-parse "$tag^{commit}")" != "$commit" ] && git merge-base --is-ancestor "$tag" "$commit"; then
+            ok=true
+          fi
+          ;;
+      esac
+    done <<< "$markers"
+    $ok || return 1
+  done < <(grep -E ' \[E\]$' "$logfile" || true)
+  [ "$count" -gt 0 ]
+}
+
+check_tag() {
+  local tag="$1"
+  local dir
   dir=$(mktemp -d)
   dirs+=("$dir")
   git archive "$tag" | tar -x -C "$dir"
-  
+
+  local start end seconds rc out
+  out=$(mktemp)
   start=$(date +%s)
   if [ -n "${OLD_APP_REPLAY:-}" ]; then
-    if "$OLD_APP_REPLAY" "$dir" "$tag"; then
+    if "$OLD_APP_REPLAY" "$dir" "$tag" >"$out"; then
       rc=0
     else
       rc=$?
     fi
   else
-    if replay_tag "$dir" "$tag"; then
+    if replay_tag "$dir" "$tag" >"$out"; then
       rc=0
     else
       rc=$?
@@ -211,7 +245,8 @@ for tag in "${selected[@]}"; do
   fi
   end=$(date +%s)
   seconds=$((end - start))
-  
+  cat "$out"
+
   case $rc in
     0)
       say "PASS $tag (${seconds}s)"
@@ -220,15 +255,92 @@ for tag in "${selected[@]}"; do
       say "UNCHECKED: no server-call tests in build $tag"
       ;;
     1)
-      say "FAIL $tag (${seconds}s)"
-      any_fail=true
+      if [ "${OLD_APP_EXCUSE:-1}" = 1 ] && excused "$tag" "$out"; then say "EXPECTED BREAK $tag (${seconds}s): every failing test is named by an old-app-break marker in a newer migration"; rc=0; else say "FAIL $tag (${seconds}s)"; fi
       ;;
     *)
       say "ERROR $tag (${seconds}s)"
-      any_fail=true
       ;;
   esac
-done
+
+  rm -f "$out"
+
+  # 0 pass or unchecked, 1 a real failing test, 2 error (the release stops on 2)
+  case $rc in 0|3) return 0 ;; 1) return 1 ;; *) return 2 ;; esac
+}
+
+release_raise() {
+  local build="${OLD_APP_RELEASE_BUILD:-}"
+  if ! [[ "$build" =~ ^[0-9]+$ ]]; then
+    echo "old app raise: OLD_APP_RELEASE_BUILD is missing" >&2
+    return 1
+  fi
+
+  OLD_APP_EXCUSE=0
+
+  local arr
+  mapfile -t arr < <(printf '%s\n' "$tags" | awk -F+ -v m="$OLD_APP_MIN" '$NF+0 >= m+0' | sort -t+ -k2 -n)
+  if [ ${#arr[@]} -eq 0 ]; then
+    say "old app raise: no build at or above the oldest allowed build $OLD_APP_MIN; nothing to replay"
+    return 0
+  fi
+
+  local hi=$(( ${#arr[@]} - 1 ))
+  local raise=""
+  local reason=""
+
+  local rc
+  rc=0; check_tag "${arr[$hi]}" || rc=$?
+  if [ "$rc" -eq 2 ]; then return 1; fi
+  if [ "$rc" -eq 1 ]; then
+    raise="$build"
+    reason="newest build ${arr[$hi]} fails against the new server"
+  fi
+
+  if [ -z "$raise" ] && [ "$hi" -gt 0 ]; then
+    rc=0; check_tag "${arr[0]}" || rc=$?
+    if [ "$rc" -eq 2 ]; then return 1; fi
+    if [ "$rc" -eq 1 ]; then
+      local lo=0
+      while [ $((hi - lo)) -gt 1 ]; do
+        local mid=$(( (lo + hi) / 2 ))
+        rc=0; check_tag "${arr[$mid]}" || rc=$?
+        if [ "$rc" -eq 2 ]; then return 1; fi
+        if [ "$rc" -eq 0 ]; then
+          hi=$mid
+        else
+          lo=$mid
+        fi
+      done
+      raise="${arr[$hi]##*+}"
+      reason="build ${arr[$lo]} fails and ${arr[$hi]} passes against the new server"
+    fi
+  fi
+
+  if [ -n "$raise" ] && [ "$raise" -gt "$OLD_APP_MIN" ]; then
+    say "old app raise: raise the oldest allowed build from $OLD_APP_MIN to $raise ($reason)"
+    if [ -n "${GITHUB_OUTPUT:-}" ]; then
+      echo "raise_to=$raise" >> "$GITHUB_OUTPUT"
+      echo "raise_reason=$reason" >> "$GITHUB_OUTPUT"
+    fi
+    echo "raise_to=$raise"
+  else
+    say "old app raise: no raise needed"
+  fi
+  return 0
+}
+
+dirs=()
+reset_done=false
+trap 'rm -rf "${dirs[@]}"' EXIT
+any_fail=false
+
+if [ "${OLD_APP_MODE:-}" = release ]; then
+  release_raise || any_fail=true
+else
+  for tag in "${selected[@]}"; do
+    check_tag "$tag" || any_fail=true
+  done
+fi
 
 # Put the current seed back, so later steps (pgTAP, the next suite) see this branch's fixtures.
 if $reset_done && ! $OLD_APP_RESET_CMD >/dev/null 2>&1; then

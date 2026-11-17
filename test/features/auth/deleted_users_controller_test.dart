@@ -134,21 +134,24 @@ void main() {
     },
   );
 
-  test('a failed ask is not repeated at 59 s but is asked again at 61 s', () async {
-    var now = DateTime(2026, 1, 1, 12);
-    await withClock(Clock(() => now), () async {
-      final r = _Repo((ids) async => Err(ProviderFailure('offline')));
-      final c = _mount(r);
-      final n = c.read(deletedUsersControllerProvider.notifier);
-      await n.check(['x']);
-      expect(r.calls.length, 1);
-      now = now.add(const Duration(seconds: 59));
-      await n.check(['x']);
-      expect(r.calls.length, 1);
-      now = now.add(const Duration(seconds: 2));
-      await n.check(['x']);
-      expect(r.calls.length, 2);
-      expect(c.read(deletedUsersControllerProvider), isEmpty);
-    });
-  });
+  test(
+    'a failed ask is not repeated at 59 s but is asked again at 61 s',
+    () async {
+      var now = DateTime(2026, 1, 1, 12);
+      await withClock(Clock(() => now), () async {
+        final r = _Repo((ids) async => Err(ProviderFailure('offline')));
+        final c = _mount(r);
+        final n = c.read(deletedUsersControllerProvider.notifier);
+        await n.check(['x']);
+        expect(r.calls.length, 1);
+        now = now.add(const Duration(seconds: 59));
+        await n.check(['x']);
+        expect(r.calls.length, 1);
+        now = now.add(const Duration(seconds: 2));
+        await n.check(['x']);
+        expect(r.calls.length, 2);
+        expect(c.read(deletedUsersControllerProvider), isEmpty);
+      });
+    },
+  );
 }

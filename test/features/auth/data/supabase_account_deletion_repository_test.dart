@@ -31,10 +31,7 @@ void main() {
     final auth = FakeAuth();
 
     test('requestDeletion returns Ok with parsed DateTime on 200', () async {
-      final client = clientWith(
-        200,
-        jsonEncode('2026-12-20T10:00:00+00:00'),
-      );
+      final client = clientWith(200, jsonEncode('2026-12-20T10:00:00+00:00'));
       final repo = SupabaseAccountDeletionRepository(client, auth);
       final result = await repo.requestDeletion();
 
@@ -49,76 +46,96 @@ void main() {
       );
     });
 
-    test('requestDeletion maps P0001 REAUTH to ReauthRequiredFailure', () async {
-      final client = clientWith(
-        400,
-        jsonEncode({
-          "code": "P0001",
-          "message": "REAUTH",
-          "details": null,
-          "hint": null,
-        }),
-      );
-      final repo = SupabaseAccountDeletionRepository(client, auth);
-      final result = await repo.requestDeletion();
+    test(
+      'requestDeletion maps P0001 REAUTH to ReauthRequiredFailure',
+      () async {
+        final client = clientWith(
+          400,
+          jsonEncode({
+            "code": "P0001",
+            "message": "REAUTH",
+            "details": null,
+            "hint": null,
+          }),
+        );
+        final repo = SupabaseAccountDeletionRepository(client, auth);
+        final result = await repo.requestDeletion();
 
-      final failure = switch (result) {
-        Err(:final failure) => failure,
-        _ => null,
-      };
-      expect(failure, isA<ReauthRequiredFailure>());
-    });
+        final failure = switch (result) {
+          Err(:final failure) => failure,
+          _ => null,
+        };
+        expect(failure, isA<ReauthRequiredFailure>());
+      },
+    );
 
-    test('requestDeletion maps P0001 APPLE_REVOKE_REQUIRED to ProviderFailure', () async {
-      final client = clientWith(
-        400,
-        jsonEncode({
-          "code": "P0001",
-          "message": "APPLE_REVOKE_REQUIRED",
-          "details": null,
-          "hint": null,
-        }),
-      );
-      final repo = SupabaseAccountDeletionRepository(client, auth);
-      final result = await repo.requestDeletion();
+    test(
+      'requestDeletion maps P0001 APPLE_REVOKE_REQUIRED to ProviderFailure',
+      () async {
+        final client = clientWith(
+          400,
+          jsonEncode({
+            "code": "P0001",
+            "message": "APPLE_REVOKE_REQUIRED",
+            "details": null,
+            "hint": null,
+          }),
+        );
+        final repo = SupabaseAccountDeletionRepository(client, auth);
+        final result = await repo.requestDeletion();
 
-      final failure = switch (result) {
-        Err(:final failure) => failure,
-        _ => null,
-      };
-      expect(failure, isA<ProviderFailure>());
-      expect(failure, isNot(isA<ReauthRequiredFailure>()));
-    });
+        final failure = switch (result) {
+          Err(:final failure) => failure,
+          _ => null,
+        };
+        expect(failure, isA<ProviderFailure>());
+        expect(failure, isNot(isA<ReauthRequiredFailure>()));
+      },
+    );
 
-    test('requestDeletion maps 42501 not permitted to ProviderFailure', () async {
-      final client = clientWith(
-        403,
-        jsonEncode({
-          "code": "42501",
-          "message": "not permitted",
-          "details": null,
-          "hint": null,
-        }),
-      );
-      final repo = SupabaseAccountDeletionRepository(client, auth);
-      final result = await repo.requestDeletion();
+    test(
+      'requestDeletion maps 42501 not permitted to ProviderFailure',
+      () async {
+        final client = clientWith(
+          403,
+          jsonEncode({
+            "code": "42501",
+            "message": "not permitted",
+            "details": null,
+            "hint": null,
+          }),
+        );
+        final repo = SupabaseAccountDeletionRepository(client, auth);
+        final result = await repo.requestDeletion();
 
-      final failure = switch (result) {
-        Err(:final failure) => failure,
-        _ => null,
-      };
-      expect(failure, isA<ProviderFailure>());
-      expect(failure, isNot(isA<ReauthRequiredFailure>()));
-    });
+        final failure = switch (result) {
+          Err(:final failure) => failure,
+          _ => null,
+        };
+        expect(failure, isA<ProviderFailure>());
+        expect(failure, isNot(isA<ReauthRequiredFailure>()));
+      },
+    );
 
     test('requestDeletion: the Apple refusal and the not-permitted refusal have different messages', () async {
       Future<String?> messageFor(int status, String code, String msg) async {
         final repo = SupabaseAccountDeletionRepository(
-          clientWith(status, jsonEncode({'code': code, 'message': msg, 'details': null, 'hint': null})),
+          clientWith(
+            status,
+            jsonEncode({
+              'code': code,
+              'message': msg,
+              'details': null,
+              'hint': null,
+            }),
+          ),
           auth,
         );
         final r = await repo.requestDeletion();
-        return switch (r) { Err(:final failure) => failure.message, _ => null };
+        return switch (r) {
+          Err(:final failure) => failure.message,
+          _ => null,
+        };
       }
 
       final apple = await messageFor(400, 'P0001', 'APPLE_REVOKE_REQUIRED');
@@ -143,27 +160,35 @@ void main() {
       expect(failure, isNotNull);
     });
 
-    test('missingUsers with empty list returns Ok(empty set) and no request', () async {
-      final seen = <http.Request>[];
-      final client = SupabaseClient(
-        'https://example.supabase.co',
-        'public-anon-key',
-        httpClient: MockClient((request) async {
-          seen.add(request);
-          return http.Response(jsonEncode([]), 200, headers: {'content-type': 'application/json'}, request: request);
-        }),
-      );
-      final repo = SupabaseAccountDeletionRepository(client, auth);
-      final result = await repo.missingUsers([]);
-      expect(seen, isEmpty);
+    test(
+      'missingUsers with empty list returns Ok(empty set) and no request',
+      () async {
+        final seen = <http.Request>[];
+        final client = SupabaseClient(
+          'https://example.supabase.co',
+          'public-anon-key',
+          httpClient: MockClient((request) async {
+            seen.add(request);
+            return http.Response(
+              jsonEncode([]),
+              200,
+              headers: {'content-type': 'application/json'},
+              request: request,
+            );
+          }),
+        );
+        final repo = SupabaseAccountDeletionRepository(client, auth);
+        final result = await repo.missingUsers([]);
+        expect(seen, isEmpty);
 
-      final value = switch (result) {
-        Ok(:final value) => value,
-        _ => null,
-      };
-      expect(value, isA<Set<String>>());
-      expect(value!.isEmpty, isTrue);
-    });
+        final value = switch (result) {
+          Ok(:final value) => value,
+          _ => null,
+        };
+        expect(value, isA<Set<String>>());
+        expect(value!.isEmpty, isTrue);
+      },
+    );
 
     test('missingUsers with 3 ids returns Ok with server answer', () async {
       final seen = <http.Request>[];

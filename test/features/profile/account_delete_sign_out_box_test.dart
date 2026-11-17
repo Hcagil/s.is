@@ -103,8 +103,7 @@ Future<void> pumpApp(
     ),
   );
   await t.pumpAndSettle();
-  expect(find.byType(HomeScreen), findsOneWidget,
-      reason: 'home did not open');
+  expect(find.byType(HomeScreen), findsOneWidget, reason: 'home did not open');
 }
 
 Finder byKey(String k) => find.byKey(ValueKey(k));
@@ -138,8 +137,9 @@ void main() {
       expect(auth.signOuts, 0);
     });
 
-    testWidgets('Sign out in the box signs out and leaves the settings pages',
-        (t) async {
+    testWidgets('Sign out in the box signs out and leaves the settings pages', (
+      t,
+    ) async {
       final auth = FakeAuth(session: true, member: mayaAccount);
       final del = _DeleteFake(Err(ReauthRequiredFailure()));
       await pumpApp(t, auth: auth, del: del);

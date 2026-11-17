@@ -119,8 +119,7 @@ void main() {
     expect(result, 'm0');
   });
 
-  test('orOldest with fewer incoming and own messages mixed returns oldest incoming',
-      () {
+  test('orOldest with fewer incoming and own messages mixed returns oldest incoming', () {
     final msgs = buildMessages([0, 1, 2, 3, 4], ownAtEven: true);
     // incoming m1, m3
     final result = firstUnreadId(msgs, 9, 'u1', orOldest: true);

@@ -26,8 +26,7 @@ import org.robolectric.annotation.Config
  * contract, not the code:
  * - its line is the fallback string ("New message", values-tr "Yeni mesaj") under the
  *   sender's name, never the server body;
- * - it has one Reply (Group I: the app sends it locked) and no Mark as read, even with a valid
- *   action ticket;
+ * - with an action token and https action_url it has Mark as read then Reply (owner 2026-11-17);
  * - every other push is unchanged: its body, and both buttons;
  * - every chat push, plain or private, is VISIBILITY_PRIVATE with a public version titled
  *   "SIS", text the fallback, same small icon and colour, never the chat name;
@@ -102,8 +101,8 @@ class LockedPushDrawTest {
     }
 
     @Test
-    fun `an encrypted push has one Reply and no Mark as read`() =
-        assertEquals(listOf("Reply"), buttons(draw("c-locked-2", "true")))
+    fun `an encrypted push has Mark as read then Reply`() =
+        assertEquals(listOf("Mark as read", "Reply"), buttons(draw("c-locked-2", "true")))
 
     @Test
     @Config(qualifiers = "tr")

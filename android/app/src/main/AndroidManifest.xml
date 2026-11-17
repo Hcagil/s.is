@@ -113,19 +113,6 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
-        <!-- Start-up trim: these two initializers are not needed before the first frame; ProcessLifecycleOwner init stays. -->
-        <provider
-            android:name="androidx.startup.InitializationProvider"
-            android:authorities="${applicationId}.androidx-startup"
-            android:exported="false"
-            tools:node="merge">
-            <meta-data
-                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
-                tools:node="remove" />
-            <meta-data
-                android:name="androidx.emoji2.text.EmojiCompatInitializer"
-                tools:node="remove" />
-        </provider>
         <!-- Sticker maker: have Google Play services fetch the background-removal model when the app is installed, so the first cut-out is ready. -->
         <meta-data
             android:name="com.google.mlkit.vision.DEPENDENCIES"

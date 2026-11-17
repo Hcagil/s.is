@@ -23,6 +23,8 @@ final class NotificationService: UNNotificationServiceExtension, URLSessionDownl
       mutable.body = reaction.body
     } else {
     // An encrypted chat's push: the real text from this phone's own store when it can be read (PushPeek.swift), else the locked text the server sent.
+    // A plain push with the real text is saved too (PushPeek.savePlain), so the app has it when it opens; the notification itself is unchanged.
+    PushPeek.savePlain(for: mutable.userInfo)
     let peek = PushPeek.peek(for: mutable.userInfo)
     // The name comes from this phone's own copy of the chat when it has one, not from the push.
     if let name = peek.name { mutable.title = name }

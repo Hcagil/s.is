@@ -98,6 +98,9 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     if (cached != null) {
       // Text the notification saved while the app was closed shows in the first frame too.
       cached = await _withPushRows(cached, pushRows);
+      cached = await _withPendingLines(cached, ownerId!, {
+        for (final m in pushRows ?? const <Message>[]) m.id,
+      });
     }
     if (cached != null && alive && ref.mounted) {
       state = AsyncData(cached);
@@ -203,6 +206,43 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     try {
       var next = list;
       for (final m in preloaded ?? await store!.pushInbox()) {
+        final applied = _withMessage(next, m);
+        if (applied != null) {
+          next = applied;
+          _pushCounted.add(m.id);
+        }
+      }
+      if (!identical(next, list)) StartupMarks.mark('list-push-rows');
+      return next;
+    } catch (_) {
+      return list;
+    }
+  }
+
+  /// [list] with the lines a plain push saved while the app was closed
+  /// (see [PendingPushMessages]) as previews and unread counts, oldest
+  /// first. A line whose real row is already in the message store counts
+  /// nothing. Best effort: any failure leaves [list] as it is.
+  Future<List<Conversation>> _withPendingLines(
+    List<Conversation> list,
+    String ownerId,
+    Set<String> known,
+  ) async {
+    try {
+      final lines = await _pendingLines(ref, ownerId, known);
+      if (lines.isEmpty) return list;
+      final store = _storeOf(ref);
+      final stored = <String>{};
+      if (store != null) {
+        for (final c in {for (final m in lines) m.conversationId}) {
+          stored.addAll([
+            for (final m in await store.newest(c, limit: 50)) m.id,
+          ]);
+        }
+      }
+      var next = list;
+      for (final m in lines) {
+        if (stored.contains(m.id)) continue;
         final applied = _withMessage(next, m);
         if (applied != null) {
           next = applied;

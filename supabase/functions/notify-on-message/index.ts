@@ -170,6 +170,18 @@ async function send(id: string): Promise<void> {
   }
   const targets = (data ?? []) as Target[];
   if (!targets.length) return;
+  // Who wrote the message, and which recipients chose preview 'full' (their push body is the real text). The phone saves a plain push as a message only with sender_id; a failed lookup leaves it out.
+  let msgSender: string | null = null;
+  let msgBody: string | null = null;
+  let notFull = new Set<string>(targets.map((t) => t.user_id));
+  try {
+    const senderRow = await db.from('messages').select('sender_id, body').eq('id', id).maybeSingle();
+    // The push body must be the message's own text (trimmed like the SQL btrim: spaces only): a label, a cut or a placeholder body is never saved as the message.
+    msgBody = !senderRow.error && typeof senderRow.data?.body === 'string' ? senderRow.data.body.replace(/^ +| +$/g, '') : null;
+    msgSender = !senderRow.error && typeof senderRow.data?.sender_id === 'string' && UUID_RE.test(senderRow.data.sender_id) ? senderRow.data.sender_id : null;
+    const prefRows = await db.from('notification_settings').select('user_id, preview').in('user_id', [...new Set(targets.map((t) => t.user_id))]);
+    notFull = prefRows.error ? new Set<string>(targets.map((t) => t.user_id)) : new Set<string>((prefRows.data ?? []).filter((r: { preview: string }) => r.preview !== 'full').map((r: { user_id: string }) => r.user_id));
+  } catch { /* leave sender_id out */ }
 
   const token = await accessToken(serviceAccount);
   const projectId = serviceAccount.project_id;
@@ -262,6 +274,7 @@ async function send(id: string): Promise<void> {
               conversation_id: t.conversation_id,
               title: t.title,
               body: t.body,
+              ...(msgSender && msgBody != null && t.body === msgBody && !t.encrypted && !notFull.has(t.user_id) ? { sender_id: msgSender } : {}), // only when the push body IS the message text
               ...(group ? { sender: t.sender!, chat: t.chat! } : {}),
               ...(t.encrypted ? { encrypted: 'true' } : {}), // FCM data values are strings
               // sk/si (pre-key sender key and id) ride only with ct, checked by shape; never logged (as ct).

@@ -55,10 +55,7 @@ void main() {
     test('generic failure (tr)', () {
       failureLanguage = 'tr';
       final e = StateError('boom');
-      expect(
-        readableFailure(e).message,
-        'Bir şeyler ters gitti. Tekrar deneyin.',
-      );
+      expect(readableFailure(e).message, 'Bir hata oluştu. Tekrar deneyin.');
     });
   });
 

@@ -480,6 +480,18 @@
   "@listChatsHeader": {
     "description": "Chat list section header"
   },
+  "chatUnreadDivider": "Unread messages",
+  "@chatUnreadDivider": {
+    "description": "Line above the first unread message when a chat opens (no number)"
+  },
+  "listFilterAll": "All",
+  "@listFilterAll": {
+    "description": "Chat list filter chip: every chat"
+  },
+  "listFilterGroups": "Groups",
+  "@listFilterGroups": {
+    "description": "Chat list filter chip: group chats only"
+  },
   "messageActionDeleteForMe": "Delete for me",
   "@messageActionDeleteForMe": {
     "description": "Long-press card row: hide on my devices only"

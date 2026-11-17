@@ -441,6 +441,15 @@ class AppLocalizationsTr extends AppLocalizations {
   String get listChatsHeader => 'Sohbetler';
 
   @override
+  String get chatUnreadDivider => 'Okunmamış mesajlar';
+
+  @override
+  String get listFilterAll => 'Tümü';
+
+  @override
+  String get listFilterGroups => 'Gruplar';
+
+  @override
   String get messageActionDeleteForMe => 'Benim için sil';
 
   @override

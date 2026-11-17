@@ -35,6 +35,7 @@ import '../domain/staff_registry.dart';
 import '../domain/conversation.dart';
 import '../domain/delivery.dart';
 import '../domain/emoji.dart';
+import '../domain/first_unread.dart';
 import '../domain/group_member.dart';
 import '../domain/highlight.dart';
 import '../domain/link_preview.dart';
@@ -253,6 +254,11 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
   /// loop (or a stale `jumpToAround` follow-up) checks this and stops as
   /// soon as a newer call has superseded it.
   int _generation = 0;
+
+  /// The chat's unread count when it opened, the first unread message found from it, and whether that was settled. The line stays until this screen is left (owner rule: not removed by time or scrolling).
+  int? _unreadAtOpen;
+  String? _unreadFromId;
+  bool _unreadDone = false;
 
   @override
   void initState() {
@@ -674,6 +680,19 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
     final timeline = ref.watch(chatTimelineProvider);
     final loadingOlder = ref.watch(olderLoadingProvider);
     final value = messages.value ?? const <Message>[];
+    _unreadAtOpen ??= listed?.unread;
+    if (!_unreadDone && _unreadAtOpen != null && value.isNotEmpty) {
+      final id = firstUnreadId(value, _unreadAtOpen!, me);
+      // A count of 0 settles at once; a count not yet covered by the loaded rows waits for the next build.
+      _unreadDone = _unreadAtOpen == 0 || id != null;
+      _unreadFromId = id;
+      if (id != null) {
+        final generation = ++_generation;
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => unawaited(_scrollTo(id, generation)),
+        );
+      }
+    }
     final messageIndexById = {
       for (var idx = 0; idx < (messages.value ?? const []).length; idx++)
         (messages.value ?? const [])[idx].id: idx,
@@ -1068,7 +1087,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                         child: bubble,
                                       )
                                     : bubble;
-                              }),
+                              }, unreadFromId: _unreadFromId),
                             ),
                           AsyncError(:final error) => Center(
                             child: Padding(

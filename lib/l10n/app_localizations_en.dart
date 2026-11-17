@@ -446,6 +446,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get listChatsHeader => 'Chats';
 
   @override
+  String get chatUnreadDivider => 'Unread messages';
+
+  @override
+  String get listFilterAll => 'All';
+
+  @override
+  String get listFilterGroups => 'Groups';
+
+  @override
   String get messageActionDeleteForMe => 'Delete for me';
 
   @override

@@ -361,3 +361,112 @@ revoke all on function app_private.purge_account_deletion_log() from public, ano
 select cron.schedule('account-deletion', '7 * * * *', 'select app_private.run_account_deletion()');
 -- 03:23 every day: drop deletion records older than 3 years
 select cron.schedule('account-deletion-log-purge', '23 3 * * *', 'select app_private.purge_account_deletion_log()');
+
+-- public.chat_gone_peers(): the other person of a 1:1 whose account is gone (no member row, no auth user), for the one remaining member only: the app then shows "Deleted account".
+-- The id comes from conversations.direct_key ('<smaller uuid>:<larger uuid>'); the caller already knew it.
+create function public.chat_gone_peers()
+returns table(conversation_id uuid, user_id uuid)
+language sql stable security definer set search_path = ''
+as $$
+  select c.id, p.other
+    from public.conversations c
+    join public.conversation_members me
+      on me.conversation_id = c.id and me.user_id = auth.uid() and me.left_at is null
+    cross join lateral (
+      select case
+        when c.direct_key ~ '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}:[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+        then (case when split_part(c.direct_key, ':', 1) = auth.uid()::text
+                   then split_part(c.direct_key, ':', 2)
+                   else split_part(c.direct_key, ':', 1) end)::uuid
+      end as other
+    ) p
+   where c.direct_key is not null
+     and p.other is not null
+     and p.other <> auth.uid()
+     and auth.uid()::text in (split_part(c.direct_key, ':', 1), split_part(c.direct_key, ':', 2))
+     and not exists (select 1 from public.conversation_members m where m.conversation_id = c.id and m.user_id = p.other)
+     and not exists (select 1 from auth.users u where u.id = p.other);
+$$;
+revoke all on function public.chat_gone_peers() from public, anon;
+grant execute on function public.chat_gone_peers() to authenticated;
+
+-- adds gone_peers: the id of a 1:1 partner whose account is deleted (a new key; old apps ignore it).
+CREATE OR REPLACE FUNCTION public.chat_list()
+RETURNS jsonb
+LANGUAGE sql
+STABLE
+SECURITY INVOKER
+SET search_path = ''
+AS $$
+SELECT jsonb_build_object(
+  'members', coalesce((
+    select jsonb_agg(to_jsonb(x))
+    from (
+      select conversation_id, user_id, left_at, color_slot, role
+      from public.conversation_members
+    ) x
+  ), '[]'::jsonb),
+  'conversations', coalesce((
+    -- Exactly the columns the app reads (a whitelist, same output as before); every other column stays server-side.
+    select jsonb_agg(jsonb_build_object('id', c.id, 'title', c.title, 'avatar_path', c.avatar_path, 'system', c.system, 'members_can_set_avatar', c.members_can_set_avatar, 'members_can_add', c.members_can_add, 'new_members_see_history', c.new_members_see_history, 'pinned_message_id', c.pinned_message_id, 'members_can_pin', c.members_can_pin, 'admin_chat', c.admin_chat, 'closed_at', c.closed_at, 'debug_chat', c.debug_chat, 'staff_key', c.staff_key))
+    from public.conversations c
+  ), '[]'::jsonb),
+  'archives', coalesce((
+    select jsonb_agg(to_jsonb(x))
+    from (
+      select conversation_id
+      from public.chat_archives
+    ) x
+  ), '[]'::jsonb),
+  'pins', coalesce((
+    select jsonb_agg(to_jsonb(x))
+    from (
+      select conversation_id
+      from public.chat_pins
+    ) x
+  ), '[]'::jsonb),
+  'hides', coalesce((
+    select jsonb_agg(to_jsonb(x))
+    from (
+      select conversation_id
+      from public.chat_hides
+    ) x
+  ), '[]'::jsonb),
+  'profiles', coalesce((
+    select jsonb_agg(to_jsonb(x))
+    from (
+      select user_id, display_name, avatar_path
+      from public.profiles_public()
+      where user_id in (
+        select cm.user_id
+        from public.conversation_members cm
+        where cm.user_id <> (select auth.uid())
+      )
+    ) x
+  ), '[]'::jsonb),
+  'previews', coalesce((
+    select jsonb_agg(to_jsonb(x))
+    from (
+      select conversation_id, body, created_at, attachment_path, sender_id, deleted, poll, contact, attachment_name, attachment_duration_ms, location_lat, attachment_mime, sticker_id, sticker_album, admin_msg, olm_type, has_ciphertext
+      from public.conversation_previews
+    ) x
+  ), '[]'::jsonb),
+  'unread', coalesce((
+    select jsonb_agg(to_jsonb(x))
+    from (
+      select conversation_id, unread
+      from public.unread_counts()
+    ) x
+  ), '[]'::jsonb),
+  'gone_peers', coalesce((
+    select jsonb_agg(to_jsonb(x))
+    from (
+      select conversation_id, user_id
+      from public.chat_gone_peers()
+    ) x
+  ), '[]'::jsonb)
+);
+$$;
+
+REVOKE ALL ON FUNCTION public.chat_list() FROM public, anon;
+GRANT EXECUTE ON FUNCTION public.chat_list() TO authenticated;

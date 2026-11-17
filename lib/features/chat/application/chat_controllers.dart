@@ -20,6 +20,7 @@ import '../domain/attachment.dart';
 import '../domain/chat_archive_repository.dart';
 import '../domain/chat_delete_repository.dart';
 import '../domain/chat_list_snapshot_store.dart';
+import '../domain/chat_mark_repository.dart';
 import '../domain/chat_pin_repository.dart';
 import '../domain/chat_repository.dart';
 import '../domain/join_cancellable.dart';
@@ -134,6 +135,10 @@ final chatArchiveRepositoryProvider = Provider<ChatArchiveRepository>(
 );
 
 final chatPinRepositoryProvider = Provider<ChatPinRepository>(
+  (_) => throw UnimplementedError('override in main'),
+);
+
+final chatMarkRepositoryProvider = Provider<ChatMarkRepository>(
   (_) => throw UnimplementedError('override in main'),
 );
 

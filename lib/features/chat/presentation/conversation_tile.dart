@@ -111,8 +111,9 @@ class ConversationTile extends ConsumerWidget {
         (rows) => isOpeningLast(rows, conversation),
       ),
     );
-    final unread = conversation.unread > 0;
-    final showPill = unread && !inArchive;
+    final unread = conversation.isUnread;
+    // The count pill shows only real unread messages; a hand mark only makes the row look unread (bold).
+    final showPill = conversation.unread > 0 && !inArchive;
     final muted = ref.watch(
       mutesProvider.select(
         (m) =>

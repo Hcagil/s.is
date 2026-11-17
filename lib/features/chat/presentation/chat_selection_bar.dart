@@ -131,9 +131,16 @@ class ChatSelectionBar extends ConsumerWidget implements PreferredSizeWidget {
           onSelected: (value) async {
             if (value == 'archive') {
               await each(context, (c) => list.setArchived(c.id, true));
+            } else if (value == 'unread') {
+              await each(
+                context,
+                (c) => c.isUnread
+                    ? Future.value(const Ok<void>(null))
+                    : list.markUnread(c.id),
+              );
             } else {
               for (final c in chats) {
-                if (c.unread > 0) await list.markRead(c.id);
+                if (c.isUnread) await list.markRead(c.id);
               }
               selection.clear();
             }
@@ -149,6 +156,12 @@ class ChatSelectionBar extends ConsumerWidget implements PreferredSizeWidget {
               value: 'read',
               child: Text(l.chatSelMarkRead),
             ),
+            if (chats.any((c) => !c.isUnread))
+              PopupMenuItem(
+                key: const ValueKey('selection-unread'),
+                value: 'unread',
+                child: Text(l.chatSelMarkUnread),
+              ),
           ],
         ),
       ],

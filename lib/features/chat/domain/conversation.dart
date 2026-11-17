@@ -30,6 +30,7 @@ final class Conversation {
     this.pinned = false,
     this.pinnedMessageId,
     this.isAdmin = false,
+    this.markedUnread = false,
   });
 
   final String id;
@@ -90,12 +91,19 @@ final class Conversation {
   /// True when the signed-in member is a current admin of this group (false for a 1:1). Only a hint for what to offer; the server decides.
   final bool isAdmin;
 
+  /// True when the member marked this chat unread by hand (server flag, on every phone). Separate from [unread], the count of messages, which stays as it is.
+  final bool markedUnread;
+
+  /// What the list shows as unread: a real unread message or a hand mark.
+  bool get isUnread => unread > 0 || markedUnread;
+
   /// The same conversation with a newer message as its preview; [unread]
   /// grows by one when [counts] (a message from someone else, arriving while
   /// this conversation is not open).
   Conversation withPreview(Message message, {bool counts = false}) =>
       Conversation(
         id: id,
+        markedUnread: markedUnread,
         title: title,
         other: other,
         lastMessage: previewText(message),
@@ -141,6 +149,7 @@ final class Conversation {
   /// The same conversation with [text] as the preview line (same message, same time and sender).
   Conversation withLastMessage(String text) => Conversation(
     id: id,
+    markedUnread: markedUnread,
     title: title,
     other: other,
     lastMessage: text,
@@ -164,6 +173,7 @@ final class Conversation {
   /// The same conversation with [next] as its settings.
   Conversation withSettings(GroupSettings next) => Conversation(
     id: id,
+    markedUnread: markedUnread,
     title: title,
     other: other,
     lastMessage: lastMessage,
@@ -187,6 +197,7 @@ final class Conversation {
   /// The same conversation, archived or not.
   Conversation withArchived(bool value) => Conversation(
     id: id,
+    markedUnread: markedUnread,
     title: title,
     other: other,
     lastMessage: lastMessage,
@@ -210,6 +221,7 @@ final class Conversation {
   /// The same conversation, pinned or not.
   Conversation withPinned(bool value) => Conversation(
     id: id,
+    markedUnread: markedUnread,
     title: title,
     other: other,
     lastMessage: lastMessage,
@@ -233,6 +245,7 @@ final class Conversation {
   /// The same conversation with [messageId] as its pinned message (null: none).
   Conversation withPinnedMessage(String? messageId) => Conversation(
     id: id,
+    markedUnread: markedUnread,
     title: title,
     other: other,
     lastMessage: lastMessage,
@@ -251,6 +264,30 @@ final class Conversation {
     pinned: pinned,
     pinnedMessageId: messageId,
     isAdmin: isAdmin,
+  );
+
+  /// The same conversation with the hand mark set or cleared.
+  Conversation withMarkedUnread(bool value) => Conversation(
+    id: id,
+    title: title,
+    other: other,
+    lastMessage: lastMessage,
+    lastMessageAt: lastMessageAt,
+    lastSenderId: lastSenderId,
+    unread: unread,
+    avatarPath: avatarPath,
+    hasLeft: hasLeft,
+    isClosed: isClosed,
+    isSystem: isSystem,
+    isAdminChat: isAdminChat,
+    staffKey: staffKey,
+    senders: senders,
+    settings: settings,
+    archived: archived,
+    pinned: pinned,
+    pinnedMessageId: pinnedMessageId,
+    isAdmin: isAdmin,
+    markedUnread: value,
   );
 
   /// For the on-disk chat list snapshot only.
@@ -276,6 +313,7 @@ final class Conversation {
     if (pinned) 'pinned': true,
     if (pinnedMessageId != null) 'pinnedMessageId': pinnedMessageId,
     if (isAdmin) 'isAdmin': true,
+    if (markedUnread) 'markedUnread': true,
   };
 
   static Conversation fromJson(Map<String, Object?> json) => Conversation(
@@ -310,6 +348,7 @@ final class Conversation {
     pinned: json['pinned'] as bool? ?? false,
     pinnedMessageId: json['pinnedMessageId'] as String?,
     isAdmin: json['isAdmin'] as bool? ?? false,
+    markedUnread: json['markedUnread'] as bool? ?? false,
   );
 
   bool get isGroup => title != null;

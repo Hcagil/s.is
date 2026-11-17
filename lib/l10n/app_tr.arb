@@ -420,6 +420,7 @@
   "wallpaperResetAction": "Sıfırla",
   "chatSelPin": "Sabitle",
   "chatSelMarkRead": "Okundu olarak işaretle",
+  "chatSelMarkUnread": "Okunmadı olarak işaretle",
   "chatDeleteAction": "Sil",
   "chatDeleteCancel": "İptal et",
   "chatDeleteUndo": "Geri al",

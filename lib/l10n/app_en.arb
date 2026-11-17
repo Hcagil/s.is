@@ -1080,6 +1080,8 @@
   "@chatSelPin": {"description": "Tooltip of the pin button in the selection bar"},
   "chatSelMarkRead": "Mark as read",
   "@chatSelMarkRead": {"description": "Selection bar menu: mark the selected chats read"},
+  "chatSelMarkUnread": "Mark as unread",
+  "@chatSelMarkUnread": {"description": "Selection bar menu: mark the selected chats unread by hand (placeholder text, copy-lead checks it)"},
   "chatDeleteAction": "Delete",
   "@chatDeleteAction": {"description": "Delete button of the selection bar and of the many-chats dialog"},
   "chatDeleteCancel": "Cancel",

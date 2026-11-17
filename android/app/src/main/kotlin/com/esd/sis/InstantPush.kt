@@ -63,6 +63,13 @@ object InstantPush {
         return Alert(sound, tone, vibrates(defaultsJson, chatsJson, conversationId))
     }
 
+    /** The server's resolved choice for this push ("1" on, "0" off) over the stored one; null or anything else keeps the stored value. The tone is dropped when sound ends up off. */
+    fun withPushAlert(a: Alert, pushSound: String?, pushVibration: String?): Alert {
+        val sound = when (pushSound) { "1" -> true; "0" -> false; else -> a.sound }
+        val vibration = when (pushVibration) { "1" -> true; "0" -> false; else -> a.vibration }
+        return Alert(sound, if (sound) a.tone else null, vibration)
+    }
+
     /** Dart's FNV-1a over UTF-16 units as lower-case hex, so a custom tone maps to the channel id Dart always used. */
     private fun fnv1a(s: String): String {
         var h = 0x811c9dc5L
@@ -430,7 +437,7 @@ object InstantPush {
             }
             val defaults = prefs.getString("flutter.sis.alert_defaults", null)
             val chats = prefs.getString("flutter.sis.alert_chats", null)
-            val alert = effectiveAlert(defaults, chats, conversationId)
+            val alert = withPushAlert(effectiveAlert(defaults, chats, conversationId), extras.getString("alert_sound"), extras.getString("alert_vibration"))
             val channel = ensureAlertChannel(context, alert)
 
             val tap = tapIntent(context, id, conversationId) ?: return false

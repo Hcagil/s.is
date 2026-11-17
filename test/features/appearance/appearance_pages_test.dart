@@ -264,26 +264,17 @@ void main() {
   });
 
   group('text size page', () {
-    testWidgets('system font off switches the app to Manrope', (t) async {
+    testWidgets('the app text is always Inter and there is no font switch', (
+      t,
+    ) async {
       await pumpApp(t);
-      expect(
-        Theme.of(appContext(t)).textTheme.bodyMedium?.fontFamily,
-        isNot('Manrope'),
-      );
+      expect(Theme.of(appContext(t)).textTheme.bodyMedium?.fontFamily, 'Inter');
       await openSettings(t);
       await tapKey(t, 'settings-text-size');
-      await tapKey(t, 'text-system-font');
-      expect(look(t).systemFont, isFalse);
-      expect(
-        Theme.of(appContext(t)).textTheme.bodyMedium?.fontFamily,
-        'Manrope',
-      );
-      await tapKey(t, 'text-system-font');
-      expect(look(t).systemFont, isTrue);
-      expect(
-        Theme.of(appContext(t)).textTheme.bodyMedium?.fontFamily,
-        isNot('Manrope'),
-      );
+      expect(byKey('text-system-font'), findsNothing);
+      expect(byKey('text-chat-size'), findsOneWidget);
+      expect(byKey('text-app-size'), findsOneWidget);
+      expect(Theme.of(appContext(t)).textTheme.bodyMedium?.fontFamily, 'Inter');
     });
 
     testWidgets('chat and app sizes are separate; the preview is chat size', (

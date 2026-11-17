@@ -53,7 +53,7 @@ void expectApplied(WidgetTester t, String when) {
     sisBrandFor(AppThemeId.ocean, Brightness.light).brand,
     reason: '$when: theme',
   );
-  expect(theme.textTheme.bodyMedium?.fontFamily, 'Manrope', reason: when);
+  expect(theme.textTheme.bodyMedium?.fontFamily, 'Inter', reason: when);
   expect(Localizations.localeOf(ctx), const Locale('tr'), reason: when);
   expect(
     MediaQuery.textScalerOf(ctx).scale(10),
@@ -98,7 +98,6 @@ void main() {
       t,
       find.descendant(of: byKey('text-app-size'), matching: find.text('Small')),
     );
-    await tapKey(t, 'text-system-font');
     await back(t);
 
     await tapKey(t, 'settings-language');
@@ -117,7 +116,6 @@ void main() {
       await store.load(),
       const AppearanceSettings(
         themeId: AppThemeId.ocean,
-        systemFont: false,
         chatTextSize: TextSize.large,
         appTextSize: TextSize.small,
         language: AppLanguage.tr,

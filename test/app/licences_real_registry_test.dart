@@ -56,7 +56,8 @@ void main() {
     print(
       'real registry: ${entries.length} entries, ${packages.length} packages',
     );
-    expect(packages, containsAll(['flutter', 'manrope', 'sora']));
+    expect(packages, containsAll(['flutter', 'inter', 'sora']));
+    expect(packages, isNot(contains('manrope')));
 
     // Tall enough that the lazy list builds every tile at once.
     t.view.devicePixelRatio = 1;

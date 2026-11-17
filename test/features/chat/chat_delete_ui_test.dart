@@ -202,19 +202,18 @@ List<String> order(WidgetTester t) {
 }
 
 /// Real fonts, so widths (and overflow) are measured as on a phone, not with
-/// the test font's one-em-square glyphs: Roboto (Android's system font, which
-/// the app draws with by default; the copy shipped in the Flutter SDK) and
-/// Manrope (the app's own).
+/// the test font's one-em-square glyphs: Inter (the app's own font, always
+/// used) and Roboto (Android's system font; the copy shipped in the Flutter SDK).
 Future<void> loadAppFonts() async {
-  final manrope = FontLoader('Manrope');
+  final inter = FontLoader('Inter');
   for (final w in [400, 500, 600, 700, 800]) {
-    manrope.addFont(
-      File('assets/fonts/Manrope-$w.ttf')
+    inter.addFont(
+      File('assets/fonts/Inter-$w.ttf')
           .readAsBytes()
           .then(ByteData.sublistView),
     );
   }
-  await manrope.load();
+  await inter.load();
   final root = Platform.environment['FLUTTER_ROOT']!;
   final roboto = FontLoader('Roboto');
   final dir = Directory(

@@ -1,6 +1,7 @@
--- Invite by link, part 1 of 3: tables, helper functions and the join-event line.
--- Invite tokens live in app_private, locked to all client roles.
--- Parts 2 and 3 follow in later migrations.
+-- Invite by link: a per-group invite code (admins make, reset, time-limit or turn it off),
+-- a preview that shows only name, picture and member count, and join by link.
+-- Tokens live in app_private, locked to all client roles. preview_invite_link and join_by_link
+-- RETURN their refusals (error LINK1..LINK4) instead of raising, so a wrong guess still counts toward the rate limit.
 
 create extension if not exists pgcrypto with schema extensions;
 
@@ -208,7 +209,7 @@ $$;
 revoke all on function app_private.invite_removed(uuid, uuid) from public, anon, authenticated;
 
 create function public.preview_invite_link(token text)
-returns table (conversation_id uuid, title text, avatar_path text, member_count int)
+returns table (conversation_id uuid, title text, avatar_path text, member_count int, error text)
 language plpgsql volatile security definer set search_path = '' as $$
 declare
   me uuid := auth.uid();
@@ -219,36 +220,45 @@ begin
   end if;
   perform app_private.invite_rate_check();
   if token is null or token !~ '^[A-Za-z0-9_-]{24}$' then
-    raise exception 'invalid link' using errcode = 'LINK1';
+    return query select null::uuid, null::text, null::text, null::int, 'LINK1'::text;
+    return;
   end if;
   select l.conversation_id, l.expires_at into link
     from app_private.group_invite_links l where l.token = preview_invite_link.token;
   if not found then
-    raise exception 'invalid link' using errcode = 'LINK1';
+    return query select null::uuid, null::text, null::text, null::int, 'LINK1'::text;
+    return;
   end if;
   case app_private.invite_group_state(link.conversation_id)
-    when 'none' then raise exception 'invalid link' using errcode = 'LINK1';
-    when 'closed' then raise exception 'group closed' using errcode = 'LINK3';
+    when 'none' then
+      return query select null::uuid, null::text, null::text, null::int, 'LINK1'::text;
+      return;
+    when 'closed' then
+      return query select null::uuid, null::text, null::text, null::int, 'LINK3'::text;
+      return;
     else null;
   end case;
   if link.expires_at is not null and link.expires_at <= now() then
-    raise exception 'link expired' using errcode = 'LINK2';
+    return query select null::uuid, null::text, null::text, null::int, 'LINK2'::text;
+    return;
   end if;
   -- a member an admin removed comes back only when an admin adds them
   if app_private.invite_removed(link.conversation_id, me) then
-    raise exception 'removed member' using errcode = 'LINK4';
+    return query select null::uuid, null::text, null::text, null::int, 'LINK4'::text;
+    return;
   end if;
   return query
     select c.id, c.title, c.avatar_path,
            (select count(*)::int from public.conversation_members m
-             where m.conversation_id = c.id and m.left_at is null)
+             where m.conversation_id = c.id and m.left_at is null),
+           null::text
       from public.conversations c where c.id = link.conversation_id;
 end $$;
 revoke all on function public.preview_invite_link(text) from public, anon;
 grant execute on function public.preview_invite_link(text) to authenticated;
 
 create function public.join_by_link(token text)
-returns uuid
+returns table (conversation_id uuid, error text)
 language plpgsql volatile security definer set search_path = '' as $$
 declare
   me uuid := auth.uid();
@@ -261,45 +271,55 @@ begin
   end if;
   perform app_private.invite_rate_check();
   if token is null or token !~ '^[A-Za-z0-9_-]{24}$' then
-    raise exception 'invalid link' using errcode = 'LINK1';
+    return query select null::uuid, 'LINK1'::text;
+    return;
   end if;
   select l.conversation_id into conv
     from app_private.group_invite_links l where l.token = join_by_link.token;
   if conv is null then
-    raise exception 'invalid link' using errcode = 'LINK1';
+    return query select null::uuid, 'LINK1'::text;
+    return;
   end if;
   -- same lock add_members and close_group take; re-read the link after it (a reset may have raced)
   perform pg_advisory_xact_lock(hashtextextended('group_admin:' || conv::text, 0));
   select l.conversation_id, l.expires_at into link
     from app_private.group_invite_links l where l.token = join_by_link.token;
   if not found then
-    raise exception 'invalid link' using errcode = 'LINK1';
+    return query select null::uuid, 'LINK1'::text;
+    return;
   end if;
   case app_private.invite_group_state(conv)
-    when 'none' then raise exception 'invalid link' using errcode = 'LINK1';
-    when 'closed' then raise exception 'group closed' using errcode = 'LINK3';
+    when 'none' then
+      return query select null::uuid, 'LINK1'::text;
+      return;
+    when 'closed' then
+      return query select null::uuid, 'LINK3'::text;
+      return;
     else null;
   end case;
   if link.expires_at is not null and link.expires_at <= now() then
-    raise exception 'link expired' using errcode = 'LINK2';
+    return query select null::uuid, 'LINK2'::text;
+    return;
   end if;
   if exists (select 1 from public.conversation_members m
               where m.conversation_id = conv and m.user_id = me and m.left_at is null) then
-    return conv;
+    return query select conv, null::text;
+    return;
   end if;
   if app_private.invite_removed(conv, me) then
-    raise exception 'removed member' using errcode = 'LINK4';
+    return query select null::uuid, 'LINK4'::text;
+    return;
   end if;
   select c.new_members_see_history into see from public.conversations c where c.id = conv;
   insert into public.conversation_members(conversation_id, user_id, role, history_from)
     values (conv, me, 'member',
             case when see then '-infinity'::timestamptz else now() end);
-  delete from public.chat_hides where user_id = me and conversation_id = conv;
+  delete from public.chat_hides h where h.user_id = me and h.conversation_id = conv;
   insert into public.group_events(conversation_id, kind, actor_id, subject_id)
     values (conv, 'joined', me, me);
   perform app_private.notify_group_changed(conv, 'members');
-  return conv;
+  return query select conv, null::text;
+  return;
 end $$;
 revoke all on function public.join_by_link(text) from public, anon;
 grant execute on function public.join_by_link(text) to authenticated;
-

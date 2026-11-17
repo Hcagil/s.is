@@ -27,6 +27,15 @@ final class SupabaseInviteLinkRepository implements InviteLinkRepository {
     _ => readableFailure(e),
   };
 
+  /// preview_invite_link and join_by_link return their refusal in an `error` column (LINK1..LINK4; null = fine) so the server counts the try.
+  Failure? _linkRefusal(String? code) => switch (code) {
+    null => null,
+    'LINK2' => const InviteLinkFailure(InviteLinkProblem.expired),
+    'LINK3' => const InviteLinkFailure(InviteLinkProblem.closed),
+    'LINK4' => const InviteLinkFailure(InviteLinkProblem.removed),
+    _ => const InviteLinkFailure(InviteLinkProblem.invalid),
+  };
+
   @override
   Future<Result<InviteLink?>> inviteLink(String conversationId) async {
     try {
@@ -123,6 +132,8 @@ final class SupabaseInviteLinkRepository implements InviteLinkRepository {
         params: {'token': code},
       );
       final row = (rows as List).cast<Map<String, dynamic>>().first;
+      final refused = _linkRefusal(row['error'] as String?);
+      if (refused != null) return Err(refused);
       return Ok(
         InvitePreview(
           conversationId: row['conversation_id'] as String,
@@ -139,8 +150,11 @@ final class SupabaseInviteLinkRepository implements InviteLinkRepository {
   @override
   Future<Result<String>> joinByInvite(String code) async {
     try {
-      final result = await _client.rpc('join_by_link', params: {'token': code});
-      return Ok(result as String);
+      final rows = await _client.rpc('join_by_link', params: {'token': code});
+      final row = (rows as List).cast<Map<String, dynamic>>().first;
+      final refused = _linkRefusal(row['error'] as String?);
+      if (refused != null) return Err(refused);
+      return Ok(row['conversation_id'] as String);
     } catch (e) {
       return Err(_asFailure(e));
     }

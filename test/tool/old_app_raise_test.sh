@@ -274,5 +274,67 @@ rel OLD_APP_MIN=1 OLD_APP_RELEASE_BUILD=200 OLD_APP_EXCUSE=1
 eqv r12-code "$code" 0
 has r12 "raise_to=110"
 
+# r13: release mode, empty or non-digit OLD_APP_MIN -> exit 1 with the message, no local fallback read
+mkdir -p "$tmp/bin"; printf '#!/usr/bin/env bash\necho called >> "%s/docker.log"\necho 50\n' "$tmp" > "$tmp/bin/docker"; chmod +x "$tmp/bin/docker"
+for v in "" abc "12x" "-5"; do
+  mkrepo 101 110 120
+  mkstub
+  failtag v1.0.101+101
+  rm -f "$tmp/docker.log"
+  rel PATH="$tmp/bin:$PATH" OLD_APP_MIN="$v" OLD_APP_RELEASE_BUILD=200
+  eqv "r13-code[$v]" "$code" 1
+  has "r13[$v]" "release mode needs the production minimum supported build in OLD_APP_MIN"
+  noraise "r13[$v]"
+  eqv "r13-replays[$v]" "$ncalls" 0
+  [ ! -e "$tmp/docker.log" ] || fail "r13[$v]: fell back to a local database read"
+done
+
+# r14: computed raise above this release's build is refused, never printed as raise_to
+mkrepo 101 110 120
+mkstub
+failtag v1.0.101+101
+rel OLD_APP_MIN=1 OLD_APP_RELEASE_BUILD=105
+eqv r14-code "$code" 1
+has r14 "refusing to raise"
+noraise r14
+# r14b: the same break with a release build at the raise value is allowed
+rel OLD_APP_MIN=1 OLD_APP_RELEASE_BUILD=110
+eqv r14b-code "$code" 0
+has r14b "raise_to=110"
+
+# r15: the guarded update from release.yml on the real local database, inside a transaction that is rolled back.
+# Skipped when the local Supabase database is not running (ci_local starts it for the integration stage).
+dbc="${OLD_APP_DB_CONTAINER:-supabase_db_s.is}"
+if ! command -v docker >/dev/null 2>&1 || ! docker exec "$dbc" pg_isready -q >/dev/null 2>&1; then
+  echo "old_app_raise_test: r15 skipped (local database $dbc not running)"
+else
+  sql=$(grep -F 'supabase db query --linked "update public.app_config' "$repo/.github/workflows/release.yml" | sed -n 's/.*db query --linked "\(update [^"]*\)".*/\1/p' | head -1)
+  [[ -n "$sql" ]] || fail "r15: no guarded update found in release.yml"
+  q() { echo "${sql//\$RAISE_TO/$1};"; }
+  before=$(docker exec "$dbc" psql -U postgres -qAt -c "select min_supported_build from public.app_config where id = 1")
+  res=$(docker exec -i "$dbc" psql -U postgres -qAt -v ON_ERROR_STOP=1 <<SQL 2>&1 || true
+begin;
+update public.app_config set min_supported_build = 400 where id = 1;
+$(q 500)
+select 'A=' || min_supported_build from public.app_config where id = 1;
+$(q 300)
+select 'B=' || min_supported_build from public.app_config where id = 1;
+$(q 500)
+select 'C=' || min_supported_build from public.app_config where id = 1;
+$(q 600)
+select 'D=' || min_supported_build from public.app_config where id = 1;
+-- the member check (session rows) is not the subject: stand in a member inside this transaction
+create or replace function app_private.has_app_access() returns boolean language sql as 'select true';
+set local role authenticated;
+select 'E=' || coalesce((select min_supported_build::text from public.app_config), 'none');
+rollback;
+SQL
+)
+  for kv in A=500 B=500 C=500 D=600; do [[ "$res" == *"$kv"* ]] || fail "r15: want $kv (res: $res)"; done
+  [[ "$res" == *"E=600"* ]] || fail "r15: app policy read does not return 600 (res: $res)"
+  after=$(docker exec "$dbc" psql -U postgres -qAt -c "select min_supported_build from public.app_config where id = 1")
+  [ "$after" = "$before" ] || fail "r15: the rollback left the shared value changed (now $after, was $before)"
+fi
+
 [ "$fails" -eq 0 ] || { echo "old_app_raise_test: $fails failed"; exit 1; }
 echo "old_app_raise_test: OK"

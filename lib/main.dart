@@ -176,7 +176,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // The bundled fonts are OFL: their licences ship with them.
   LicenseRegistry.addLicense(() async* {
-    for (final font in ['manrope', 'sora']) {
+    for (final font in ['inter', 'sora']) {
       yield LicenseEntryWithLineBreaks([
         font,
       ], await rootBundle.loadString('assets/fonts/OFL-$font.txt'));

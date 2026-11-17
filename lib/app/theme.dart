@@ -5,21 +5,19 @@ import '../features/appearance/domain/contrast.dart';
 import '../features/appearance/domain/custom_theme.dart';
 import 'swipe_back.dart';
 
-/// The Nocturne design: ink violet, the system font (Manrope stays bundled
-/// as the switch-off font), rounded but precise shapes.
+/// The Nocturne design: ink violet, the bundled Inter font, rounded but
+/// precise shapes.
 /// Values are the design tokens in docs/DESIGN.md §10; change them there first.
 ///
-/// [theme] picks one of the six palettes; [systemFont] false uses Manrope.
+/// [theme] picks one of the six palettes.
 /// [brand] replaces the palette (a custom theme).
 ThemeData sisTheme(
   Brightness brightness, {
   AppThemeId theme = AppThemeId.violet,
-  bool systemFont = true,
   SisBrand? brand,
 }) {
   final t = brand ?? sisBrandFor(theme, brightness);
-  // null: the phone's own font; off, SIS's bundled Manrope.
-  final family = systemFont ? null : 'Manrope';
+  const family = 'Inter';
   final scheme = ColorScheme(
     brightness: brightness,
     primary: t.brand,

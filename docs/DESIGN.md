@@ -290,7 +290,7 @@ The design direction is **Nocturne**: sleek, ink violet, precise.
 | danger | `#D23F57` | `#FF7B8E` |
 | prism (logo, wordmark only) | `#2E36D9` → `#6D35E8` → `#B23FD0` | `#4450FF` → `#8B5CFF` → `#C45BE6` |
 
-- **Type:** Manrope (400–800) for the interface; Sora 800 for the "SIS"
+- **Type:** Inter (400–800) for the interface; Sora 800 for the "SIS"
   wordmark. Both are bundled (OFL), never fetched at runtime.
 - **Shapes:** bubbles and inputs 8px, with a 3px corner on the sender's side;
   buttons and cards 12px; floating buttons and sheets 16px; badges, switches

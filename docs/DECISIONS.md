@@ -692,3 +692,7 @@ Nothing contacts the site before that tap.
 - The bridge account has no app access, is treated as a bot everywhere, and runs on the desktop in a sandbox that cannot see the rest of the owner's home folder.
 - Only the owner account sees the entry point; other accounts never see the screen.
 - RPCs that update or delete always carry a WHERE clause, because the API runs with safe updates on (a pgTAP test loads it).
+
+## 2026-11-17 — Private chat notifications offer Mark as read
+
+Owner Q-M-00277: encrypted chat notifications get the same Mark as read button as every other chat, on Android and iPhone. The server token of a private chat already signs `mark_read` only, and Mark as read sends no message text, so nothing is weakened. Reply stays the locked Reply handed to the app.

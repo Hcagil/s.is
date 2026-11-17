@@ -1,5 +1,5 @@
 {
- "_comment": "Shared by test/features/notifications/push_inbox_parity_test.dart (Dart) and android/app/src/test/kotlin/com/esd/sis/PushInboxTest.kt (Kotlin). The Android receiver (PushInbox.kt) writes the notification inbox at flutter.sis.push_inbox.<owner> while the Dart handler is held back by Doze; the Dart handler later reads and extends the same JSON. Both sides must produce the same inbox from the same pushes (adds), the same summary line (summaries), the same picture path from the chat list snapshot (avatars), and the same cache file name for a picture path, which is Dart's Uri.encodeComponent (cache_names). Expected values are written from the contract, not from either implementation.",
+ "_comment": "Shared by test/features/notifications/push_inbox_parity_test.dart (Dart) and android/app/src/test/kotlin/com/esd/sis/PushInboxTest.kt (Kotlin). The Android receiver (PushInbox.kt) writes the notification inbox at flutter.sis.push_inbox.<owner> while the Dart handler is held back by Doze; the Dart handler later reads and extends the same JSON. Both sides must produce the same inbox from the same pushes (adds; a step's optional sender_id is kept on its line as u when UUID-shaped, absent otherwise), the same summary line (summaries), the same picture path from the chat list snapshot (avatars), and the same cache file name for a picture path, which is Dart's Uri.encodeComponent (cache_names). Expected values are written from the contract, not from either implementation.",
  "max_lines": 25,
  "adds": [
   {
@@ -745,8 +745,148 @@
      "p": 0
     }
    ]
-  }
- ],
+  },
+   {
+    "name": "a sender id is kept as 'u' on the line",
+    "start": null,
+    "steps": [
+     {
+      "conversation_id": "c1",
+      "title": "Ava",
+      "sender": null,
+      "chat": null,
+      "sender_id": "a7a00000-0000-4000-8000-000000000001",
+      "text": "hi",
+      "at": 1000,
+      "message_id": "m1"
+     }
+    ],
+    "inbox": [
+     {
+      "c": "c1",
+      "t": "Ava",
+      "g": false,
+      "l": [
+       {
+        "s": "Ava",
+        "x": "hi",
+        "a": 1000,
+        "m": "m1",
+        "u": "a7a00000-0000-4000-8000-000000000001"
+       }
+      ],
+      "n": 1,
+      "p": 0
+     }
+    ]
+   },
+   {
+    "name": "a group line keeps its sender id as 'u'",
+    "start": null,
+    "steps": [
+     {
+      "conversation_id": "g1",
+      "title": "Ben @ Team",
+      "sender": null,
+      "chat": null,
+      "sender_id": "be000000-0000-4000-8000-000000000002",
+      "text": "yo",
+      "at": 1000,
+      "message_id": "m1"
+     }
+    ],
+    "inbox": [
+     {
+      "c": "g1",
+      "t": "Team",
+      "g": true,
+      "l": [
+       {
+        "s": "Ben",
+        "x": "yo",
+        "a": 1000,
+        "m": "m1",
+        "u": "be000000-0000-4000-8000-000000000002"
+       }
+      ],
+      "n": 1,
+      "p": 0
+     }
+    ]
+   },
+   {
+    "name": "a stored line without 'u' and a new line with 'u' both stay",
+    "start": "[{\"c\": \"c1\", \"t\": \"Ava\", \"g\": false, \"l\": [{\"s\": \"Ava\", \"x\": \"old\", \"a\": 500}], \"n\": 1, \"p\": 1}]",
+    "steps": [
+     {
+      "conversation_id": "c1",
+      "title": "Ava",
+      "sender": null,
+      "chat": null,
+      "sender_id": "a7a00000-0000-4000-8000-000000000001",
+      "text": "new",
+      "at": 1000,
+      "message_id": "m1"
+     }
+    ],
+    "inbox": [
+     {
+      "c": "c1",
+      "t": "Ava",
+      "g": false,
+      "l": [
+       {
+        "s": "Ava",
+        "x": "old",
+        "a": 500
+       },
+       {
+        "s": "Ava",
+        "x": "new",
+        "a": 1000,
+        "m": "m1",
+        "u": "a7a00000-0000-4000-8000-000000000001"
+       }
+      ],
+      "n": 2,
+      "p": 1
+     }
+    ]
+   },
+   {
+    "name": "a sender id that is not UUID-shaped is not kept",
+    "start": null,
+    "steps": [
+     {
+      "conversation_id": "c1",
+      "title": "Ava",
+      "sender": null,
+      "chat": null,
+      "sender_id": "u-ava",
+      "text": "hi",
+      "at": 1000,
+      "message_id": "m1"
+     }
+    ],
+    "inbox": [
+     {
+      "c": "c1",
+      "t": "Ava",
+      "g": false,
+      "l": [
+       {
+        "s": "Ava",
+        "x": "hi",
+        "a": 1000,
+        "m": "m1"
+       }
+      ],
+      "n": 1,
+      "p": 0
+     }
+    ]
+   }
+  ],
  "summaries": [
   {
    "inbox": [],

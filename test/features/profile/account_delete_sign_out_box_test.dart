@@ -40,8 +40,8 @@ const mayaAccount = Member(
   email: 'maya.k@example.org',
 );
 
-class _DeleteFake implements AccountDeletionRepository {
-  _DeleteFake(this.result);
+class DeleteFake implements AccountDeletionRepository {
+  DeleteFake(this.result);
   final Result<DateTime> result;
   int calls = 0;
   @override
@@ -61,7 +61,7 @@ List<Override> overrides({
   ProfileFake? profile,
   PushRegistryFake? push,
   AttachmentCacheFake? photos,
-  _DeleteFake? del,
+  DeleteFake? del,
 }) => [
   ...videoOverrides(),
   runtimeConfigProvider.overrideWithValue(config),
@@ -87,7 +87,7 @@ Future<void> pumpApp(
   ProfileFake? profile,
   PushRegistryFake? push,
   AttachmentCacheFake? photos,
-  _DeleteFake? del,
+  DeleteFake? del,
 }) async {
   await t.pumpWidget(
     ProviderScope(
@@ -124,7 +124,7 @@ void main() {
   group('delete account reauth box', () {
     testWidgets('a stale session shows the Sign out box', (t) async {
       final auth = FakeAuth(session: true, member: mayaAccount);
-      final del = _DeleteFake(Err(ReauthRequiredFailure()));
+      final del = DeleteFake(Err(ReauthRequiredFailure()));
       await pumpApp(t, auth: auth, del: del);
       await openPage(t, 'settings-account');
       await t.ensureVisible(byKey('account-delete'));
@@ -141,7 +141,7 @@ void main() {
       t,
     ) async {
       final auth = FakeAuth(session: true, member: mayaAccount);
-      final del = _DeleteFake(Err(ReauthRequiredFailure()));
+      final del = DeleteFake(Err(ReauthRequiredFailure()));
       await pumpApp(t, auth: auth, del: del);
       await openPage(t, 'settings-account');
       await t.ensureVisible(byKey('account-delete'));
@@ -157,7 +157,7 @@ void main() {
 
     testWidgets('Cancel closes the box and does not sign out', (t) async {
       final auth = FakeAuth(session: true, member: mayaAccount);
-      final del = _DeleteFake(Err(ReauthRequiredFailure()));
+      final del = DeleteFake(Err(ReauthRequiredFailure()));
       await pumpApp(t, auth: auth, del: del);
       await openPage(t, 'settings-account');
       await t.ensureVisible(byKey('account-delete'));
@@ -173,7 +173,7 @@ void main() {
 
     testWidgets('another refusal shows no Sign out box', (t) async {
       final auth = FakeAuth(session: true, member: mayaAccount);
-      final del = _DeleteFake(Err(ProviderFailure('nope')));
+      final del = DeleteFake(Err(ProviderFailure('nope')));
       await pumpApp(t, auth: auth, del: del);
       await openPage(t, 'settings-account');
       await t.ensureVisible(byKey('account-delete'));

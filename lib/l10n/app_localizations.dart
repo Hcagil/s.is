@@ -5384,17 +5384,17 @@ abstract class AppLocalizations {
   /// **'No fresh status from your computer. It may be off or asleep.'**
   String get adminDashboardStale;
 
-  /// No description provided for @messageReadMore.
+  /// No description provided for @messageShowMore.
   ///
   /// In en, this message translates to:
   /// **'Show more'**
-  String get messageReadMore;
+  String get messageShowMore;
 
-  /// No description provided for @messageReadLess.
+  /// No description provided for @messageShowLess.
   ///
   /// In en, this message translates to:
   /// **'Show less'**
-  String get messageReadLess;
+  String get messageShowLess;
 }
 
 class _AppLocalizationsDelegate

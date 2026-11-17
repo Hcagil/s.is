@@ -165,7 +165,7 @@ class _LinkedTextState extends ConsumerState<_LinkedText> {
             onPressed: () => setState(() => _expanded = !_expanded),
             style: style,
             child: Text(
-              _expanded ? l10n.messageReadLess : l10n.messageReadMore,
+              _expanded ? l10n.messageShowLess : l10n.messageShowMore,
             ),
           ),
         ),

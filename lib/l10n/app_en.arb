@@ -2027,6 +2027,6 @@
   "@adminReasonGeneric": {"description": "Admin panels screen text"},
   "adminDashboardStale": "No fresh status from your computer. It may be off or asleep.",
   "@adminDashboardStale": {"description": "Admin panels screen text"},
-  "messageReadMore": "Show more",
-  "messageReadLess": "Show less"
+  "messageShowMore": "Show more",
+  "messageShowLess": "Show less"
 }

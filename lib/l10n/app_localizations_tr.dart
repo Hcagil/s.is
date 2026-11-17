@@ -3074,8 +3074,8 @@ class AppLocalizationsTr extends AppLocalizations {
       'Bilgisayarınızdan güncel durum gelmiyor. Bilgisayarınız kapalı veya uykuda olabilir.';
 
   @override
-  String get messageReadMore => 'Daha fazla göster';
+  String get messageShowMore => 'Devamını oku';
 
   @override
-  String get messageReadLess => 'Daha az göster';
+  String get messageShowLess => 'Daha az göster';
 }

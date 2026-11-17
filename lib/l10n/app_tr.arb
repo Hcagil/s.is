@@ -913,6 +913,6 @@
   "adminReasonUnknownItem": "Bu öğe artık bilgisayarınızda yok.",
   "adminReasonGeneric": "Bir hata oluştu. Tekrar deneyin.",
   "adminDashboardStale": "Bilgisayarınızdan güncel durum gelmiyor. Bilgisayarınız kapalı veya uykuda olabilir.",
-  "messageReadMore": "Daha fazla göster",
-  "messageReadLess": "Daha az göster"
+  "messageShowMore": "Devamını oku",
+  "messageShowLess": "Daha az göster"
 }

@@ -3101,8 +3101,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'No fresh status from your computer. It may be off or asleep.';
 
   @override
-  String get messageReadMore => 'Show more';
+  String get messageShowMore => 'Show more';
 
   @override
-  String get messageReadLess => 'Show less';
+  String get messageShowLess => 'Show less';
 }

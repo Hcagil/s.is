@@ -14,6 +14,7 @@ import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions
 import kotlin.math.roundToInt
 
 private const val SIDE = 512
+private const val MAX_DROPPED = 3
 
 // Background removal for a sticker photo with ML Kit subject segmentation. The
 // model is unbundled: Google Play services downloads it, and a request made
@@ -24,17 +25,26 @@ class StickerCutout(private val context: Context) {
         // re-throws the graph error on its own thread pool, where nobody can catch
         // it, and that kills the app. One is kept for reuse; after a failure it is
         // dropped (leaked, the OS frees it with the process) and the next call
-        // makes a fresh one, because a failed graph stays broken.
+        // makes a fresh one, because a failed graph stays broken. After 3 dropped
+        // segmenters no new one is made and mask() answers null at once, so the leak
+        // is capped.
         private var current: SubjectSegmenter? = null
+        private var dropped = 0
 
         @Synchronized
-        fun segmenter(): SubjectSegmenter = current ?: SubjectSegmentation.getClient(
-            SubjectSegmenterOptions.Builder().enableForegroundConfidenceMask().build()
-        ).also { current = it }
+        fun segmenter(): SubjectSegmenter {
+            check(dropped < MAX_DROPPED) { "segmenter keeps failing" }
+            return current ?: SubjectSegmentation.getClient(
+                SubjectSegmenterOptions.Builder().enableForegroundConfidenceMask().build()
+            ).also { current = it }
+        }
 
         @Synchronized
         fun drop(failed: SubjectSegmenter) {
-            if (current === failed) current = null
+            if (current === failed) {
+                current = null
+                dropped++
+            }
         }
     }
 
@@ -72,7 +82,6 @@ class StickerCutout(private val context: Context) {
             if (small !== decoded) decoded.recycle()
             val seg = segmenter()
             fun finish(bytes: ByteArray?) {
-                if (bytes == null) drop(seg)
                 small.recycle()
                 onDone(bytes)
             }
@@ -93,7 +102,7 @@ class StickerCutout(private val context: Context) {
                     val bytes = ByteArray(floats.size) { (floats[it] * 255).roundToInt().coerceIn(0, 255).toByte() }
                     finish(if (floats.any { it > 0.1f }) bytes else null)
                 }
-                .addOnFailureListener { finish(null) }
+                .addOnFailureListener { drop(seg); finish(null) }
         } catch (e: Throwable) {
             // An OutOfMemoryError is not an Exception; the channel must still answer.
             scaled?.recycle()

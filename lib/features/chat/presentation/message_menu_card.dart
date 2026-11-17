@@ -90,6 +90,7 @@ Future<T?> showFloatingCard<T>(
   bool below = false,
   double anchorRadius = 14,
   bool keepFocus = false,
+  bool centered = false,
 }) => showGeneralDialog<T>(
   requestFocus: !keepFocus,
   context: context,
@@ -127,6 +128,7 @@ Future<T?> showFloatingCard<T>(
             ),
           ),
           below,
+          centered,
         ),
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
@@ -152,12 +154,19 @@ Future<T?> showFloatingCard<T>(
 /// Puts the card above the anchor (below it when the top is too tight, or
 /// always when [below]) and keeps it inside the safe area either way.
 class _CardLayout extends SingleChildLayoutDelegate {
-  const _CardLayout(this.anchor, this.alignEnd, this.safe, this.below);
+  const _CardLayout(
+    this.anchor,
+    this.alignEnd,
+    this.safe,
+    this.below,
+    this.centered,
+  );
 
   final Rect anchor;
   final bool alignEnd;
   final EdgeInsets safe;
   final bool below;
+  final bool centered;
 
   static const _gap = 8.0;
 
@@ -167,6 +176,12 @@ class _CardLayout extends SingleChildLayoutDelegate {
 
   @override
   Offset getPositionForChild(Size size, Size childSize) {
+    if (centered) {
+      return Offset(
+        (size.width - childSize.width) / 2,
+        (size.height - childSize.height) / 2,
+      );
+    }
     final x = (alignEnd ? anchor.right - childSize.width : anchor.left)
         .clamp(_gap, math.max(_gap, size.width - childSize.width - _gap))
         .toDouble();
@@ -191,7 +206,8 @@ class _CardLayout extends SingleChildLayoutDelegate {
       anchor != old.anchor ||
       alignEnd != old.alignEnd ||
       safe != old.safe ||
-      below != old.below;
+      below != old.below ||
+      centered != old.centered;
 }
 
 Widget _row<T>(MenuCardAction<T> a, Color color, BuildContext card) {

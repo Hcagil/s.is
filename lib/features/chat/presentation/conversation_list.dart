@@ -55,6 +55,9 @@ class ConversationList extends ConsumerWidget {
     final selecting = ref.watch(
       chatSelectionProvider.select((s) => s.isNotEmpty),
     );
+    final undoShowing = ref.watch(
+      chatDeleteProvider.select((s) => s.notice != null),
+    );
     // Timing only (label, never data): first build that has rows.
     if (conversations.value?.isNotEmpty ?? false) {
       StartupMarks.mark('list-rows');
@@ -89,27 +92,30 @@ class ConversationList extends ConsumerWidget {
       bottomSheet: const ChatUndoBar(),
       floatingActionButton: selecting
           ? null
-          : Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              alignment: WrapAlignment.end,
-              crossAxisAlignment: WrapCrossAlignment.end,
-              children: [
-                FloatingActionButton.extended(
-                  key: const ValueKey('new-group'),
-                  heroTag: 'new-group',
-                  onPressed: () => _startGroup(context, ref),
-                  icon: const Icon(Icons.groups_outlined),
-                  label: Text(l.commonNewGroup),
-                ),
-                FloatingActionButton.extended(
-                  key: const ValueKey('new-chat'),
-                  heroTag: 'new-chat',
-                  onPressed: () => _startChat(context, ref),
-                  icon: const Icon(Icons.edit_outlined),
-                  label: Text(l.pickerNewChat),
-                ),
-              ],
+          : Padding(
+              padding: EdgeInsets.only(bottom: undoShowing ? 64 : 0),
+              child: Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                alignment: WrapAlignment.end,
+                crossAxisAlignment: WrapCrossAlignment.end,
+                children: [
+                  FloatingActionButton.extended(
+                    key: const ValueKey('new-group'),
+                    heroTag: 'new-group',
+                    onPressed: () => _startGroup(context, ref),
+                    icon: const Icon(Icons.groups_outlined),
+                    label: Text(l.commonNewGroup),
+                  ),
+                  FloatingActionButton.extended(
+                    key: const ValueKey('new-chat'),
+                    heroTag: 'new-chat',
+                    onPressed: () => _startChat(context, ref),
+                    icon: const Icon(Icons.edit_outlined),
+                    label: Text(l.pickerNewChat),
+                  ),
+                ],
+              ),
             ),
     );
   }

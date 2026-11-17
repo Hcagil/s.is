@@ -209,4 +209,16 @@ enum PeekCore {
     }
     return (shown, quote)
   }
+
+  /// What a PLAIN push (not encrypted, not a reaction) may save into push_inbox, or nil. Saved only when the push carries sender_id (the server sets it only when the body is the real text) in uuid shape, with uuid message_id and conversation_id and user_id, and a body that is not empty and not the locked placeholder. Saves nothing itself.
+  static func plainSave(userInfo: [AnyHashable: Any]) -> (userId: String, conversationId: String, messageId: String, senderId: String, body: String)? {
+    guard (userInfo["encrypted"] as? String) != "true", (userInfo["kind"] as? String) != "reaction",
+          let senderId = userInfo["sender_id"] as? String, isUuid(senderId),
+          let messageId = userInfo["message_id"] as? String, isUuid(messageId),
+          let conversationId = userInfo["conversation_id"] as? String, isUuid(conversationId),
+          let userId = userInfo["user_id"] as? String, isUuid(userId),
+          let body = userInfo["body"] as? String, !body.isEmpty, body != lockedPlaceholder
+    else { return nil }
+    return (userId, conversationId, messageId, senderId, body)
+  }
 }

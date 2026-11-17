@@ -156,6 +156,8 @@ void main() {
       await pumpList(t, chat: chat, mark: mark);
       await t.longPress(byKey('conversation-c1'));
       await t.pumpAndSettle();
+      await t.tap(byKey('chat-menu-select'));
+      await t.pumpAndSettle();
       await openMore(t);
       expect(byKey('selection-unread'), findsOneWidget);
       await t.tap(byKey('selection-unread'));
@@ -179,6 +181,8 @@ void main() {
       await pumpList(t, chat: chat, mark: mark);
       await t.longPress(byKey('conversation-c1'));
       await t.pumpAndSettle();
+      await t.tap(byKey('chat-menu-select'));
+      await t.pumpAndSettle();
       await t.tap(byKey('conversation-c2'));
       await t.pumpAndSettle();
       await openMore(t);
@@ -195,6 +199,8 @@ void main() {
       final mark = MarkFake();
       await pumpList(t, chat: chat, mark: mark);
       await t.longPress(byKey('conversation-c1'));
+      await t.pumpAndSettle();
+      await t.tap(byKey('chat-menu-select'));
       await t.pumpAndSettle();
       await openMore(t);
       expect(byKey('selection-read'), findsOneWidget);
@@ -213,6 +219,8 @@ void main() {
       mark.result = const Err(DeniedFailure());
       await pumpList(t, chat: chat, mark: mark);
       await t.longPress(byKey('conversation-c1'));
+      await t.pumpAndSettle();
+      await t.tap(byKey('chat-menu-select'));
       await t.pumpAndSettle();
       await openMore(t);
       await t.tap(byKey('selection-unread'));

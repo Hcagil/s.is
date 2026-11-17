@@ -115,8 +115,8 @@ reset role;
 
 -- shape ------------------------------------------------------------------
 select is((select array(select jsonb_object_keys(j) order by 1) from _r where who='uma'),
-  array['archives','conversations','hides','members','pins','previews','profiles','unread'],
-  'eight keys');
+  array['archives','conversations','hides','marked_unread','members','pins','previews','profiles','unread'],
+  'nine keys');
 
 -- member sees only own rows ------------------------------------------------
 select is((select array(select (e->>'id')::text from _r, jsonb_array_elements(j->'conversations') e
@@ -149,7 +149,7 @@ select is((select count(*)::int from _r, jsonb_array_elements(j->'members') e
 -- outsider gets [] everywhere ---------------------------------------------
 select is((select count(*)::int from _r, jsonb_each(j) kv where who='xan' and kv.value <> '[]'::jsonb), 0,
   'xan: every key is []');
-select is((select count(*)::int from _r, jsonb_each(j) kv where who='xan'), 8, 'xan: all eight keys still there');
+select is((select count(*)::int from _r, jsonb_each(j) kv where who='xan'), 9, 'xan: all nine keys still there');
 
 -- anon cannot execute ------------------------------------------------------
 select is(has_function_privilege('anon', 'public.chat_list()', 'execute'), false, 'anon has no execute');

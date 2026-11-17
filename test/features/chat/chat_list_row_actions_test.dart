@@ -202,9 +202,11 @@ int shift((int, int, int) a, (int, int, int) b) =>
 Color onSurfaceVariant(WidgetTester t) =>
     Theme.of(t.element(byKey('conversation-c1'))).colorScheme.onSurfaceVariant;
 
-/// Long-press selects the row; the bar's mute button opens the mute menu.
+/// Long-press, then Select; the bar's mute button opens the mute menu.
 Future<void> openMuteMenu(WidgetTester t, String id) async {
   await t.longPress(byKey('conversation-$id'));
+  await t.pumpAndSettle();
+  await t.tap(byKey('chat-menu-select'));
   await t.pumpAndSettle();
   await t.tap(byKey('selection-mute'));
   await t.pumpAndSettle();
@@ -333,7 +335,7 @@ void main() {
   });
 
   group('the selection bar chat actions', () {
-    testWidgets('long-press selects and lights the row; back puts the row '
+    testWidgets('long-press then Select selects and lights the row; back puts the row '
         'back', (t) async {
       await pumpList(t);
       final row = byKey('conversation-c2');
@@ -342,6 +344,8 @@ void main() {
       final otherBefore = await drawn(t, other);
 
       await t.longPress(row);
+      await t.pumpAndSettle();
+      await t.tap(byKey('chat-menu-select'));
       await t.pumpAndSettle();
       expect(byKey('selection-count'), findsOneWidget);
       // Lit = the selected row changes more than an unselected one.
@@ -409,6 +413,8 @@ void main() {
       );
       await t.longPress(byKey('conversation-c1'));
       await t.pumpAndSettle();
+      await t.tap(byKey('chat-menu-select'));
+      await t.pumpAndSettle();
       expect(
         find.descendant(
           of: byKey('selection-mute'),
@@ -434,6 +440,8 @@ void main() {
       notif.unmuteResult = const Err(NetworkFailure('offline'));
       await t.longPress(byKey('conversation-c1'));
       await t.pumpAndSettle();
+      await t.tap(byKey('chat-menu-select'));
+      await t.pumpAndSettle();
       await t.tap(byKey('selection-mute'));
       await t.pump();
       await t.pump(const Duration(milliseconds: 100));
@@ -445,6 +453,8 @@ void main() {
     testWidgets('the bar offers Pin, no grey pin', (t) async {
       await pumpList(t);
       await t.longPress(byKey('conversation-c2'));
+      await t.pumpAndSettle();
+      await t.tap(byKey('chat-menu-select'));
       await t.pumpAndSettle();
       expect(byKey('selection-pin'), findsOneWidget);
       expect(

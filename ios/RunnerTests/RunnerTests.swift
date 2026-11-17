@@ -440,3 +440,81 @@ final class NotificationActionRunTests: XCTestCase {
     XCTAssertEqual(time.ended, [time.nextId])
   }
 }
+
+import UserNotifications
+
+// Runs ONLY on macOS (GitHub CI job ios, step "Native iOS tests (simulator)")
+
+final class MessageCategoryTests: XCTestCase {
+    // MARK: - Helper
+
+    private func category(_ id: String) -> UNNotificationCategory {
+        let expectation = self.expectation(description: "Fetch categories")
+        var fetchedCategory: UNNotificationCategory?
+
+        UNUserNotificationCenter.current().getNotificationCategories { cats in
+            fetchedCategory = cats.first { $0.identifier == id }
+            expectation.fulfill()
+        }
+
+        wait(for: [expectation], timeout: 10)
+        return try! XCTUnwrap(fetchedCategory, "Category '\(id)' not found")
+    }
+
+    // MARK: - Tests
+
+    func testLockedCategoryOffersReplyThenMarkRead() {
+        let locked = category("SIS_MESSAGE_LOCKED")
+        let ids = locked.actions.map(\.identifier)
+        XCTAssertEqual(ids, ["SIS_REPLY", "SIS_MARK_READ"])
+    }
+
+    func testLockedReplyIsATextInputNeedingUnlockAndOpeningTheApp() {
+        let locked = category("SIS_MESSAGE_LOCKED")
+        guard let reply = locked.actions.first(where: { $0.identifier == "SIS_REPLY" }) else {
+            XCTFail("SIS_REPLY action missing")
+            return
+        }
+        XCTAssertTrue(reply is UNTextInputNotificationAction)
+        XCTAssertTrue(reply.options.contains(.authenticationRequired))
+        XCTAssertTrue(reply.options.contains(.foreground))
+    }
+
+    func testLockedMarkReadIsAPlainActionWithNoOptions() {
+        let locked = category("SIS_MESSAGE_LOCKED")
+        guard let markRead = locked.actions.first(where: { $0.identifier == "SIS_MARK_READ" }) else {
+            XCTFail("SIS_MARK_READ action missing")
+            return
+        }
+        XCTAssertFalse(markRead is UNTextInputNotificationAction)
+        XCTAssertTrue(markRead.options.isEmpty)
+    }
+
+    func testLockedMarkReadHasTheSameTitleAsThePlainOne() {
+        let locked = category("SIS_MESSAGE_LOCKED")
+        let plain = category("SIS_MESSAGE")
+
+        guard let lockedMarkRead = locked.actions.first(where: { $0.identifier == "SIS_MARK_READ" }),
+              let plainMarkRead = plain.actions.first(where: { $0.identifier == "SIS_MARK_READ" }) else {
+            XCTFail("SIS_MARK_READ action missing in one of the categories")
+            return
+        }
+
+        XCTAssertEqual(lockedMarkRead.title, plainMarkRead.title)
+        XCTAssertFalse(lockedMarkRead.title.isEmpty)
+    }
+
+    func testPlainCategoryKeepsReplyThenMarkReadAndItsReplyStaysInTheBackground() {
+        let plain = category("SIS_MESSAGE")
+        let ids = plain.actions.map(\.identifier)
+        XCTAssertEqual(ids, ["SIS_REPLY", "SIS_MARK_READ"])
+
+        guard let reply = plain.actions.first(where: { $0.identifier == "SIS_REPLY" }) else {
+            XCTFail("SIS_REPLY action missing")
+            return
+        }
+
+        XCTAssertTrue(reply.options.contains(.authenticationRequired))
+        XCTAssertFalse(reply.options.contains(.foreground))
+    }
+}

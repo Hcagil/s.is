@@ -566,6 +566,7 @@ The release reaches the production database only through `SUPABASE_ACCESS_TOKEN`
 the Supabase CLI mints a short-lived `cli_login_*` role with it and switches to
 `postgres`. That token is the one database credential; no database password is
 stored.
+The token reaches two jobs of the release workflow. Job `old_app` holds it for one short step that only reads `app_config.min_supported_build`; the long replay step has no production secret. Job `publish` (and `raise_own`, which waits for the iOS build) writes `app_config.min_supported_build` automatically: upward only (`... and min_supported_build < N`), never above this release's build, with a digit-checked value.
 
 Nothing the app stores on the phone (session, waiting notification previews, the message store)
 leaves it through Android backup or device-to-device transfer: both are

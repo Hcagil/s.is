@@ -168,21 +168,29 @@ jobs:
         with: { version: 2.117.0 }
       - name: Start Supabase and replay migrations
         run: docker compose run --rm -e SUPABASE_INTERNAL_IMAGE_REGISTRY=ghcr.io/${{ github.repository_owner }} -e DOCKER_CONFIG=/docker-config -v "$HOME/.docker:/docker-config:ro" supabase start -x imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+      # Production access for this one read only: the long replay below gets no production secrets.
+      - name: Read the production minimum
+        id: prod
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          supabase link --project-ref "$SUPABASE_PROJECT_REF"
+          # -o csv: a header line, then the value.
+          min=$(supabase db query --linked -o csv "select min_supported_build from public.app_config where id = 1" 2>/dev/null | tail -n 1)
+          [[ "$min" =~ ^[0-9]+$ ]] || { echo "::error::could not read the production minimum supported build"; exit 1; }
+          echo "min=$min" >> "$GITHUB_OUTPUT"
       - name: Find the lowest safe build
         id: replay
         env:
           GH_TOKEN: ${{ github.token }}
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
           OLD_APP_RELEASE_BUILD: ${{ needs.scope.outputs.code }}
+          OLD_APP_MIN: ${{ steps.prod.outputs.min }}
         run: |
           export LOCAL_UID=$(id -u) LOCAL_GID=$(id -g)
-          supabase link --project-ref "$SUPABASE_PROJECT_REF"
-          # -o csv: a header line, then the value.
-          min=$(supabase db query --linked -o csv "select min_supported_build from public.app_config where id = 1" 2>/dev/null | tail -n 1)
           prev=$(gh release list --limit 1 --json tagName --jq '.[0].tagName // empty')
           compose="docker compose -f compose.yaml -f .github/compose.ci.yaml"
-          OLD_APP_MODE=release OLD_APP_MIN="$min" OLD_APP_BASE="$prev" OLD_APP_COMPOSE="$compose" OLD_APP_DB_CONTAINER=supabase_db_s.is OLD_APP_RESET_CMD="$compose run --rm -T supabase db reset" tool/old_app_check.sh
+          OLD_APP_MODE=release OLD_APP_BASE="$prev" OLD_APP_COMPOSE="$compose" OLD_APP_DB_CONTAINER=supabase_db_s.is OLD_APP_RESET_CMD="$compose run --rm -T supabase db reset" tool/old_app_check.sh
 
   publish:
     needs: [scope, old_app]
@@ -375,14 +383,17 @@ jobs:
           inAppUpdatePriority: ${{ needs.scope.outputs.quiet == 'true' && '0' || '2' }}
       # The oldest allowed build only goes up: the `< N` guard keeps a larger hand-raised value. It runs after the upload so the new build is on Play before older ones are blocked.
       - name: Raise the oldest allowed build
-        if: needs.old_app.outputs.raise_to != ''
+        # A raise to this release's own build waits for the iOS build (job raise_own); only raises to an older build that both platforms already have happen here.
+        if: needs.old_app.outputs.raise_to != '' && needs.old_app.outputs.raise_to != needs.scope.outputs.code
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
           RAISE_TO: ${{ needs.old_app.outputs.raise_to }}
           RAISE_REASON: ${{ needs.old_app.outputs.raise_reason }}
+          RELEASE_CODE: ${{ needs.scope.outputs.code }}
         run: |
           [[ "$RAISE_TO" =~ ^[0-9]+$ ]] || { echo "::error::bad raise value"; exit 1; }
+          [ "$RAISE_TO" -le "$RELEASE_CODE" ] || { echo "::error::raise value above this release's build"; exit 1; }
           supabase db query --linked "update public.app_config set min_supported_build = $RAISE_TO where id = 1 and min_supported_build < $RAISE_TO"
           echo "Oldest allowed build raised to $RAISE_TO: $RAISE_REASON" >> "$GITHUB_STEP_SUMMARY"
       # The "What's new" note for this build: the `For users:` line of every PR
@@ -434,7 +445,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           QUIET_SUFFIX: ${{ needs.scope.outputs.quiet == 'true' && ' (quiet)' || '' }}
-          RAISE_NOTE: ${{ needs.old_app.outputs.raise_to != '' && format('Oldest allowed build raised to {0} ({1})', needs.old_app.outputs.raise_to, needs.old_app.outputs.raise_reason) || '' }}
+          RAISE_NOTE: ${{ needs.old_app.outputs.raise_to != '' && needs.old_app.outputs.raise_to != needs.scope.outputs.code && format('Oldest allowed build raised to {0} ({1})', needs.old_app.outputs.raise_to, needs.old_app.outputs.raise_reason) || '' }}
         run: |
           tag="v${{ needs.scope.outputs.name }}+${{ needs.scope.outputs.code }}"
           # A GitHub error once failed this step after the build was already uploaded: retry, waiting 10 s then 30 s.
@@ -455,9 +466,10 @@ jobs:
     # Independent of `publish` on purpose: an iOS failure shows as a red job
     # but leaves the Play release intact, and Play never waits on Apple.
     # Repository variable IOS_RELEASE=off skips it; unset means on.
-    needs: scope
+    # Waits for old_app only so that a failed old_app stops the iOS build too (!failure() lets it run when old_app was skipped).
+    needs: [scope, old_app]
     # A quiet release (Admin Panels only) sends no TestFlight build: testers get no message.
-    if: needs.scope.outputs.ship == 'true' && vars.IOS_RELEASE != 'off' && needs.scope.outputs.quiet != 'true'
+    if: needs.scope.outputs.ship == 'true' && vars.IOS_RELEASE != 'off' && needs.scope.outputs.quiet != 'true' && !failure() && !cancelled()
     uses: ./.github/workflows/ios-ipa.yml
     with:
       ref: ${{ needs.scope.outputs.sha }}
@@ -474,6 +486,54 @@ jobs:
       MAPS_API_KEY_IOS: ${{ secrets.MAPS_API_KEY_IOS }}
     permissions:
       contents: read
+
+  # The raise to THIS release's own build (every older build is blocked) must not lock iPhone testers out before their build exists:
+  # it runs only after `distribute` handed the TestFlight build over. A release with no iOS build skips it and says so.
+  raise_own:
+    needs: [scope, old_app, publish, ios, distribute]
+    if: ${{ !cancelled() && needs.publish.result == 'success' && needs.old_app.outputs.raise_to != '' && needs.old_app.outputs.raise_to == needs.scope.outputs.code }}
+    runs-on: ubuntu-24.04
+    environment: play-internal
+    permissions:
+      contents: read
+    steps:
+      - name: Decide
+        id: decide
+        env:
+          IOS: ${{ needs.ios.result }}
+          DISTRIBUTE: ${{ needs.distribute.result }}
+          RAISE_TO: ${{ needs.old_app.outputs.raise_to }}
+        run: |
+          if [ "$IOS" = success ] && [ "$DISTRIBUTE" = success ]; then
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::raise to $RAISE_TO skipped: no iOS build in this release; raise by hand after the next iOS build"
+            echo "Raise to $RAISE_TO skipped: no iOS build in this release; raise by hand after the next iOS build" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Check out source
+        if: steps.decide.outputs.go == 'true'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ needs.scope.outputs.sha }}
+          persist-credentials: false
+      - name: Install Supabase CLI
+        if: steps.decide.outputs.go == 'true'
+        uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3
+        with: { version: 2.117.0 }
+      - name: Raise the oldest allowed build to this release
+        if: steps.decide.outputs.go == 'true'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          RAISE_TO: ${{ needs.old_app.outputs.raise_to }}
+          RAISE_REASON: ${{ needs.old_app.outputs.raise_reason }}
+          RELEASE_CODE: ${{ needs.scope.outputs.code }}
+        run: |
+          [[ "$RAISE_TO" =~ ^[0-9]+$ ]] || { echo "::error::bad raise value"; exit 1; }
+          [ "$RAISE_TO" -le "$RELEASE_CODE" ] || { echo "::error::raise value above this release's build"; exit 1; }
+          supabase link --project-ref "$SUPABASE_PROJECT_REF"
+          supabase db query --linked "update public.app_config set min_supported_build = $RAISE_TO where id = 1 and min_supported_build < $RAISE_TO"
+          echo "Oldest allowed build raised to $RAISE_TO: $RAISE_REASON" >> "$GITHUB_STEP_SUMMARY"
 
   distribute:
     # Hands the uploaded TestFlight build to the tester groups. Runs only when

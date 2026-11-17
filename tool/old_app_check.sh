@@ -115,6 +115,11 @@ if [ -n "${OLD_APP_BASE:-}" ]; then
 fi
 
 # OLD_APP_MIN check
+# Release mode never falls back to the local stack's minimum: it lags production after a raise.
+if [ "${OLD_APP_MODE:-}" = release ] && ! [[ "${OLD_APP_MIN:-}" =~ ^[0-9]+$ ]]; then
+  echo "old app check: release mode needs the production minimum supported build in OLD_APP_MIN" >&2
+  exit 1
+fi
 if [ -z "${OLD_APP_MIN:-}" ]; then
   OLD_APP_MIN=$(docker exec -i "${OLD_APP_DB_CONTAINER:-supabase_db_s.is}" psql -U postgres -v ON_ERROR_STOP=1 -qAt -c 'select min_supported_build from public.app_config where id = 1' 2>/dev/null || true)
 fi
@@ -314,6 +319,11 @@ release_raise() {
       raise="${arr[$hi]##*+}"
       reason="build ${arr[$lo]} fails and ${arr[$hi]} passes against the new server"
     fi
+  fi
+
+  if [ -n "$raise" ] && [ "$raise" -gt "$build" ]; then
+    echo "old app raise: refusing to raise to $raise: above this release's build $build" >&2
+    return 1
   fi
 
   if [ -n "$raise" ] && [ "$raise" -gt "$OLD_APP_MIN" ]; then

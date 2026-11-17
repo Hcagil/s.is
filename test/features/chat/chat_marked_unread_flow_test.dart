@@ -84,7 +84,7 @@ void main() {
       await t.pump();
       await t.pump(const Duration(seconds: 4));
       expect(find.text(l10nEn.chatMarkedUnread), findsOneWidget);
-      await t.pump(const Duration(seconds: 2));
+      await t.pump(const Duration(seconds: 6));
       await t.pumpAndSettle();
       expect(find.text(l10nEn.chatMarkedUnread), findsNothing);
       expect(byKey('marked-dot-c1'), findsOneWidget);

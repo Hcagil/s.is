@@ -23,7 +23,7 @@ language sql immutable set search_path = '' as $$
   ),
   ordered_pieces as (
     select p.*, char_length(p.piece) as piece_len,
-      sum(char_length(p.piece)) over (order by p.ord, p.email_pos) as running_len
+      sum(case when p.is_email then char_length(p.piece) else 0 end) over (order by p.ord, p.email_pos) as email_running
     from pieces p
   ),
   head as (
@@ -35,14 +35,15 @@ language sql immutable set search_path = '' as $$
   ),
   kept_pieces as (
     select op.* from ordered_pieces op cross join threshold_check tc
-    where tc.fits or op.running_len <= 3950
+    where tc.fits or not op.is_email
+       or char_length((select h from head)) + (select coalesce(sum(piece_len), 0) from ordered_pieces where not is_email) + op.email_running <= 3950
   ),
   footer_data as (
     select (select count(*) from pieces where is_email)
          - (select count(*) from kept_pieces where is_email) as dropped
   )
   select h.h ||
-    case when tc.fits
+    case when tc.fits or fd.dropped = 0
       then string_agg(kp.piece, '' order by kp.ord, kp.email_pos)
       else string_agg(kp.piece, '' order by kp.ord, kp.email_pos) ||
         E'\n… and ' || fd.dropped || ' more'

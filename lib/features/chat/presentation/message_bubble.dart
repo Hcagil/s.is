@@ -16,7 +16,7 @@ class _Bubble extends StatelessWidget {
     this.album = const [],
     this.quotedCount = 0,
     this.onQuoteTap,
-    this.flash = false,
+    this.flash,
     this.onFlashEnd,
   });
 
@@ -32,8 +32,8 @@ class _Bubble extends StatelessWidget {
   /// Called when the quote is tapped; null = the tap does nothing.
   final VoidCallback? onQuoteTap;
 
-  /// True while the bubble shows the temporary jump highlight (fades in; [onFlashEnd] then clears it so it fades out).
-  final bool flash;
+  /// Alpha of the temporary jump highlight, null = none. The screen steps it (0, 0.25, 0, null) from [onFlashEnd].
+  final double? flash;
   final VoidCallback? onFlashEnd;
 
   /// The delivery tick of your own message (sending, sent, delivered,
@@ -148,11 +148,11 @@ class _Bubble extends StatelessWidget {
         constraints: const BoxConstraints(maxWidth: _maxWidth),
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         duration: const Duration(milliseconds: 300),
-        onEnd: flash ? onFlashEnd : null,
-        foregroundDecoration: flash
+        onEnd: flash != null ? onFlashEnd : null,
+        foregroundDecoration: flash != null
             ? BoxDecoration(
                 color: Theme.of(context).colorScheme.primary
-                    .withValues(alpha: 0.25),
+                    .withValues(alpha: flash!),
                 borderRadius: BorderRadius.circular(brand.bubbleRadius),
               )
             : null,

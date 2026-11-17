@@ -174,8 +174,10 @@ async function send(id: string): Promise<void> {
   let msgSender: string | null = null;
   let notFull = new Set<string>(targets.map((t) => t.user_id));
   try {
-    const senderRow = await db.from('messages').select('sender_id').eq('id', id).maybeSingle();
-    msgSender = !senderRow.error && typeof senderRow.data?.sender_id === 'string' && UUID_RE.test(senderRow.data.sender_id) ? senderRow.data.sender_id : null;
+    const senderRow = await db.from('messages').select('sender_id, body').eq('id', id).maybeSingle();
+    // a cut body would be saved cut
+    const whole = typeof senderRow.data?.body === 'string' && Array.from(senderRow.data.body.replace(/^ +| +$/g, '')).length <= 120;
+    msgSender = !senderRow.error && typeof senderRow.data?.sender_id === 'string' && UUID_RE.test(senderRow.data.sender_id) && whole ? senderRow.data.sender_id : null;
     const prefRows = await db.from('notification_settings').select('user_id, preview').in('user_id', [...new Set(targets.map((t) => t.user_id))]);
     notFull = prefRows.error ? new Set<string>(targets.map((t) => t.user_id)) : new Set<string>((prefRows.data ?? []).filter((r: { preview: string }) => r.preview !== 'full').map((r: { user_id: string }) => r.user_id));
   } catch { /* leave sender_id out */ }

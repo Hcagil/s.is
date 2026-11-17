@@ -128,6 +128,7 @@ import 'features/notifications/data/platform_app_badge.dart';
 import 'features/notifications/data/reaction_opener.dart';
 import 'features/notifications/data/shared_prefs_alert_store.dart';
 import 'features/notifications/data/shared_prefs_notification_explainer_store.dart';
+import 'features/notifications/data/supabase_alert_remote.dart';
 import 'features/notifications/data/supabase_notification_settings_repository.dart';
 import 'features/notifications/data/supabase_push_receipts.dart';
 import 'features/notifications/data/supabase_push_registry.dart';
@@ -574,6 +575,7 @@ Future<void> main() async {
             SupabaseNotificationSettingsRepository(client),
           ),
           alertStoreProvider.overrideWithValue(const SharedPrefsAlertStore()),
+          alertRemoteProvider.overrideWithValue(SupabaseAlertRemote(client)),
           tonePickerProvider.overrideWithValue(const ChannelTonePicker()),
           notificationExplainerStoreProvider.overrideWithValue(
             const SharedPrefsNotificationExplainerStore(),

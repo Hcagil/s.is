@@ -1,3 +1,5 @@
+import '../../../core/failure.dart';
+
 /// Sound and vibration choices for new-message notifications. Stored on the
 /// phone only; see AlertStore.
 enum AlertChoice {
@@ -191,6 +193,28 @@ abstract interface class AlertStore {
 
   /// Removes the chat's entry when [c] is all Default.
   Future<void> saveChat(String conversationId, ChatAlert c);
+}
+
+/// What the account keeps: its sound and vibration settings and the chats that differ from Default. [sound] and [vibration] are null when the account has no saved settings yet (the phone's own values stay).
+final class RemoteAlerts {
+  const RemoteAlerts({this.sound, this.vibration, required this.chats});
+
+  final bool? sound;
+  final bool? vibration;
+  final Map<String, ChatAlert> chats;
+}
+
+/// The account-side copy of the alert settings (the server applies it to pushes while the app is closed, and every phone of the account uses it).
+abstract interface class AlertRemote {
+  Future<Result<RemoteAlerts>> load();
+
+  Future<Result<void>> saveDefaults({
+    required bool sound,
+    required bool vibration,
+  });
+
+  /// All Default removes the chat's row.
+  Future<Result<void>> saveChat(String conversationId, ChatAlert c);
 }
 
 /// A tone the member picked.

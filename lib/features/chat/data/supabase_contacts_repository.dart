@@ -13,9 +13,8 @@ final class SupabaseContactsRepository implements ContactsRepository {
   final SupabaseClient _client;
 
   Failure _asFailure(Object e) => switch (e) {
-    PostgrestException(:final code) when code == 'RLMT1' => ProviderFailure(
-      failureStrings.failSearchLimit,
-    ),
+    PostgrestException(:final code) when code == 'RLMT1' =>
+      const SearchLimitFailure(),
     PostgrestException(:final code) when code == '42501' =>
       const DeniedFailure(),
     _ => readableFailure(e),
@@ -30,14 +29,7 @@ final class SupabaseContactsRepository implements ContactsRepository {
       ) as List<dynamic>;
       if (rows.isEmpty) return const Ok(null);
       final row = rows[0] as Map<String, dynamic>;
-      return Ok(
-        Member(
-          userId: row['user_id'] as String,
-          displayName: row['display_name'] as String,
-          tag: row['tag'] as String?,
-          avatarPath: row['avatar_path'] as String?,
-        ),
-      );
+      return Ok(Member.fromRow(row));
     } catch (e) {
       return Err(_asFailure(e));
     }
@@ -54,17 +46,9 @@ final class SupabaseContactsRepository implements ContactsRepository {
         for (final r in rows.cast<Map<String, dynamic>>())
           ContactMatch(
             hash: r['matched_hash'] as String,
-            member: Member(
-              userId: r['user_id'] as String,
-              displayName: r['display_name'] as String,
-              tag: r['tag'] as String?,
-              avatarPath: r['avatar_path'] as String?,
-            ),
+            member: Member.fromRow(r),
           ),
       ]);
-    } on PostgrestException catch (e) {
-      if (e.code == 'RLMT1') return const Err(SearchLimitFailure());
-      return Err(_asFailure(e));
     } catch (e) {
       return Err(_asFailure(e));
     }

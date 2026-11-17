@@ -8,6 +8,14 @@ final class Member {
     this.avatarPath,
   });
 
+  /// A member from a server row with `user_id`, `display_name`, `tag` and `avatar_path`.
+  factory Member.fromRow(Map<String, dynamic> row) => Member(
+    userId: row['user_id'] as String,
+    displayName: row['display_name'] as String,
+    tag: row['tag'] as String?,
+    avatarPath: row['avatar_path'] as String?,
+  );
+
   final String userId;
   final String displayName;
 

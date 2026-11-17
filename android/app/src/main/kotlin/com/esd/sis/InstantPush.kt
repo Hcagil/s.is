@@ -456,6 +456,7 @@ object InstantPush {
                 text,
                 System.currentTimeMillis(),
                 lineKey,
+                extras.getString("sender_id")?.takeIf { it.isNotEmpty() },
             )
             // commit(), not apply(): written before Dart can read it, narrowing the read-modify-write race.
             if (!redraw) prefs.edit().putString(inboxKey, inbox).commit()

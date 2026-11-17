@@ -96,6 +96,19 @@ enum PushPeek {
     return (opened?.text, data.peerName)
   }
 
+  /// Saves a plain push's line into push_inbox (see PeekCore.plainSave) so the app shows the real text when it opens. Only when the store's owner is the push's user_id. Best effort: any failure just saves nothing. Runs before the extension hands its content to the system.
+  static func savePlain(for userInfo: [AnyHashable: Any]) {
+    guard let line = PeekCore.plainSave(userInfo: userInfo),
+          let store = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup)?.appendingPathComponent(storeFileName),
+          FileManager.default.fileExists(atPath: store.path),
+          let group = PeekKeychain.cryptoGroup(),
+          let storeKeyHex = PeekKeychain.value(account: "sis.store.key", group: group),
+          isHex64(storeKeyHex),
+          let data = PeekStoreReader.read(path: store.path, keyHex: storeKeyHex, conversationId: line.conversationId, messageId: line.messageId, senderKey: nil, senderId: nil),
+          data.ownerId == line.userId else { return }
+    _ = PeekStoreReader.save(path: store.path, keyHex: storeKeyHex, conversationId: line.conversationId, messageId: line.messageId, peerUserId: line.senderId, body: line.body, sealed: PeekCore.sealedHash(line.body), receivedAtMicros: Int64(Date().timeIntervalSince1970 * 1_000_000))
+  }
+
   /// Title (nil = keep the push's) and body of a reaction push (kind "reaction"); nil when the push is not a reaction.
   /// - reactor_id == user_id: generic text (an extension cannot cancel a notification).
   /// - private chat (encrypted == "true"): the real text only when PeekCore.reaction opens it from this phone's own store; title = the phone's own copy of the partner name; otherwise generic. Never a sender prefix (a private chat is 1:1).

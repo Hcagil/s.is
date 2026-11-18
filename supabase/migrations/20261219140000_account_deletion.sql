@@ -47,7 +47,8 @@ create table app_private.account_deletion_files (
 -- who the request was for, until the deletion is final (the log itself has no user id)
 create table app_private.account_deletion_after (
   request_id uuid primary key,
-  user_id uuid not null
+  user_id uuid not null,
+  email text   -- lower-cased address read by prepare, only so the audit clean-up can find e-mail-only rows; dropped by account_deletion_done
 );
 alter table app_private.account_deletion_files enable row level security;
 revoke all on table app_private.account_deletion_files from public, anon, authenticated;
@@ -80,9 +81,8 @@ declare rid uuid;
 begin
   delete from app_private.account_deletions where user_id = uid returning request_id into rid;
   if rid is not null then
+    -- the notes (files, user id, e-mail) are kept: a delete that was already under way may still finish, and account_deletion_done cleans up whenever the account is really gone. Done / the hourly sweep drop them when the account still exists.
     update app_private.account_deletion_log set outcome = 'cancelled', done_at = now() where request_id = rid;
-    delete from app_private.account_deletion_files where request_id = rid;
-    delete from app_private.account_deletion_after where request_id = rid;
   end if;
 end;
 $$;
@@ -242,7 +242,8 @@ begin
     return false;
   end if;
 
-  insert into app_private.account_deletion_after(request_id, user_id) values (rid, uid)
+  insert into app_private.account_deletion_after(request_id, user_id, email)
+  values (rid, uid, (select lower(btrim(u.email)) from auth.users u where u.id = uid))
   on conflict (request_id) do nothing;
 
   -- the person's messages go with the account. Their files are only NOTED here; the storage sweeper gets them in account_deletion_done, after the account is really gone (a cancel must never lose a file).
@@ -274,7 +275,7 @@ $$;
 revoke all on function public.account_deletion_prepare(uuid) from public, anon, authenticated;
 grant execute on function public.account_deletion_prepare(uuid) to service_role;
 
--- Called after deleteUser succeeded. addr (the e-mail, read just before the delete, never stored) is optional. Does nothing for a request that was cancelled.
+-- Called after deleteUser. Cleans up when the account is really gone (no auth.users row), whatever the log says (a cancel that lost the race), or when the request is still pending: removes Auth's audit rows naming the person (by user id and by e-mail, the e-mail from prepare's note or addr), hands the noted files to the storage sweeper, drops the notes and marks the log done. While the account still exists nothing is queued or removed (the person signed in again); a cancelled request's notes are dropped then.
 create function public.account_deletion_done(rid uuid, addr text default null)
   returns void
   language plpgsql
@@ -284,17 +285,30 @@ as $$
 #variable_conflict use_column
 declare
   uid uuid;
+  mail text;
+  state text;
 begin
-  if not exists (select 1 from app_private.account_deletion_log where request_id = rid and outcome = 'pending') then
-    delete from app_private.account_deletion_files where request_id = rid;
-    delete from app_private.account_deletion_after where request_id = rid;
+  select l.outcome into state from app_private.account_deletion_log l where l.request_id = rid;
+  select a.user_id, a.email into uid, mail from app_private.account_deletion_after a where a.request_id = rid;
+  if uid is null then
+    -- no note: only the log can be settled (old behaviour)
+    update app_private.account_deletion_log set outcome = 'done', done_at = now()
+     where request_id = rid and outcome = 'pending';
     return;
   end if;
-  select a.user_id into uid from app_private.account_deletion_after a where a.request_id = rid;
-  -- Auth's own audit rows name the person (actor_id, traits.user_id, actor_username, traits.user_email): remove them, the deleteUser call has just added one more
+  -- the account still exists and the request is not pending (cancelled: the person signed in again): nothing is cleaned
+  if exists (select 1 from auth.users u where u.id = uid) and state is distinct from 'pending' then
+    if state = 'cancelled' then
+      delete from app_private.account_deletion_files where request_id = rid;
+      delete from app_private.account_deletion_after where request_id = rid;
+    end if;
+    return;
+  end if;
+  mail := nullif(lower(btrim(coalesce(addr, mail))), '');
   delete from auth.audit_log_entries e
-   where (uid is not null and (e.payload ->> 'actor_id' = uid::text or e.payload -> 'traits' ->> 'user_id' = uid::text))
-      or (addr is not null and addr <> '' and (lower(e.payload ->> 'actor_username') = lower(addr) or lower(e.payload -> 'traits' ->> 'user_email') = lower(addr)));
+   where e.payload ->> 'actor_id' = uid::text
+      or e.payload -> 'traits' ->> 'user_id' = uid::text
+      or (mail is not null and (lower(e.payload ->> 'actor_username') = mail or lower(e.payload -> 'traits' ->> 'user_email') = mail));
   insert into app_private.storage_removal_queue(bucket, path)
     select f.bucket, f.path from app_private.account_deletion_files f where f.request_id = rid
   on conflict (bucket, path) do nothing;
@@ -302,7 +316,7 @@ begin
   delete from app_private.account_deletion_after where request_id = rid;
   update app_private.account_deletion_log
   set outcome = 'done', done_at = now()
-  where request_id = rid and outcome = 'pending';
+  where request_id = rid and outcome in ('pending', 'cancelled');
 end;
 $$;
 revoke all on function public.account_deletion_done(uuid, text) from public, anon, authenticated;
@@ -366,6 +380,12 @@ begin
     select l.request_id from app_private.account_deletion_log l
      where l.outcome = 'pending'
        and not exists (select 1 from app_private.account_deletions d where d.request_id = l.request_id)
+    union
+    -- a noted deletion whose account is gone (finish the clean-up), or a cancelled one older than an hour (drop its notes)
+    select a.request_id from app_private.account_deletion_after a
+      left join app_private.account_deletion_log l on l.request_id = a.request_id
+     where not exists (select 1 from auth.users u where u.id = a.user_id)
+        or (l.outcome = 'cancelled' and l.done_at < now() - interval '1 hour')
   loop
     perform public.account_deletion_done(rid);
   end loop;

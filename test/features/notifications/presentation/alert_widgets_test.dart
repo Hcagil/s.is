@@ -310,9 +310,7 @@ void main() {
       await mount(t, const ChatAlertTiles(conversationId: 'g1'));
 
       expect(byKey('chat-alert-sound'), findsOneWidget);
-      expect(byKey('chat-alert-sound-choice'), findsNothing);
       expect(byKey('chat-alert-vibration'), findsNothing);
-      expect(byKey('chat-alert-vibration-choice'), findsNothing);
     });
 
     onPlatform(

@@ -139,7 +139,7 @@ void main() {
     testWidgets('a 6th pin is refused with the limit notice', (
       WidgetTester t,
     ) async {
-      t.view.physicalSize = const Size(1080, 2400);
+      t.view.physicalSize = const Size(1080, 3600);
       t.view.devicePixelRatio = 3;
       addTearDown(t.view.reset);
       final pins = ChatPinFake(pinned: {'p1', 'p2', 'p3', 'p4', 'p5'});
@@ -154,6 +154,20 @@ void main() {
           conv('c2', cem, 7),
         ]);
       await pumpCardList(t, chat: chat, pins: pins);
+      // Tall enough that the buttons wrapping at 360 wide stay below the
+      // row; the drag and the check below keep it honest once the list scrolls.
+      // Bring the row clear of the floating new-group / new-chat buttons.
+      await t.drag(byKey('conversation-list'), const Offset(0, -400));
+      await t.pumpAndSettle();
+      final row = t.getRect(byKey('conversation-c1'));
+      for (final k in ['new-group', 'new-chat']) {
+        final btn = t.getRect(byKey(k));
+        expect(
+          row.center.dy < btn.top || row.center.dy > btn.bottom,
+          isTrue,
+          reason: 'row centre must not sit under $k',
+        );
+      }
       await openCard(t, 'c1');
       await t.tap(byKey('chat-menu-pin'));
       await t.pump();

@@ -53,8 +53,24 @@ Future<SupabaseClient> signedIn(String email, {bool activate = true}) async {
   final client = _client();
   try {
     await client.auth.signInWithPassword(email: email, password: _password);
-  } on AuthException {
-    await client.auth.signUp(email: email, password: _password);
+  } on AuthException catch (first) {
+    // Names the real cause when the fallback below fails; never the password.
+    final status = first.statusCode;
+    final code = first.code;
+    // ignore: avoid_print
+    print(
+      'integration signedIn: first sign-in failed: ${first.runtimeType} '
+      'status=$status code=$code message=${first.message}',
+    );
+    try {
+      await client.auth.signUp(email: email, password: _password);
+    } on AuthApiException catch (e) {
+      // The account exists, so the sign-in above failed for another reason
+      // (a transient error); the sign-up fallback is refused. Sign in again.
+      if (e.code != 'user_already_exists') rethrow;
+      await Future<void>.delayed(const Duration(seconds: 1));
+      await client.auth.signInWithPassword(email: email, password: _password);
+    }
   }
   expect(client.auth.currentUser, isNotNull, reason: 'sign-in failed');
   if (activate) {

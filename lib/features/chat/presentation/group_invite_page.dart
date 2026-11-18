@@ -239,8 +239,7 @@ class _GroupInvitePageState extends ConsumerState<GroupInvitePage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          if (_busy)
-            const SisProgressLine(key: ValueKey('invite-progress')),
+          if (_busy) const SisProgressLine(key: ValueKey('invite-progress')),
           InviteGroupHeader(
             title: widget.title,
             seed: id,

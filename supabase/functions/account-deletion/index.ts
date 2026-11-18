@@ -35,9 +35,15 @@ Deno.serve(async (req) => {
     if (!data || data.length === 0) break;
 
     for (const row of data as { user_id: string; request_id: string }[]) {
-      // the e-mail is only held in memory, to clean Auth's audit rows after the delete; never logged, never stored
-      const { data: found } = await db.auth.admin.getUserById(row.user_id);
-      const addr = found?.user?.email ?? null;
+      // the e-mail is only held in memory, to clean Auth's audit rows after the delete; never logged, never stored.
+      // One read, before prepare. If it fails, this person is left for the next run (no prepare, no delete, no done), so the audit clean-up never runs without the e-mail.
+      const { data: found, error: readErr } = await db.auth.admin.getUserById(row.user_id);
+      if (readErr || !found?.user) {
+        failed++;
+        console.log('account-deletion: read failed');
+        continue;
+      }
+      const addr = found.user.email ?? null;
 
       // last check right before the delete: false = the person signed in again (cancelled) or it is not due
       const { data: ok, error: prepErr } = await db.rpc('account_deletion_prepare', { uid: row.user_id });

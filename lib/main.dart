@@ -253,7 +253,12 @@ Future<void> main() async {
     unawaited(
       DriftMessageStore.prefetchKey(
         () => StoreKey.inGroup(keychainGroup).peek(),
-      ).then((_) => DriftMessageStore.warmOpen(storeFile)),
+      ).then(
+        (_) => DriftMessageStore.warmOpen(
+          storeFile,
+          preload: DriftChatListSnapshotStore.readSnapshot,
+        ),
+      ),
     );
     // The two preference reads and the Supabase start run together.
     final (appearanceOverrides, autoDownloadOverrides, _) = await (

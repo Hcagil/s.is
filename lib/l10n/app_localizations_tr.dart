@@ -3081,4 +3081,10 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get adminDashboardStale =>
       'Bilgisayarınızdan güncel durum gelmiyor. Bilgisayarınız kapalı veya uykuda olabilir.';
+
+  @override
+  String get messageShowMore => 'Devamını oku';
+
+  @override
+  String get messageShowLess => 'Daha az göster';
 }

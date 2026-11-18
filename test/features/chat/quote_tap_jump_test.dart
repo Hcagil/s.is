@@ -340,6 +340,9 @@ void main() {
           if (m1Finder.evaluate().isNotEmpty) break;
         }
         expect(m1Finder, findsOneWidget, reason: 'm1 should appear after load');
+        await tester.pump(const Duration(milliseconds: 300));
+        // The animation starts on the first frame; the second pump ends it.
+        await tester.pump(const Duration(milliseconds: 300));
 
         final screenRect =
             Offset.zero &
@@ -379,6 +382,9 @@ void main() {
           if (m1Finder.evaluate().isNotEmpty) break;
         }
         expect(m1Finder, findsOneWidget, reason: 'm1 should appear after load');
+        await tester.pump(const Duration(milliseconds: 300));
+        // The animation starts on the first frame; the second pump ends it.
+        await tester.pump(const Duration(milliseconds: 300));
 
         final screenRect =
             Offset.zero &
@@ -428,7 +434,8 @@ void main() {
       final before = replyTop(tester);
       final quoteFinder = find.byKey(const ValueKey('quote-r1'));
       await tester.tap(quoteFinder);
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
       expect(tester.takeException(), isNull);
       expect(
@@ -436,6 +443,7 @@ void main() {
         findsOneWidget,
       );
       expect(replyTop(tester), equals(before));
+      await endNotice(tester);
     });
 
     // --------------------------------------------------------------------
@@ -483,11 +491,16 @@ void main() {
 
         // Wait until m1 appears
         for (var i = 0; i < 400; i++) {
-          await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 10)),
+          );
           await tester.pump(const Duration(milliseconds: 50));
           if (m1Finder.evaluate().isNotEmpty) break;
         }
         expect(m1Finder, findsOneWidget, reason: 'm1 should appear after load');
+        await tester.pump(const Duration(milliseconds: 300));
+        // The animation starts on the first frame; the second pump ends it.
+        await tester.pump(const Duration(milliseconds: 300));
 
         final screenRect =
             Offset.zero &
@@ -505,49 +518,50 @@ void main() {
       },
     );
 
-    testWidgets(
-      'original beyond page 20: no notice, no jump, no throw',
-      (tester) async {
-        await pump(tester, deepHistory(1100, 'm1'));
+    testWidgets('original beyond page 20: no notice, no jump, no throw', (
+      tester,
+    ) async {
+      await pump(tester, deepHistory(1100, 'm1'));
 
-        final before = replyTop(tester);
+      final before = replyTop(tester);
 
-        final quoteFinder = find.byKey(const ValueKey('quote-r1'));
-        expect(quoteFinder, findsOneWidget);
+      final quoteFinder = find.byKey(const ValueKey('quote-r1'));
+      expect(quoteFinder, findsOneWidget);
 
-        await tester.tap(quoteFinder);
+      await tester.tap(quoteFinder);
 
-        // Let the 20 pages load
-        for (var i = 0; i < 200; i++) {
-          await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
-          await tester.pump(const Duration(milliseconds: 50));
-        }
-
-        // Check immediately after loop
-        expect(
-          find.byKey(const ValueKey('quote-deleted-notice')),
-          findsNothing,
-          reason: 'no notice after tap',
+      // Let the 20 pages load
+      for (var i = 0; i < 200; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)),
         );
+        await tester.pump(const Duration(milliseconds: 50));
+      }
 
-        final m1Finder = find.byKey(
-          const ValueKey('message-m1'),
-          skipOffstage: false,
-        );
-        expect(m1Finder, findsNothing, reason: 'm1 not loaded');
+      // Check immediately after loop
+      expect(
+        find.byKey(const ValueKey('quote-deleted-notice')),
+        findsNothing,
+        reason: 'no notice after tap',
+      );
 
-        await tester.pump(const Duration(seconds: 3));
-        await tester.pumpAndSettle();
+      final m1Finder = find.byKey(
+        const ValueKey('message-m1'),
+        skipOffstage: false,
+      );
+      expect(m1Finder, findsNothing, reason: 'm1 not loaded');
 
-        expect(tester.takeException(), isNull);
-        expect(
-          find.byKey(const ValueKey('quote-deleted-notice')),
-          findsNothing,
-          reason: 'no notice after settle',
-        );
-        expect(m1Finder, findsNothing);
-        expect(replyTop(tester), equals(before));
-      },
-    );
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        find.byKey(const ValueKey('quote-deleted-notice')),
+        findsNothing,
+        reason: 'no notice after settle',
+      );
+      expect(m1Finder, findsNothing);
+      expect(replyTop(tester), equals(before));
+    });
   });
 }

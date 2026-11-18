@@ -357,6 +357,38 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
   GlobalKey _keyFor(String messageId) =>
       _bubbleKeys.putIfAbsent(messageId, GlobalKey.new);
 
+  /// The message whose jump highlight is showing (set by a quote tap, cleared by the bubble when its fade-in ends).
+  String? _flashId;
+
+  /// Alpha of the highlight on [_flashId] (null = none); see _Bubble.flash.
+  double? _flashAlpha;
+
+  /// A tap on a quote: scrolls the original into view and flashes it. Does nothing when the original is not loaded here.
+  Future<void> _jumpToQuoted(String id) async {
+    final list = ref.read(messagesProvider).value ?? const <Message>[];
+    if (!list.any((m) => m.id == id)) return;
+    await _scrollTo(id, ++_generation);
+    if (!mounted) return;
+    setState(() {
+      _flashId = id;
+      _flashAlpha =
+          0; // invisible first: a null -> value change would not animate
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _flashId == id) setState(() => _flashAlpha = 0.25);
+    });
+  }
+
+  /// The bubble's highlight finished a fade: in -> start fading out; out -> remove it.
+  void _flashStepped() => setState(() {
+    if (_flashAlpha == 0.25) {
+      _flashAlpha = 0;
+    } else {
+      _flashId = null;
+      _flashAlpha = null;
+    }
+  });
+
   void _openSearch() => setState(() => _searching = true);
 
   Future<void> _closeSearch() async {
@@ -1143,6 +1175,15 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                         quotedCount: quoted == null
                                             ? 0
                                             : albumOf(value, quoted).length,
+                                        onQuoteTap: quoted == null
+                                            ? null
+                                            : () => unawaited(
+                                                _jumpToQuoted(quoted.id),
+                                              ),
+                                        flash: _flashId == message.id
+                                            ? _flashAlpha
+                                            : null,
+                                        onFlashEnd: _flashStepped,
                                       );
                                       final tapped = ref.watch(
                                         tappedMessageProvider.select(

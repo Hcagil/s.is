@@ -17,6 +17,7 @@ const log: { method: string; path: string; body: any; t: number; tEnd?: number }
 const queueConfig: { user_id: string; request_id: string }[] = [];
 const prepareFalseFor: Set<string> = new Set();
 const deleteResponses: Map<string, { status: number; body: any }> = new Map();
+const getStatus: Map<string, number> = new Map();
 let deleteDelayMs = 40;
 
 const fakeHandler = async (req: Request): Promise<Response> => {
@@ -39,6 +40,8 @@ const fakeHandler = async (req: Request): Promise<Response> => {
   // NEW: GET user info before delete
   if (u.pathname.startsWith('/auth/v1/admin/users/') && req.method === 'GET') {
     const uid = u.pathname.split('/').pop()!;
+    const gs = getStatus.get(uid);
+    if (gs !== undefined) return new Response(JSON.stringify({ msg: 'x' }), { status: gs });
     const resp = {
       id: uid,
       aud: 'authenticated',
@@ -225,6 +228,50 @@ Deno.test('empty queue -> 200', async () => {
   assertEquals(r.status, 200);
   assertEquals(deleted().length, 0);
   assertEquals(doneBodies().length, 0);
+});
+
+Deno.test('user GET fails 404 or 500 -> not prepared, not deleted, failed 1', async () => {
+  const A = '00000000-0000-0000-0000-0000000000a1';
+  for (const status of [404, 500]) {
+    log.length = 0;
+    prepareFalseFor.clear();
+    deleteResponses.clear();
+    getStatus.clear();
+    queueConfig.splice(0, queueConfig.length, { user_id: A, request_id: 'r1' });
+    getStatus.set(A, status);
+    const orig = console.log;
+    const lines: string[] = [];
+    console.log = (...a) => { lines.push(a.map(String).join(' ')); };
+    let r;
+    try { r = await call(); } finally { console.log = orig; getStatus.clear(); }
+    assertEquals(r.status, 200, `status for ${status}`);
+    assertEquals(JSON.parse(r.text).failed, 1, `failed count for ${status}`);
+    assertEquals(log.filter(l => l.path.endsWith('/account_deletion_prepare')).length, 0, `prepare for ${status}`);
+    assertEquals(deleted().length, 0, `deleted for ${status}`);
+    assertEquals(doneBodies().length, 0, `done for ${status}`);
+    assert(!lines.some(l => l.includes(A) || l.includes('ann@mail.test')), `log leaks id or e-mail for ${status}`);
+  }
+});
+
+Deno.test('failed user read does not stop the next person', async () => {
+  const A = '00000000-0000-0000-0000-0000000000a1';
+  const B = '00000000-0000-0000-0000-0000000000a2';
+  log.length = 0;
+  prepareFalseFor.clear();
+  deleteResponses.clear();
+  getStatus.clear();
+  queueConfig.splice(0, queueConfig.length, { user_id: A, request_id: 'r1' }, { user_id: B, request_id: 'r2' });
+  getStatus.set(A, 500);
+  let r;
+  try { r = await call(); } finally { getStatus.clear(); }
+  assertEquals(r.status, 200, 'overall status');
+  assertEquals(JSON.parse(r.text).failed, 1, 'failed count');
+  assertEquals(deleted(), [B], 'deleted only B');
+  const done = doneBodies();
+  assertEquals(done.length, 1, 'done count');
+  assertEquals(done[0].rid, 'r2', 'done rid');
+  const prepareUids = log.filter(l => l.path.endsWith('/account_deletion_prepare')).map(l => l.body.uid);
+  assertEquals(prepareUids, [B], 'prepare called only for B');
 });
 
 Deno.test('shutdown server', async () => {

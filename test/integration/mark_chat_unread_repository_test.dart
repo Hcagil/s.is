@@ -30,10 +30,7 @@ Future<SupabaseClient> _signedIn(String email) async {
   );
   await setLocalTestPassword(_url, email, _password);
   try {
-    await client.auth.signInWithPassword(
-      email: email,
-      password: _password,
-    );
+    await client.auth.signInWithPassword(email: email, password: _password);
   } on AuthException {
     await client.auth.signUp(email: email, password: _password);
   }

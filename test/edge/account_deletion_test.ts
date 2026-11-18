@@ -19,6 +19,7 @@ const prepareFalseFor: Set<string> = new Set();
 const deleteResponses: Map<string, { status: number; body: any }> = new Map();
 const getStatus: Map<string, number> = new Map();
 let deleteDelayMs = 40;
+let doneStatus = 204;
 
 const fakeHandler = async (req: Request): Promise<Response> => {
   const u = new URL(req.url);
@@ -62,7 +63,7 @@ const fakeHandler = async (req: Request): Promise<Response> => {
     return new Response(JSON.stringify(resp.body), { status: resp.status });
   }
   if (u.pathname === '/rest/v1/rpc/account_deletion_done' && req.method === 'POST') {
-    return new Response(null, { status: 204 });
+    return new Response(doneStatus === 204 ? null : JSON.stringify({ message: 'boom' }), { status: doneStatus });
   }
   return new Response(null, { status: 404 });
 };
@@ -272,6 +273,27 @@ Deno.test('failed user read does not stop the next person', async () => {
   assertEquals(done[0].rid, 'r2', 'done rid');
   const prepareUids = log.filter(l => l.path.endsWith('/account_deletion_prepare')).map(l => l.body.uid);
   assertEquals(prepareUids, [B], 'prepare called only for B');
+});
+
+Deno.test('account_deletion_done fails -> counted failed, not removed', async () => {
+  const A = '00000000-0000-0000-0000-0000000000a1';
+  log.length = 0;
+  prepareFalseFor.clear();
+  deleteResponses.clear();
+  getStatus.clear();
+  queueConfig.splice(0, queueConfig.length, { user_id: A, request_id: 'r1' });
+  doneStatus = 500;
+  let r;
+  try {
+    r = await call();
+  } finally {
+    doneStatus = 204;
+  }
+  assertEquals(r.status, 200);
+  assertEquals(doneBodies().length, 1, 'done was attempted');
+  const j = JSON.parse(r.text);
+  assertEquals(j.failed, 1, 'failed count');
+  assertEquals(j.removed, 0, 'removed count');
 });
 
 Deno.test('shutdown server', async () => {

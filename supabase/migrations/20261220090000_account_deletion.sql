@@ -454,8 +454,8 @@ $$;
 revoke all on function public.chat_gone_peers() from public, anon;
 grant execute on function public.chat_gone_peers() to authenticated;
 
--- adds gone_peers: the id of a 1:1 partner whose account is deleted (a new key; old apps ignore it).
-CREATE OR REPLACE FUNCTION public.chat_list()
+-- chat_list_v2: the list plus two new keys, marked_unread (own rows via RLS) and gone_peers (a 1:1 partner whose account is deleted). Released apps keep calling chat_list, whose answer stays the old eight keys.
+CREATE OR REPLACE FUNCTION public.chat_list_v2()
 RETURNS jsonb
 LANGUAGE sql
 STABLE
@@ -528,9 +528,29 @@ SELECT jsonb_build_object(
       select conversation_id, user_id
       from public.chat_gone_peers()
     ) x
+  ), '[]'::jsonb),
+  'marked_unread', coalesce((
+    select jsonb_agg(to_jsonb(x))
+    from (
+      select conversation_id
+      from public.chat_marked_unread
+    ) x
   ), '[]'::jsonb)
 );
 $$;
 
+REVOKE ALL ON FUNCTION public.chat_list_v2() FROM public, anon;
+GRANT EXECUTE ON FUNCTION public.chat_list_v2() TO authenticated;
+
+-- chat_list keeps its old eight keys: v2 minus the new ones.
+CREATE OR REPLACE FUNCTION public.chat_list()
+RETURNS jsonb
+LANGUAGE sql
+STABLE
+SECURITY INVOKER
+SET search_path = ''
+AS $$
+SELECT public.chat_list_v2() - 'marked_unread' - 'gone_peers';
+$$;
 REVOKE ALL ON FUNCTION public.chat_list() FROM public, anon;
 GRANT EXECUTE ON FUNCTION public.chat_list() TO authenticated;

@@ -1475,6 +1475,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatSelMarkRead => 'Mark as read';
 
   @override
+  String get chatMenuMarkUnread => 'Mark as unread';
+
+  @override
+  String get commonSelect => 'Select';
+
+  @override
+  String get chatMarkedUnread => 'Chat marked as unread';
+
+  @override
   String get chatDeleteAction => 'Delete';
 
   @override

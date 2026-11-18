@@ -2624,6 +2624,24 @@ abstract class AppLocalizations {
   /// **'Mark as read'**
   String get chatSelMarkRead;
 
+  /// Chat menu and selection bar: mark the chat unread by hand (shows a dot until the chat is opened)
+  ///
+  /// In en, this message translates to:
+  /// **'Mark as unread'**
+  String get chatMenuMarkUnread;
+
+  /// Chat menu row that starts selecting chats
+  ///
+  /// In en, this message translates to:
+  /// **'Select'**
+  String get commonSelect;
+
+  /// Snackbar after marking a chat unread, with the Undo button
+  ///
+  /// In en, this message translates to:
+  /// **'Chat marked as unread'**
+  String get chatMarkedUnread;
+
   /// Delete button of the selection bar and of the many-chats dialog
   ///
   /// In en, this message translates to:

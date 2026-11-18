@@ -91,6 +91,7 @@ import 'features/chat/data/supabase_staff_registry_repository.dart';
 import 'features/chat/data/supabase_chat_archive_repository.dart';
 import 'features/chat/data/supabase_chat_delete_repository.dart';
 import 'features/chat/data/supabase_chat_file_repository.dart';
+import 'features/chat/data/supabase_chat_mark_repository.dart';
 import 'features/chat/data/supabase_chat_pin_repository.dart';
 import 'features/chat/data/supabase_group_settings_repository.dart';
 import 'features/chat/data/supabase_chat_repository.dart';
@@ -356,6 +357,9 @@ Future<void> main() async {
           ),
           chatPinRepositoryProvider.overrideWithValue(
             SupabaseChatPinRepository(client),
+          ),
+          chatMarkRepositoryProvider.overrideWithValue(
+            SupabaseChatMarkRepository(client),
           ),
           chatDeleteRepositoryProvider.overrideWithValue(
             SupabaseChatDeleteRepository(client),

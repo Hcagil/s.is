@@ -774,6 +774,26 @@ class ConversationListController extends AsyncNotifier<List<Conversation>> {
     return result;
   }
 
+  /// Marks [conversationId] unread by hand for the signed-in member. The list shows it at once (and saves it); a refusal from the server puts the chat back and returns the [Err]. Opening the chat later clears the mark ([markRead]). The unread count is not touched.
+  Future<Result<void>> markUnread(String conversationId) async {
+    void mark(bool value) {
+      final list = state.value;
+      if (list == null) return;
+      state = AsyncData([
+        for (final c in list)
+          if (c.id == conversationId) c.withMarkedUnread(value) else c,
+      ]);
+      _scheduleSnapshotSave();
+    }
+
+    mark(true);
+    final result = await ref
+        .read(chatMarkRepositoryProvider)
+        .markChatUnread(conversationId);
+    if (result is Err && ref.mounted) mark(false);
+    return result;
+  }
+
   /// Shows [messageId] (null: none) as [conversationId]'s pinned message at
   /// once, without a server call; the usual refreshes re-read the list.
   void applyPinnedMessage(String conversationId, String? messageId) {

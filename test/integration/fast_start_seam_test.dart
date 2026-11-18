@@ -346,13 +346,13 @@ void main() {
       );
     });
 
-    test('sends exactly one request, rpc chat_list, and returns the same '
+    test('sends exactly one request, rpc chat_list_v2, and returns the same '
         'list whether sent alone or with others in flight', () async {
       wire.oneAtATime = true;
       final alone = _ok(await chat.conversations());
       expect(
         [for (final r in wire.rest) r.shape],
-        ['GET /rest/v1/rpc/chat_list?'],
+        ['GET /rest/v1/rpc/chat_list_v2?'],
       );
 
       wire
@@ -361,7 +361,7 @@ void main() {
       final again = _ok(await chat.conversations());
       expect(
         [for (final r in wire.rest) r.shape],
-        ['GET /rest/v1/rpc/chat_list?'],
+        ['GET /rest/v1/rpc/chat_list_v2?'],
       );
       expect(
         [for (final c in again) _row(c)],
@@ -376,13 +376,40 @@ void main() {
       expect(list, isNotEmpty);
       expect(
         [for (final r in wire.rest) r.shape],
-        ['GET /rest/v1/rpc/chat_list?'],
+        ['GET /rest/v1/rpc/chat_list_v2?'],
         reason: 'one round trip means one request: ${wire.rest}',
       );
       expect(wire.maxInFlight, 1, reason: 'nothing sent beside the list');
     });
 
-    test('chat_list holds the eight old reads plus gone_peers', () async {
+    test(
+      'chat_list_v2 holds exactly the eight old keys plus marked_unread',
+      () async {
+        final raw = Map<String, dynamic>.from(
+          await bram.rpc('chat_list_v2') as Map,
+        );
+        expect(raw.keys.toSet(), {
+          'members',
+          'conversations',
+          'archives',
+          'pins',
+          'hides',
+          'profiles',
+          'previews',
+          'unread',
+          'marked_unread',
+        });
+        expect(raw['marked_unread'], isA<List>());
+        final old = Map<String, dynamic>.from(
+          await bram.rpc('chat_list') as Map,
+        );
+        List<String> ids(Object? rows) =>
+            [for (final r in rows as List) (r as Map)['id'] as String]..sort();
+        expect(ids(raw['conversations']), ids(old['conversations']));
+      },
+    );
+
+    test('chat_list holds what the eight old reads held', () async {
       final raw = Map<String, dynamic>.from(await bram.rpc('chat_list') as Map);
       expect(raw.keys.toSet(), {
         'members',
@@ -393,7 +420,6 @@ void main() {
         'profiles',
         'previews',
         'unread',
-        'gone_peers',
       });
       List<String> ids(Object? rows, String col) =>
           [for (final r in rows as List) (r as Map)[col] as String]..sort();
@@ -441,7 +467,7 @@ void main() {
         finnWire.reset();
         final list = _ok(await SupabaseChatRepository(finn).conversations());
         expect(list, isEmpty);
-        expect([for (final r in finnWire.rest) r.table], ['chat_list']);
+        expect([for (final r in finnWire.rest) r.table], ['chat_list_v2']);
       },
     );
 
@@ -468,7 +494,7 @@ void main() {
       expect(c.auth.currentUser, isNotNull, reason: 'no session to test with');
       final r = await SupabaseChatRepository(c).conversations();
       expect(r, isA<Err<List<Conversation>>>());
-      final rpcs = w.sent.where((u) => u.path.endsWith('/rpc/chat_list'));
+      final rpcs = w.sent.where((u) => u.path.endsWith('/rpc/chat_list_v2'));
       expect(rpcs, hasLength(2), reason: 'one try plus one retry: ${w.sent}');
     });
   });
@@ -532,7 +558,7 @@ void main() {
 
     final readyAt = wire.now;
     final reqs = wire.rest;
-    final members = reqs.firstWhere((r) => r.table == 'chat_list');
+    final members = reqs.firstWhere((r) => r.table == 'chat_list_v2');
     // A profiles read that overlaps the list's request can only be the
     // member's own profile.
     expect(
@@ -557,12 +583,12 @@ void main() {
           ].fold(0, max);
     }
     expect(
-      reqs.where((r) => r.table == 'chat_list'),
+      reqs.where((r) => r.table == 'chat_list_v2'),
       hasLength(1),
       reason: 'the list is one request: $reqs',
     );
     expect(
-      stage[reqs.firstWhere((r) => r.table == 'chat_list')],
+      stage[reqs.firstWhere((r) => r.table == 'chat_list_v2')],
       1,
       reason: 'the list waited for another request: $reqs',
     );
@@ -727,7 +753,7 @@ void main() {
       wire
         ..delay = const Duration(milliseconds: 1500)
         ..reset()
-        ..held.addAll(['chat_list', 'own_profile']);
+        ..held.addAll(['chat_list_v2', 'own_profile']);
       addTearDown(wire.release);
       c = app(marker: marker);
       await t.pumpWidget(
@@ -737,7 +763,8 @@ void main() {
       expect(
         [
           for (final r in wire.rest)
-            if ({'chat_list', 'own_profile'}.contains(r.table) && r.end != null)
+            if ({'chat_list_v2', 'own_profile'}.contains(r.table) &&
+                r.end != null)
               r,
         ],
         isEmpty,
@@ -751,7 +778,7 @@ void main() {
       wire.release();
       await pumpUntil(
         t,
-        () => wire.rest.any((r) => r.table == 'chat_list' && r.end != null),
+        () => wire.rest.any((r) => r.table == 'chat_list_v2' && r.end != null),
         "the server's list",
       );
       await t.pump(const Duration(milliseconds: 200));

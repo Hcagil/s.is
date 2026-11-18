@@ -122,6 +122,8 @@ Future<World> pumpList(WidgetTester t, {bool tr = false}) async {
 Future<void> select(WidgetTester t, List<String> ids) async {
   await t.longPress(byKey('conversation-${ids.first}'));
   await t.pumpAndSettle();
+  await t.tap(byKey('chat-menu-select'));
+  await t.pumpAndSettle();
   for (final id in ids.skip(1)) {
     await t.tap(byKey('conversation-$id'));
     await t.pumpAndSettle();

@@ -236,18 +236,6 @@ abstract class AppLocalizations {
   /// **'Great, I\'ll bring the cake'**
   String get previewMine;
 
-  /// Switch title
-  ///
-  /// In en, this message translates to:
-  /// **'Use the phone\'s own font'**
-  String get textSystemFont;
-
-  /// Switch subtitle
-  ///
-  /// In en, this message translates to:
-  /// **'Uses your phone\'s font. When off, SIS uses its own font.'**
-  String get textSystemFontHint;
-
   /// Section label
   ///
   /// In en, this message translates to:
@@ -5395,6 +5383,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No fresh status from your computer. It may be off or asleep.'**
   String get adminDashboardStale;
+
+  /// No description provided for @messageShowMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Show more'**
+  String get messageShowMore;
+
+  /// No description provided for @messageShowLess.
+  ///
+  /// In en, this message translates to:
+  /// **'Show less'**
+  String get messageShowLess;
 }
 
 class _AppLocalizationsDelegate

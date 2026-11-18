@@ -92,14 +92,6 @@
   "@previewMine": {
     "description": "Sample outgoing message in the live preview"
   },
-  "textSystemFont": "Use the phone's own font",
-  "@textSystemFont": {
-    "description": "Switch title"
-  },
-  "textSystemFontHint": "Uses your phone's font. When off, SIS uses its own font.",
-  "@textSystemFontHint": {
-    "description": "Switch subtitle"
-  },
   "textChatSize": "Chat text size",
   "@textChatSize": {
     "description": "Section label"
@@ -2030,5 +2022,7 @@
   "adminReasonGeneric": "Something went wrong. Try again.",
   "@adminReasonGeneric": {"description": "Admin panels screen text"},
   "adminDashboardStale": "No fresh status from your computer. It may be off or asleep.",
-  "@adminDashboardStale": {"description": "Admin panels screen text"}
+  "@adminDashboardStale": {"description": "Admin panels screen text"},
+  "messageShowMore": "Show more",
+  "messageShowLess": "Show less"
 }

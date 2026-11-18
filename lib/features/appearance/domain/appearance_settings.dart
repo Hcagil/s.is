@@ -28,7 +28,6 @@ const _keep = Object();
 final class AppearanceSettings {
   const AppearanceSettings({
     this.themeId = AppThemeId.violet,
-    this.systemFont = true,
     this.chatTextSize = TextSize.medium,
     this.appTextSize = TextSize.medium,
     this.language = AppLanguage.system,
@@ -39,7 +38,6 @@ final class AppearanceSettings {
   });
 
   final AppThemeId themeId;
-  final bool systemFont;
   final TextSize chatTextSize;
   final TextSize appTextSize;
   final AppLanguage language;
@@ -58,7 +56,6 @@ final class AppearanceSettings {
 
   AppearanceSettings copyWith({
     AppThemeId? themeId,
-    bool? systemFont,
     TextSize? chatTextSize,
     TextSize? appTextSize,
     AppLanguage? language,
@@ -69,7 +66,6 @@ final class AppearanceSettings {
   }) {
     return AppearanceSettings(
       themeId: themeId ?? this.themeId,
-      systemFont: systemFont ?? this.systemFont,
       chatTextSize: chatTextSize ?? this.chatTextSize,
       appTextSize: appTextSize ?? this.appTextSize,
       language: language ?? this.language,
@@ -111,7 +107,6 @@ final class AppearanceSettings {
   bool operator ==(Object other) =>
       other is AppearanceSettings &&
       other.themeId == themeId &&
-      other.systemFont == systemFont &&
       other.chatTextSize == chatTextSize &&
       other.appTextSize == appTextSize &&
       other.language == language &&
@@ -123,7 +118,6 @@ final class AppearanceSettings {
   @override
   int get hashCode => Object.hash(
     themeId,
-    systemFont,
     chatTextSize,
     appTextSize,
     language,

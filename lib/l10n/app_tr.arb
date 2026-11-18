@@ -23,8 +23,6 @@
   "appearanceBlur": "Bulanıklık",
   "previewTheirs": "Cumartesi için herkes hâlâ var mı?",
   "previewMine": "Harika, pastayı ben getiririm",
-  "textSystemFont": "Telefonun kendi yazı tipini kullan",
-  "textSystemFontHint": "Telefonunuzun yazı tipini kullanır. Kapalıyken SIS kendi yazı tipini kullanır.",
   "textChatSize": "Sohbet yazı boyutu",
   "textAppSize": "Uygulama yazı boyutu",
   "textAppSample": "Ayarlar ve sohbet listesi yazısı",
@@ -914,5 +912,7 @@
   "adminReasonDeskOnly": "Bunu yalnızca bilgisayarınızın başında yanıtlayabilirsiniz.",
   "adminReasonUnknownItem": "Bu öğe artık bilgisayarınızda yok.",
   "adminReasonGeneric": "Bir hata oluştu. Tekrar deneyin.",
-  "adminDashboardStale": "Bilgisayarınızdan güncel durum gelmiyor. Bilgisayarınız kapalı veya uykuda olabilir."
+  "adminDashboardStale": "Bilgisayarınızdan güncel durum gelmiyor. Bilgisayarınız kapalı veya uykuda olabilir.",
+  "messageShowMore": "Devamını oku",
+  "messageShowLess": "Daha az göster"
 }

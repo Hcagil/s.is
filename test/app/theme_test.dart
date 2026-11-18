@@ -50,7 +50,7 @@ void main() {
         expect(theme.colorScheme.primary, primary);
       });
 
-      test('sets text in the system font, not Manrope', () {
+      test('sets text in the bundled Inter font', () {
         final t = theme.textTheme;
         for (final style in [
           t.bodyMedium,
@@ -60,9 +60,7 @@ void main() {
           t.labelLarge,
           t.headlineSmall,
         ]) {
-          // No family of our own: the platform default, Roboto under test.
-          expect(style?.fontFamily, isNot('Manrope'));
-          expect(style?.fontFamily, 'Roboto');
+          expect(style?.fontFamily, 'Inter');
         }
       });
 

@@ -13,7 +13,6 @@ import 'package:sis/app/sis_app.dart';
 import 'package:sis/core/runtime_config.dart';
 import 'package:sis/features/auth/application/account_deletion_controller.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
-import 'package:sis/features/auth/domain/account_deletion_repository.dart';
 import 'package:sis/features/auth/domain/member.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/home/presentation/home_screen.dart';
@@ -60,6 +59,7 @@ SupabaseClient clientWith(int status, String body) {
     'https://example.supabase.co',
     'public-anon-key',
     httpClient: mock,
+    authOptions: const AuthClientOptions(autoRefreshToken: false),
   );
 }
 
@@ -118,12 +118,11 @@ void main() {
       expect(r, isNotNull);
     });
 
-    testWidgets('sign out after server returns unreadable answer',
-        (t) async {
+    testWidgets('sign out after server returns unreadable answer', (t) async {
       final auth = FakeAuth(session: true, member: mayaAccount);
       final repo = SupabaseAccountDeletionRepository(
         clientWith(200, jsonEncode('not-a-date')),
-        FakeAuth(),
+        auth,
       );
       await t.pumpWidget(
         ProviderScope(
@@ -144,8 +143,11 @@ void main() {
       await t.tap(byKey('account-delete-confirm'));
       await t.pumpAndSettle();
 
-      expect(auth.signOuts, 1,
-          reason: 'the request is on the server, so the phone must sign out');
+      expect(
+        auth.signOuts,
+        1,
+        reason: 'the request is on the server, so the phone must sign out',
+      );
     });
   });
 }

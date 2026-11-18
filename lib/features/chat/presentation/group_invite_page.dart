@@ -240,10 +240,7 @@ class _GroupInvitePageState extends ConsumerState<GroupInvitePage> {
         padding: const EdgeInsets.all(16),
         children: [
           if (_busy)
-            const LinearProgressIndicator(
-              key: ValueKey('invite-progress'),
-              minHeight: 2,
-            ),
+            const SisProgressLine(key: ValueKey('invite-progress')),
           InviteGroupHeader(
             title: widget.title,
             seed: id,

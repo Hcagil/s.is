@@ -98,8 +98,7 @@ class _GroupInvitePageState extends ConsumerState<GroupInvitePage> {
           style: Theme.of(context).textTheme.titleMedium,
         ),
         Text(l.groupInviteNoneBody, style: TextStyle(color: t.muted)),
-        if (_offline)
-          InviteRedBox(text: l.inviteNoInternet, keyId: 'invite-offline-box'),
+        ..._statusBoxes(l, l.inviteNoInternet),
         if (_offline)
           Text(l.groupInviteNoneOfflineBody, style: TextStyle(color: t.muted)),
         SizedBox(
@@ -121,6 +120,7 @@ class _GroupInvitePageState extends ConsumerState<GroupInvitePage> {
         content = [
           InviteLinkBox(text: text, grey: true),
           Text(l.groupInviteExpiredNote, style: TextStyle(color: t.muted)),
+          ..._statusBoxes(l, l.groupInviteOffline),
           SizedBox(
             width: double.infinity,
             child: FilledButton(
@@ -175,22 +175,7 @@ class _GroupInvitePageState extends ConsumerState<GroupInvitePage> {
         content = [
           Text(l.groupInviteHelp, style: TextStyle(color: t.muted)),
           InviteLinkBox(text: text),
-          if (_offline)
-            InviteRedBox(
-              text: l.groupInviteOffline,
-              keyId: 'invite-offline-box',
-            ),
-          if (_failed) ...[
-            InviteRedBox(
-              text: l.groupInviteSaveFailed,
-              keyId: 'invite-error-box',
-            ),
-            TextButton(
-              key: const ValueKey('invite-retry'),
-              onPressed: _retry,
-              child: Text(l.commonTryAgain),
-            ),
-          ],
+          ..._statusBoxes(l, l.groupInviteOffline),
           const SizedBox(height: 16),
           Card(
             color: t.surfaceHigh,
@@ -251,6 +236,19 @@ class _GroupInvitePageState extends ConsumerState<GroupInvitePage> {
       ),
     );
   }
+
+  /// The offline box, or the error box with Try again, of the last failed action.
+  List<Widget> _statusBoxes(AppLocalizations l, String offlineText) => [
+    if (_offline) InviteRedBox(text: offlineText, keyId: 'invite-offline-box'),
+    if (_failed) ...[
+      InviteRedBox(text: l.groupInviteSaveFailed, keyId: 'invite-error-box'),
+      TextButton(
+        key: const ValueKey('invite-retry'),
+        onPressed: _retry,
+        child: Text(l.commonTryAgain),
+      ),
+    ],
+  ];
 
   Widget _greyed(bool grey, String name, String label, Widget child) =>
       grey ? GreyOption(name: name, label: label, child: child) : child;

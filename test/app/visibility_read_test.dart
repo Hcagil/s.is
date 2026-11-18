@@ -9,7 +9,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sis/app/sis_app.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/core/runtime_config.dart';
+import 'package:sis/features/auth/application/account_deletion_controller.dart';
 import 'package:sis/features/auth/application/session_controller.dart';
+import 'package:sis/features/auth/domain/account_deletion_repository.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
 import 'package:sis/features/chat/domain/message.dart';
@@ -21,6 +23,15 @@ import 'package:sis/features/update/application/update_controller.dart';
 
 import '../support/fakes.dart';
 import '../support/video_fakes.dart';
+
+class _NoDeletions implements AccountDeletionRepository {
+  @override
+  Future<Result<DateTime>> requestDeletion() => throw UnimplementedError();
+
+  @override
+  Future<Result<Set<String>>> missingUsers(List<String> ids) async =>
+      const Ok(<String>{});
+}
 
 const config = RuntimeConfig(
   supabaseUrl: 'https://x.supabase.co',
@@ -87,6 +98,7 @@ void main() {
           profileRepositoryProvider.overrideWithValue(ProfileFake()),
           pushSourceProvider.overrideWithValue(PushSourceFake()),
           pushRegistryProvider.overrideWithValue(PushRegistryFake()),
+          accountDeletionRepositoryProvider.overrideWithValue(_NoDeletions()),
         ],
         child: const SisApp(),
       ),

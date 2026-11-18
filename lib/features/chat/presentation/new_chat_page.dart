@@ -100,7 +100,7 @@ class _NewChatPageState extends ConsumerState<NewChatPage> {
     return Scaffold(
       key: const ValueKey('new-chat-page'),
       appBar: AppBar(title: Text(l.pickerNewChat)),
-      body: Column(
+      body: ListView(
         children: [
           PickerSearchField(
             fieldKey: const ValueKey('find-by-tag-field'),
@@ -192,39 +192,40 @@ class _NewChatPageState extends ConsumerState<NewChatPage> {
             title: Text(l.findFromContacts),
             onTap: _openFromContacts,
           ),
-          Expanded(
-            child: switch (people) {
-              AsyncData(:final value) when value.isEmpty => ListTile(
-                title: Text(l.newChatEmpty),
+          ...switch (people) {
+            AsyncData(:final value) when value.isEmpty => [
+              ListTile(title: Text(l.newChatEmpty)),
+            ],
+            AsyncData(:final value) => [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: Text(l.commonYourPeople, style: header),
               ),
-              AsyncData(:final value) => ListView(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                    child: Text(l.commonYourPeople, style: header),
+              for (final m in value)
+                ListTile(
+                  key: ValueKey('member-${m.userId}'),
+                  leading: PersonAvatar(
+                    label: m.displayName,
+                    seed: m.userId,
+                    online: false,
+                    dotKey: ValueKey('picker-online-${m.userId}'),
+                    avatarPath: m.avatarPath,
                   ),
-                  for (final m in value)
-                    ListTile(
-                      key: ValueKey('member-${m.userId}'),
-                      leading: PersonAvatar(
-                        label: m.displayName,
-                        seed: m.userId,
-                        online: false,
-                        dotKey: ValueKey('picker-online-${m.userId}'),
-                        avatarPath: m.avatarPath,
-                      ),
-                      title: Text(m.displayName),
-                      subtitle: m.tag == null ? null : Text('@${m.tag}'),
-                      onTap: () => Navigator.of(context).pop(m),
-                    ),
-                ],
+                  title: Text(m.displayName),
+                  subtitle: m.tag == null ? null : Text('@${m.tag}'),
+                  onTap: () => Navigator.of(context).pop(m),
+                ),
+            ],
+            AsyncError(:final error) => [
+              ListTile(title: Text(failureReason(error))),
+            ],
+            _ => const [
+              Padding(
+                padding: EdgeInsets.all(24),
+                child: Center(child: SisLoadingLogo(size: 40)),
               ),
-              AsyncError(:final error) => ListTile(
-                title: Text(failureReason(error)),
-              ),
-              _ => const Center(child: SisLoadingLogo(size: 40)),
-            },
-          ),
+            ],
+          },
         ],
       ),
     );

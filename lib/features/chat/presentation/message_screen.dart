@@ -428,6 +428,8 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
       }
       _scroll.jumpTo(pixels);
       await WidgetsBinding.instance.endOfFrame;
+      // A newer scroll (an own send, a jump) took over while this one waited for the frame.
+      if (!mounted || generation != _generation) return;
       final ctx = _bubbleKeys[messageId]?.currentContext;
       if (ctx != null && ctx.mounted) {
         Scrollable.ensureVisible(
@@ -731,7 +733,11 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
       final live = !ref.read(messagesProvider.notifier).isJumped;
       if (live && appended && now.last.isFrom(me ?? '')) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _toLatest();
+          if (!mounted || !_scroll.hasClients) return;
+          _generation++; // stops a scroll to the unread line still running
+          _scroll.position.jumpTo(
+            0,
+          ); // at once: the new bubble shows in this frame
         });
       }
     });

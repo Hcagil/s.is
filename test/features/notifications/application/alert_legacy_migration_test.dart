@@ -192,4 +192,19 @@ void main() {
     expect(remote.chatsSaved, [('c1', const ChatAlert(sound: AlertChoice.on))]);
     expect((await prefs()).defaults.sound, isFalse);
   });
+
+  test('F3: an account that saved true/true keeps them over this phone off choice (cross-device)', () async {
+    store = JournalStore(
+      journal: journal,
+      defaults: const AlertDefaults(sound: false, vibration: false),
+    );
+    remote.loadResult = const Ok(RemoteAlerts(sound: true, vibration: true, chats: {}));
+    c = make();
+    final p = await prefs();
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    expect(p.defaults.sound, isTrue);
+    expect(p.defaults.vibration, isTrue);
+    expect(store.defaults.sound, isTrue);
+    expect(remote.defaultsSaved, isEmpty);
+  });
 }

@@ -307,6 +307,8 @@ has r14b "raise_to=110"
 dbc="${OLD_APP_DB_CONTAINER:-supabase_db_s.is}"
 if ! command -v docker >/dev/null 2>&1 || ! docker exec "$dbc" pg_isready -q >/dev/null 2>&1; then
   echo "old_app_raise_test: r15 skipped (local database $dbc not running)"
+elif [[ -z "$(docker exec "$dbc" psql -U postgres -qAt -c "select to_regclass('public.app_config')" 2>/dev/null || true)" ]]; then
+  echo "old_app_raise_test: r15 skipped (local database $dbc has no public.app_config, maybe mid-reset)"
 else
   sql=$(grep -F 'supabase db query --linked "update public.app_config' "$repo/.github/workflows/release.yml" | sed -n 's/.*db query --linked "\(update [^"]*\)".*/\1/p' | head -1)
   [[ -n "$sql" ]] || fail "r15: no guarded update found in release.yml"

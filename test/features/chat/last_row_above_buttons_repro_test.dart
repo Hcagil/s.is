@@ -38,22 +38,25 @@ Finder byKey(String key) => find.byKey(ValueKey(key));
 List<Conversation> rows() {
   final now = DateTime.now().toUtc();
   Conversation at(int i, Conversation c) => Conversation(
-        id: c.id,
-        title: c.title,
-        other: c.other,
-        isAdmin: c.isAdmin,
-        isSystem: c.isSystem,
-        lastMessage: 'hi ${c.id}',
-        lastMessageAt: now.subtract(Duration(minutes: i + 1)),
-        lastSenderId: c.other?.userId,
-      );
+    id: c.id,
+    title: c.title,
+    other: c.other,
+    isAdmin: c.isAdmin,
+    isSystem: c.isSystem,
+    lastMessage: 'hi ${c.id}',
+    lastMessageAt: now.subtract(Duration(minutes: i + 1)),
+    lastSenderId: c.other?.userId,
+  );
   final List<Conversation> list = [];
   for (var i = 0; i < 30; i++) {
     list.add(
-      at(i, Conversation(
-        id: 'c$i',
-        other: Member(userId: 'u$i', displayName: 'Person $i'),
-      )),
+      at(
+        i,
+        Conversation(
+          id: 'c$i',
+          other: Member(userId: 'u$i', displayName: 'Person $i'),
+        ),
+      ),
     );
   }
   return list;
@@ -113,8 +116,18 @@ Future<World> pumpList(WidgetTester t, {bool tr = false}) async {
 
 void main() {
   final records = [
-    (name: 'iPhone with bottom safe area', size: const Size(390, 844), ratio: 3.0, bottomInset: 34.0),
-    (name: 'plain Android', size: const Size(360, 640), ratio: 2.0, bottomInset: 0.0),
+    (
+      name: 'iPhone with bottom safe area',
+      size: const Size(390, 844),
+      ratio: 3.0,
+      bottomInset: 34.0,
+    ),
+    (
+      name: 'plain Android',
+      size: const Size(360, 640),
+      ratio: 2.0,
+      bottomInset: 0.0,
+    ),
   ];
 
   for (final s in records) {
@@ -138,25 +151,34 @@ void main() {
         // Scroll to the end
         for (var i = 0; i < 5; i++) {
           await t.fling(
-            find.byWidgetPredicate(
-              (w) => w is Scrollable && w.axis == Axis.vertical,
-            ).first,
+            find
+                .byWidgetPredicate(
+                  (w) => w is Scrollable && w.axis == Axis.vertical,
+                )
+                .first,
             const Offset(0, -2000),
             3000,
           );
           await t.pumpAndSettle();
         }
 
-        expect(byKey('conversation-c29'), findsOneWidget, reason: 'list did not reach the end');
+        expect(
+          byKey('conversation-c29'),
+          findsOneWidget,
+          reason: 'list did not reach the end',
+        );
 
         final lastRect = t.getRect(byKey('conversation-c29'));
         final chatRect = t.getRect(byKey('new-chat'));
         final groupRect = t.getRect(byKey('new-group'));
         final buttonsTop = min(chatRect.top, groupRect.top);
 
-        expect(lastRect.bottom <= buttonsTop, isTrue,
-            reason:
-                'last row: $lastRect, new-chat: $chatRect, new-group: $groupRect, rows hide ${lastRect.bottom - buttonsTop} px under the buttons');
+        expect(
+          lastRect.bottom <= buttonsTop,
+          isTrue,
+          reason:
+              'last row: $lastRect, new-chat: $chatRect, new-group: $groupRect, rows hide ${lastRect.bottom - buttonsTop} px under the buttons',
+        );
       },
     );
   }

@@ -590,4 +590,30 @@ void main() {
     expect(await rowsWithBody(t, body), hasLength(1));
     await unmount(t, c);
   }, timeout: const Timeout(Duration(seconds: 90)));
+
+  testWidgets(
+    'own send while the chat opened at unread messages: the new bubble is on screen',
+    (t) async {
+      final zane = SupabaseChatRepository(zaneClient);
+      for (var i = 0; i < 3; i++) {
+        final r = await t.runAsync(
+          () => zane.send(
+            id: randomMessageId(),
+            conversationId: conversationId,
+            body: 'unread $i ${DateTime.now().microsecondsSinceEpoch}',
+          ),
+        );
+        expect(r, isA<Ok<Message>>());
+      }
+      final relay = _Relay(SupabaseChatRepository(umutClient));
+      final c = await mount(t, relay);
+      final body = 'own after unread ${DateTime.now().microsecondsSinceEpoch}';
+      final stored = await sendAndAwaitEcho(t, c, relay, body);
+      expect(stored.body, body);
+      expectShownOnce(t, c, stored);
+      expect(await rowsWithBody(t, body), hasLength(1));
+      await unmount(t, c);
+    },
+    timeout: const Timeout(Duration(seconds: 90)),
+  );
 }

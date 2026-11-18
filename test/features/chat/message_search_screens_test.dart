@@ -596,6 +596,10 @@ void main() {
             .ancestor(of: row('g1-juice'), matching: find.byType(Scrollable))
             .first,
       );
+      t.view.physicalSize = const Size(1080, 3600);
+      t.view.devicePixelRatio = 3;
+      addTearDown(t.view.reset);
+      await t.pump();
       await t.tap(row('c1-20'));
       await settle(t, 40);
 
@@ -623,6 +627,10 @@ void main() {
             .first,
       );
       final holds = [for (var i = 0; i < 3; i++) w.chat.holdAround()];
+      t.view.physicalSize = const Size(1080, 3600);
+      t.view.devicePixelRatio = 3;
+      addTearDown(t.view.reset);
+      await t.pump();
       await t.tap(row('c1-20'));
       await settle(t, 10);
       // The last asked answers first, the first asked last.
@@ -675,6 +683,10 @@ void main() {
             .ancestor(of: row('g1-juice'), matching: find.byType(Scrollable))
             .first,
       );
+      t.view.physicalSize = const Size(1080, 3600);
+      t.view.devicePixelRatio = 3;
+      addTearDown(t.view.reset);
+      await t.pump();
       await t.tap(row('c1-20'));
       await settle(t, 40);
       expect(find.byType(MessageScreen), findsOneWidget);

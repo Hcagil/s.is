@@ -14,6 +14,7 @@ import 'chat_undo_bar.dart';
 import '../domain/message.dart';
 import '../application/chat_controllers.dart';
 import '../application/chat_delete_controller.dart';
+import '../application/chat_list_filter.dart';
 import '../application/chat_selection_controller.dart';
 import '../application/message_opener.dart';
 import '../domain/conversation.dart';
@@ -34,6 +35,7 @@ class ConversationList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l = AppLocalizations.of(context);
     final conversations = ref.watch(conversationListProvider);
+    final groupsOnly = ref.watch(chatListGroupsOnlyProvider);
     final hasArchived = ref.watch(
       archivedChatsProvider.select((a) => a.isNotEmpty),
     );
@@ -69,6 +71,7 @@ class ConversationList extends ConsumerWidget {
       body: Column(
         children: [
           const _ListSearchField(),
+          const _FilterChips(),
           Expanded(
             child: !isSearchable(searchQuery)
                 ? switch (conversations) {
@@ -79,6 +82,7 @@ class ConversationList extends ConsumerWidget {
                       ref,
                       value,
                       hasArchived,
+                      groupsOnly,
                     ),
                     AsyncError(:final error) => _Failed(
                       reason: failureReason(error),
@@ -130,11 +134,12 @@ Widget _visibleList(
   WidgetRef ref,
   List<Conversation> all,
   bool hasArchived,
+  bool groupsOnly,
 ) {
   final l = AppLocalizations.of(context);
   final shown = [
     for (final c in all)
-      if (!c.archived) c,
+      if (!c.archived && (!groupsOnly || c.isGroup)) c,
   ];
   final pinned = [
     for (final c in shown)
@@ -170,6 +175,57 @@ Widget _visibleList(
     },
     onRefresh: () => ref.read(conversationListProvider.notifier).refresh(),
   );
+}
+
+/// "All" / "Groups" pills above the list. The pick stays while the app lives (see chatListGroupsOnlyProvider); no unread counts on the pills.
+class _FilterChips extends ConsumerWidget {
+  const _FilterChips();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l = AppLocalizations.of(context);
+    final groupsOnly = ref.watch(chatListGroupsOnlyProvider);
+    final copper = Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFFC58B68)
+        : const Color(0xFF9A5F3D);
+    Widget chip(Key key, String label, bool selected, bool groups) =>
+        ChoiceChip(
+          key: key,
+          label: Text(label),
+          selected: selected,
+          showCheckmark: false,
+          shape: StadiumBorder(
+            side: BorderSide(
+              color: selected
+                  ? copper.withValues(alpha: 0.5)
+                  : Colors.transparent,
+            ),
+          ),
+          selectedColor: copper.withValues(alpha: 0.25),
+          onSelected: (_) =>
+              ref.read(chatListGroupsOnlyProvider.notifier).set(groups),
+        );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      child: Row(
+        children: [
+          chip(
+            const ValueKey('filter-all'),
+            l.listFilterAll,
+            !groupsOnly,
+            false,
+          ),
+          const SizedBox(width: 8),
+          chip(
+            const ValueKey('filter-groups'),
+            l.listFilterGroups,
+            groupsOnly,
+            true,
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// "Pinned" / "Chats" above a group of rows, shown only while a chat is

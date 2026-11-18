@@ -23,8 +23,8 @@ grant select, insert, update, delete on table public.chat_alert_settings to auth
 
 create policy chat_alert_settings_own on public.chat_alert_settings
   for all to authenticated
-  using (app_private.has_app_access() and user_id = (select auth.uid()))
-  with check (app_private.has_app_access() and user_id = (select auth.uid()) and app_private.is_member(conversation_id));
+  using ((select app_private.has_app_access()) and user_id = (select auth.uid()))
+  with check ((select app_private.has_app_access()) and user_id = (select auth.uid()) and app_private.is_member(conversation_id));
 
 create function public.push_alerts(conversation uuid, users uuid[])
 returns table (user_id uuid, sound boolean, vibration boolean)

@@ -4922,6 +4922,18 @@ abstract class AppLocalizations {
   /// **'No open questions'**
   String get adminQuestionsEmpty;
 
+  /// Label on an admin question card: the Talk conversation it came from
+  ///
+  /// In en, this message translates to:
+  /// **'From {conv}'**
+  String adminQuestionFromLabel(String conv);
+
+  /// Count of open questions on an admin question group header
+  ///
+  /// In en, this message translates to:
+  /// **'{n} to answer'**
+  String adminQuestionCountText(int n);
+
   /// Admin panels screen text
   ///
   /// In en, this message translates to:

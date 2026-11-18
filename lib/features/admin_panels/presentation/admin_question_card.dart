@@ -62,6 +62,12 @@ class AdminQuestionCard extends StatelessWidget {
               ],
             ),
           ),
+          if (question.conv case final conv?)
+            Text(
+              AppLocalizations.of(context).adminQuestionFromLabel(conv),
+              key: ValueKey('admin-question-conv-${question.id}'),
+              style: TextStyle(color: t.muted),
+            ),
           if (expanded && question.ctx.isNotEmpty)
             Text(question.ctx, style: TextStyle(color: t.muted)),
           // The status stays on the closed header too.

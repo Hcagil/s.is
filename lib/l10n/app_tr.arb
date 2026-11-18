@@ -836,6 +836,8 @@
   "adminWaiting": "Gönderildi, henüz okunmadı",
   "adminTalkAbout": "Bunun hakkında konuş",
   "adminQuestionsEmpty": "Açık soru yok",
+  "adminQuestionFromLabel": "Kaynak: {conv}",
+  "adminQuestionCountText": "{n} soru yanıt bekliyor",
   "adminBoxM": "Manager",
   "adminBoxC": "AI Control",
   "adminBoxS": "Support",

@@ -20,6 +20,7 @@ const _key = String.fromEnvironment(
   'SUPABASE_TEST_KEY',
   defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
 );
+const _password = 'int-pw';
 
 Future<SupabaseClient> _signedIn(String email) async {
   final client = SupabaseClient(
@@ -27,14 +28,14 @@ Future<SupabaseClient> _signedIn(String email) async {
     _key,
     authOptions: const AuthClientOptions(authFlowType: AuthFlowType.implicit),
   );
-  await setLocalTestPassword(_url, email, localTestPassword);
+  await setLocalTestPassword(_url, email, _password);
   try {
     await client.auth.signInWithPassword(
       email: email,
-      password: localTestPassword,
+      password: _password,
     );
   } on AuthException {
-    await client.auth.signUp(email: email, password: localTestPassword);
+    await client.auth.signUp(email: email, password: _password);
   }
   expect(client.auth.currentUser, isNotNull, reason: 'sign-in failed');
   expect(await client.rpc('activate_session'), isTrue);

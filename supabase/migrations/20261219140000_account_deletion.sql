@@ -1,4 +1,5 @@
 -- Delete my account: tables, Vault key, HMAC helper (part 1).
+-- raise-minimum: builds before the one that ships this migration cannot show the "Deleted account" label or ask for the re-sign-in a deletion can need (owner Q-M-00310).
 
 -- one row per pending deletion; the row cascades away when the auth user is deleted
 create table app_private.account_deletions (

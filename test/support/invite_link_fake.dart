@@ -11,6 +11,12 @@ class InviteLinkFake implements InviteLinkRepository {
 
   final Duration latency;
 
+  /// Group setting new_members_see_history per conversation (null = server silent).
+  final seeHistory = <String, bool?>{};
+
+  /// Joined-by-link events returned per conversation.
+  final joinEventList = <String, List<GroupEvent>>{};
+
   /// Conversations where the caller is an admin.
   final admins = <String>{};
 
@@ -80,6 +86,7 @@ class InviteLinkFake implements InviteLinkRepository {
       expiresAt: validDays == null
           ? null
           : DateTime.now().add(Duration(days: validDays)),
+      validDays: validDays,
     );
     _links[conversationId] = link;
     return Ok(link);
@@ -111,6 +118,7 @@ class InviteLinkFake implements InviteLinkRepository {
       expiresAt: validDays == null
           ? null
           : DateTime.now().add(Duration(days: validDays)),
+      validDays: validDays,
     );
     _links[conversationId] = updated;
     return Ok(updated);
@@ -165,6 +173,7 @@ class InviteLinkFake implements InviteLinkRepository {
         title: titles[conv] ?? 'Team',
         memberCount: members[conv] ?? 2,
         avatarPath: null,
+        newMembersSeeHistory: seeHistory[conv],
       ),
     );
   }
@@ -211,7 +220,7 @@ class InviteLinkFake implements InviteLinkRepository {
       failNext = null;
       return Err(f);
     }
-    return Ok(const []);
+    return Ok(joinEventList[conversationId] ?? const []);
   }
 
   /// Helper to expire a stored link for a conversation.
@@ -222,6 +231,7 @@ class InviteLinkFake implements InviteLinkRepository {
         token: link.token,
         createdAt: link.createdAt,
         expiresAt: DateTime.now().subtract(const Duration(hours: 1)),
+        validDays: link.validDays,
       );
     }
   }

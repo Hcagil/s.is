@@ -72,8 +72,8 @@ select grp('ES','ie-s'); select mem('ES','01','admin',9); select mem('ES','02','
 select grp('EB','ie-b'); select mem('EB','01','admin',9); select mem('EB','bot','member',9); update public.conversations set debug_chat = true where id = g('EB');
 insert into app_private.bot_accounts(user_id, debug_conversation, enabled) values (u('bot'), g('EB'), true);
 select commit_check();
-create temp table t1(token text, created_at timestamptz, expires_at timestamptz);
-create temp table t2(token text, created_at timestamptz, expires_at timestamptz);
+create temp table t1(token text, created_at timestamptz, expires_at timestamptz, limit_days int);
+create temp table t2(token text, created_at timestamptz, expires_at timestamptz, limit_days int);
 grant all on t1, t2 to authenticated;
 select as_('01');
 insert into t1 select * from public.reset_invite_link(g('E1'), 1);

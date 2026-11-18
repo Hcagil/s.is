@@ -201,7 +201,7 @@ select throws_ok(format('select * from public.reset_invite_link(%L, null)', g('G
 reset role;
 -- reset
 reset role;
-create temp table t1(token text, created_at timestamptz, expires_at timestamptz);
+create temp table t1(token text, created_at timestamptz, expires_at timestamptz, limit_days int);
 grant all on t1 to authenticated;
 select as_('01');
 select is((select count(*)::int from public.get_invite_link(g('G1'))), 0, 'no link before the first reset');                       -- test 1

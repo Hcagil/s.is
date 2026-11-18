@@ -5,6 +5,7 @@ import '../../../app/theme.dart';
 import '../../../core/date_label.dart';
 import '../../../l10n/app_localizations.dart';
 import '../domain/timeline.dart';
+import 'unread_divider.dart';
 
 /// The day chip's text: "Today", the day and month this year, else with the year.
 String dayChipLabel(AppLocalizations l, DateTime at, DateTime now) {
@@ -51,23 +52,30 @@ class DayChip extends StatelessWidget {
   }
 }
 
-/// Wraps an itemBuilder of the reversed message list: a row that starts a new local day gets a [DayChip] above it. The row keeps its own key (a Column holds both), and the loader row past the end is left alone.
+/// Wraps an itemBuilder of the reversed message list: a row that starts a new local day gets a [DayChip] above it. The row keeps its own key (a Column holds both), and the loader row past the end is left alone. The row holding [unreadFromId] also gets an [UnreadDivider] under the day chip.
 IndexedWidgetBuilder withDayChips(
   List<TimelineEntry> timeline,
-  IndexedWidgetBuilder rows,
-) => (context, i) {
+  IndexedWidgetBuilder rows, {
+  String? unreadFromId,
+}) => (context, i) {
   final row = rows(context, i);
   if (i >= timeline.length) return row;
   final entry = timeline[timeline.length - 1 - i];
   final olderIndex = timeline.length - 2 - i;
-  if (olderIndex >= 0 && isSameLocalDay(timeline[olderIndex].at, entry.at)) {
-    return row;
-  }
+  final newDay =
+      !(olderIndex >= 0 && isSameLocalDay(timeline[olderIndex].at, entry.at));
+  final unread =
+      unreadFromId != null &&
+      entry is MessageEntry &&
+      (entry.message.id == unreadFromId ||
+          entry.album.any((m) => m.id == unreadFromId));
+  if (!newDay && !unread) return row;
   return Column(
     mainAxisSize: MainAxisSize.min,
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      DayChip(at: entry.at, now: DateTime.now()),
+      if (newDay) DayChip(at: entry.at, now: DateTime.now()),
+      if (unread) const UnreadDivider(),
       row,
     ],
   );

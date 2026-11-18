@@ -38,12 +38,29 @@ final alertPrefsProvider = AsyncNotifierProvider<AlertController, AlertPrefs>(
 class AlertController extends AsyncNotifier<AlertPrefs> {
   @override
   Future<AlertPrefs> build() async {
-    ref.watch(
-      currentUserIdProvider,
-    ); // a switch of account loads that account's copy
+    // A switch of account loads that account's copy.
+    final uid = ref.watch(currentUserIdProvider);
     final store = ref.read(alertStoreProvider);
-    final defaults = await store.loadDefaults();
-    final chats = await store.loadChats();
+    final stored = await store.loadDefaults();
+    final storedChats = await store.loadChats();
+    // The phone keeps one set of choices; they belong to the account that wrote them (owner). Another account starts from the defaults and uploads nothing of them. owner null = written before this was tracked: it is the signed-in account's (the one-time copy up).
+    final foreign = uid != null && stored.owner != null && stored.owner != uid;
+    final defaults = (foreign ? const AlertDefaults() : stored).withOwner(
+      uid ?? stored.owner,
+    );
+    final chats = foreign ? <String, ChatAlert>{} : storedChats;
+    if (uid != null && (foreign || stored.owner == null)) {
+      try {
+        await store.saveDefaults(defaults);
+        if (foreign) {
+          for (final id in storedChats.keys) {
+            await store.saveChat(id, const ChatAlert());
+          }
+        }
+      } catch (_) {
+        // Housekeeping: the next start tries again; the account's copy wins then.
+      }
+    }
     final local = AlertPrefs(defaults: defaults, chats: chats);
 
     final remote = ref.read(alertRemoteProvider);
@@ -54,6 +71,7 @@ class AlertController extends AsyncNotifier<AlertPrefs> {
       final r = value;
       if (r.sound == null && r.vibration == null && r.chats.isEmpty) {
         // The account has nothing saved yet: upload what the phone has.
+        if (foreign) return local;
         await remote.saveDefaults(
           sound: defaults.sound,
           vibration: defaults.vibration,
@@ -98,10 +116,16 @@ class AlertController extends AsyncNotifier<AlertPrefs> {
       );
       if (r case Err()) return r;
     }
-    await ref.read(alertStoreProvider).saveDefaults(next);
+    final owned = next.withOwner(ref.read(currentUserIdProvider));
+    try {
+      await ref.read(alertStoreProvider).saveDefaults(owned);
+    } catch (_) {
+      // The account has it; the phone copy catches up at the next start.
+      return Err(NetworkFailure.localized((s) => s.failGeneric));
+    }
     final current = state.value;
     if (ref.mounted && current != null) {
-      state = AsyncData(AlertPrefs(defaults: next, chats: current.chats));
+      state = AsyncData(AlertPrefs(defaults: owned, chats: current.chats));
     }
     return const Ok(null);
   }
@@ -114,7 +138,12 @@ class AlertController extends AsyncNotifier<AlertPrefs> {
       final r = await remote.saveChat(conversationId, next);
       if (r case Err()) return r;
     }
-    await ref.read(alertStoreProvider).saveChat(conversationId, next);
+    try {
+      await ref.read(alertStoreProvider).saveChat(conversationId, next);
+    } catch (_) {
+      // The account has it; the phone copy catches up at the next start.
+      return Err(NetworkFailure.localized((s) => s.failGeneric));
+    }
     final current = state.value;
     if (ref.mounted && current != null) {
       state = AsyncData(

@@ -17,7 +17,11 @@ enum AlertChoice {
 
 /// The member's global sound and vibration settings.
 final class AlertDefaults {
+  /// The account these choices belong to; null = saved before the phone tracked it (kept for the one-time copy to the account). Not part of ==.
+  final String? owner;
+
   const AlertDefaults({
+    this.owner,
     this.sound = true,
     this.tone,
     this.toneName,
@@ -39,6 +43,7 @@ final class AlertDefaults {
     tone: tone,
     toneName: toneName,
     vibration: vibration ?? this.vibration,
+    owner: owner,
   );
 
   /// Sets both tone and name, either of them to null.
@@ -47,6 +52,16 @@ final class AlertDefaults {
     tone: tone,
     toneName: toneName,
     vibration: vibration,
+    owner: owner,
+  );
+
+  /// Returns a copy with the given owner.
+  AlertDefaults withOwner(String? owner) => AlertDefaults(
+    sound: sound,
+    tone: tone,
+    toneName: toneName,
+    vibration: vibration,
+    owner: owner,
   );
 
   Map<String, Object?> toJson() => {
@@ -54,6 +69,7 @@ final class AlertDefaults {
     't': tone,
     'n': toneName,
     'v': vibration,
+    if (owner != null) 'o': owner,
   };
 
   static AlertDefaults fromJson(Map<String, Object?> j) => AlertDefaults(
@@ -61,6 +77,7 @@ final class AlertDefaults {
     tone: j['t'] as String?,
     toneName: j['n'] as String?,
     vibration: j['v'] as bool? ?? true,
+    owner: j['o'] as String?,
   );
 
   @override

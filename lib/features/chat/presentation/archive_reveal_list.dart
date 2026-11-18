@@ -16,6 +16,7 @@ class ArchiveRevealList extends StatefulWidget {
     required this.itemBuilder,
     required this.separatorBuilder,
     required this.onRefresh,
+    this.bottomPadding = 0,
   });
 
   /// null = no archived chats: plain list, no hidden row
@@ -24,6 +25,9 @@ class ArchiveRevealList extends StatefulWidget {
   final IndexedWidgetBuilder itemBuilder;
   final IndexedWidgetBuilder separatorBuilder;
   final Future<void> Function() onRefresh;
+
+  /// Empty room under the last row, so floating buttons never cover it.
+  final double bottomPadding;
 
   @override
   State<ArchiveRevealList> createState() => _ArchiveRevealListState();
@@ -82,6 +86,7 @@ class _ArchiveRevealListState extends State<ArchiveRevealList> {
                   return SliverToBoxAdapter(child: SizedBox(height: filler));
                 },
               ),
+            SliverToBoxAdapter(child: SizedBox(height: widget.bottomPadding)),
           ],
         ),
       ),

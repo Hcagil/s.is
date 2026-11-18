@@ -1,9 +1,10 @@
 -- Per-chat alert sound and vibration settings, with account-level defaults.
 -- The push sender (service_role) reads the resolved values via public.push_alerts.
 
+-- NULL = never saved from the app: the phone's own choice is copied up once at its first start; the push function reads NULL as on.
 alter table public.notification_settings
-  add column alert_sound boolean not null default true,
-  add column alert_vibration boolean not null default true;
+  add column alert_sound boolean,
+  add column alert_vibration boolean;
 
 create table public.chat_alert_settings (
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,

@@ -38,10 +38,6 @@ class AppearanceController extends Notifier<AppearanceSettings> {
   Future<void> setTheme(AppThemeId themeId) =>
       _update(state.copyWith(themeId: themeId, customThemeId: null));
 
-  /// Sets whether the phone's own font is used (off: SIS's own font).
-  Future<void> setSystemFont(bool systemFont) =>
-      _update(state.copyWith(systemFont: systemFont));
-
   /// Sets the chat text size.
   Future<void> setChatTextSize(TextSize chatTextSize) =>
       _update(state.copyWith(chatTextSize: chatTextSize));

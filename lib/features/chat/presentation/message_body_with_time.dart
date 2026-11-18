@@ -88,6 +88,8 @@ class _BodyWithTime extends StatelessWidget {
     // RTL locales ever ship.
     final fits =
         direction != TextDirection.rtl &&
+        // A folded long message changes height when opened, so it keeps the own-row layout.
+        message.body.length <= foldMessageAfter &&
         lastLineWidth + _gap + timeWidth <= maxContentWidth;
 
     final timeWidget = _TimeTick(

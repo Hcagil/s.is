@@ -701,7 +701,13 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
       Allowed(:final member) => member,
       _ => null,
     };
+    // Until the roster arrives, the stored chat list already holds each other
+    // member's name and colour slot (Conversation.senders): no "Member" flash.
+    final stored = isGroup ? listed?.senders : null;
     final names = {
+      if (stored != null)
+        for (final e in stored.entries)
+          if (e.value.name.isNotEmpty) e.key: e.value.name,
       for (final m in roster)
         m.member.userId: nameOrMember(
           AppLocalizations.of(context),
@@ -720,7 +726,11 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
         if (m.hasLeft) m.member.userId,
     };
     // Each sender's colour slot, from the group's roster (empty in a 1:1).
-    final slotByUser = {for (final m in roster) m.member.userId: m.colorSlot};
+    final slotByUser = {
+      if (stored != null)
+        for (final e in stored.entries) e.key: e.value.slot,
+      for (final m in roster) m.member.userId: m.colorSlot,
+    };
     // Keeps the read and delivery marks loaded and live for the whole chat
     // (an auto-dispose provider the rows would otherwise only start when one
     // of your own messages is on screen). The select never changes, so this

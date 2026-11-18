@@ -5401,6 +5401,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No fresh status from your computer. It may be off or asleep.'**
   String get adminDashboardStale;
+
+  /// No description provided for @messageShowMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Show more'**
+  String get messageShowMore;
+
+  /// No description provided for @messageShowLess.
+  ///
+  /// In en, this message translates to:
+  /// **'Show less'**
+  String get messageShowLess;
 }
 
 class _AppLocalizationsDelegate

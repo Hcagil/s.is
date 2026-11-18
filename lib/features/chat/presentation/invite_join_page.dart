@@ -31,7 +31,7 @@ class _InviteJoinPageState extends ConsumerState<InviteJoinPage> {
     final navigator = Navigator.of(context);
     navigator.popUntil((route) => route.isFirst);
     await openConversation(
-      navigator.context,
+      navigator.overlay!.context,
       ref,
       widget.preview.conversationId,
       title: widget.preview.title,
@@ -52,10 +52,11 @@ class _InviteJoinPageState extends ConsumerState<InviteJoinPage> {
       case Ok(:final value):
         await ref.read(conversationListProvider.notifier).refresh();
         if (!mounted) return;
+        // The notice lives in the root overlay, so it stays after this page is popped.
+        showSisNotice(context, l.inviteJoinedToast);
         navigator.popUntil((route) => route.isFirst);
-        showSisNotice(navigator.context, l.inviteJoinedToast);
         await openConversation(
-          navigator.context,
+          navigator.overlay!.context,
           ref,
           value,
           title: widget.preview.title,

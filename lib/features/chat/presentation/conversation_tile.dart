@@ -408,20 +408,7 @@ class ConversationTile extends ConsumerWidget {
         return;
       }
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            SnackBar(
-              duration: const Duration(seconds: 5),
-              // A SnackBar with an action stays up by default; it must time out.
-              persist: false,
-              content: Text(l.chatMarkedUnread),
-              action: SnackBarAction(
-                label: l.chatDeleteUndo,
-                onPressed: () => list.markRead(conversation.id),
-              ),
-            ),
-          );
+        showSisNotice(context, l.chatMarkedUnread);
       }
       return;
     }

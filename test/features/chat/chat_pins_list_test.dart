@@ -230,7 +230,7 @@ void main() {
 
   testWidgets('6th pin shows notice and does not pin', (WidgetTester t) async {
     // A tall phone, so all six rows are on screen.
-    t.view.physicalSize = const Size(1080, 2400);
+    t.view.physicalSize = const Size(1080, 3600);
     t.view.devicePixelRatio = 3;
     addTearDown(t.view.reset);
     final pins = ChatPinFake(pinned: {'p1', 'p2', 'p3', 'p4', 'p5'});

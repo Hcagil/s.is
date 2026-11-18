@@ -878,6 +878,24 @@ abstract class AppLocalizations {
   /// **'Chats'**
   String get listChatsHeader;
 
+  /// Line above the first unread message when a chat opens (no number)
+  ///
+  /// In en, this message translates to:
+  /// **'Unread messages'**
+  String get chatUnreadDivider;
+
+  /// Chat list filter chip: every chat
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get listFilterAll;
+
+  /// Chat list filter chip: group chats only
+  ///
+  /// In en, this message translates to:
+  /// **'Groups'**
+  String get listFilterGroups;
+
   /// Long-press card row: hide on my devices only
   ///
   /// In en, this message translates to:

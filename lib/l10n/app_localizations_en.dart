@@ -80,13 +80,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get previewMine => 'Great, I\'ll bring the cake';
 
   @override
-  String get textSystemFont => 'Use the phone\'s own font';
-
-  @override
-  String get textSystemFontHint =>
-      'Uses your phone\'s font. When off, SIS uses its own font.';
-
-  @override
   String get textChatSize => 'Chat text size';
 
   @override
@@ -3282,4 +3275,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get inviteRemovedBody => 'Only a group admin can add you back.';
+
+  @override
+  String get messageShowMore => 'Show more';
+
+  @override
+  String get messageShowLess => 'Show less';
 }

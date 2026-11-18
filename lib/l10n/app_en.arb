@@ -92,14 +92,6 @@
   "@previewMine": {
     "description": "Sample outgoing message in the live preview"
   },
-  "textSystemFont": "Use the phone's own font",
-  "@textSystemFont": {
-    "description": "Switch title"
-  },
-  "textSystemFontHint": "Uses your phone's font. When off, SIS uses its own font.",
-  "@textSystemFontHint": {
-    "description": "Switch subtitle"
-  },
   "textChatSize": "Chat text size",
   "@textChatSize": {
     "description": "Section label"
@@ -2130,5 +2122,7 @@
   "inviteRemovedTitle": "You were removed",
   "@inviteRemovedTitle": {"description": "Invite by link: Page title"},
   "inviteRemovedBody": "Only a group admin can add you back.",
-  "@inviteRemovedBody": {"description": "Invite by link: Refusal text (Q-M-00319)"}
+  "@inviteRemovedBody": {"description": "Invite by link: Refusal text (Q-M-00319)"},
+  "messageShowMore": "Show more",
+  "messageShowLess": "Show less"
 }

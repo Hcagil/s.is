@@ -5,6 +5,7 @@
     "body": "edge seam hello",
     "user_id": "<user>",
     "message_id": "<message>",
+    "sender_id": "<sender>",
     "sender": "Ann Sender",
     "chat": "Edge Team",
     "badge": "1"
@@ -33,6 +34,7 @@
     "body": "edge direct hello",
     "user_id": "<user>",
     "message_id": "<message>",
+    "sender_id": "<sender>",
     "badge": "1"
   }
 }

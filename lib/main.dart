@@ -39,6 +39,7 @@ import 'features/auth/data/secure_session_storage.dart';
 import 'features/auth/data/supabase_auth_repository.dart';
 import 'features/chat/application/chat_controllers.dart';
 import 'features/chat/application/invite_link_controller.dart';
+import 'features/chat/application/pending_push_messages_provider.dart';
 import 'features/chat/application/staff_registry_controller.dart';
 import 'features/chat/application/link_preview_controller.dart';
 import 'features/chat/application/encrypted_reply_controller.dart';
@@ -80,6 +81,7 @@ import 'features/chat/data/share_plus_text_sharer.dart';
 import 'features/chat/data/share_plus_video_sharer.dart';
 import 'features/chat/data/shared_prefs_contacts_disclosure_store.dart';
 import 'features/chat/data/shared_prefs_played_voice_store.dart';
+import 'features/chat/data/shared_prefs_pending_push_messages.dart';
 import 'features/chat/data/shared_prefs_recent_sticker_store.dart';
 import 'features/chat/data/speech_dictation.dart';
 import 'features/chat/data/supabase_admin_chat_repository.dart';
@@ -178,7 +180,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // The bundled fonts are OFL: their licences ship with them.
   LicenseRegistry.addLicense(() async* {
-    for (final font in ['manrope', 'sora']) {
+    for (final font in ['inter', 'sora']) {
       yield LicenseEntryWithLineBreaks([
         font,
       ], await rootBundle.loadString('assets/fonts/OFL-$font.txt'));
@@ -252,7 +254,12 @@ Future<void> main() async {
     unawaited(
       DriftMessageStore.prefetchKey(
         () => StoreKey.inGroup(keychainGroup).peek(),
-      ).then((_) => DriftMessageStore.warmOpen(storeFile)),
+      ).then(
+        (_) => DriftMessageStore.warmOpen(
+          storeFile,
+          preload: DriftChatListSnapshotStore.readSnapshot,
+        ),
+      ),
     );
     // The two preference reads and the Supabase start run together.
     final (appearanceOverrides, autoDownloadOverrides, _) = await (
@@ -477,6 +484,9 @@ Future<void> main() async {
             ref.watch(messageStoreProvider);
             return DriftChatListSnapshotStore(builtStore!);
           }),
+          pendingPushMessagesProvider.overrideWithValue(
+            const SharedPrefsPendingPushMessages(),
+          ),
           reactionStoreProvider.overrideWith((ref) {
             ref.watch(messageStoreProvider);
             return DriftReactionStore(builtStore!);

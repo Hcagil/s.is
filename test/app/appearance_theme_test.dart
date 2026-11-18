@@ -15,22 +15,19 @@ const white = Color(0xFFFFFFFF);
 void main() {
   group('sisTheme', () {
     for (final b in Brightness.values) {
-      test('$b: system font means no family, off means Manrope', () {
-        final system = sisTheme(b);
-        final own = sisTheme(b, systemFont: false);
-        for (final style in [
-          system.textTheme.bodyMedium,
-          system.textTheme.titleLarge,
-        ]) {
-          // No family of our own (fontFamily null): the platform default,
-          // which is Roboto under test.
-          expect(style?.fontFamily, 'Roboto');
-        }
-        for (final style in [
-          own.textTheme.bodyMedium,
-          own.textTheme.titleLarge,
-        ]) {
-          expect(style?.fontFamily, 'Manrope');
+      test('$b: every text style uses Inter, for all palettes', () {
+        for (final id in AppThemeId.values) {
+          final theme = sisTheme(b, theme: id);
+          for (final style in [
+            theme.textTheme.bodyMedium,
+            theme.textTheme.bodyLarge,
+            theme.textTheme.titleMedium,
+            theme.textTheme.titleLarge,
+            theme.textTheme.labelLarge,
+            theme.textTheme.headlineSmall,
+          ]) {
+            expect(style?.fontFamily, 'Inter');
+          }
         }
       });
 

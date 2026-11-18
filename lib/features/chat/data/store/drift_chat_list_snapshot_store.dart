@@ -28,39 +28,49 @@ class DriftChatListSnapshotStore
   @override
   Future<({List<Conversation> list, List<Message> push})?> loadWithPush(
     String ownerId,
-  ) {
-    if (ownerId != _store.ownerId) return Future.value(null);
-    return _store.run<({List<Conversation> list, List<Message> push})?>(null, (
-      db,
-    ) async {
-      StartupMarks.mark('snap-read-start');
-      final metaRow = await (db.select(
-        db.meta,
-      )..where((m) => m.key.equals('chat_list_saved'))).getSingleOrNull();
-      if (metaRow == null) return null;
+  ) async {
+    if (ownerId != _store.ownerId) return null;
+    // Cold start: warmOpen already read the list while Supabase started.
+    final pre = await DriftMessageStore.takePreloaded(ownerId);
+    if (pre is ({List<Conversation> list, List<Message> push})) return pre;
+    return _store.run<({List<Conversation> list, List<Message> push})?>(
+      null,
+      (db) => readSnapshot(db, onCorrupt: clear),
+    );
+  }
 
-      final rows = await (db.select(
-        db.conversations,
-      )..orderBy([(c) => OrderingTerm.asc(c.sortAt)])).get();
-      // Best effort, as before: a failed push read never costs the list.
-      var push = const <Message>[];
-      try {
-        push = await readPushInbox(db);
-      } catch (_) {}
-      StartupMarks.mark('snap-read-done');
-      try {
-        final list = rows.map((row) {
-          final json = jsonDecode(row.json) as Map<String, Object?>;
-          return Conversation.fromJson(json);
-        }).toList();
-        StartupMarks.mark('snap-decoded');
-        return (list: list, push: push);
-      } catch (_) {
-        // Corrupt JSON: clear and return null.
-        await clear();
-        return null;
-      }
-    });
+  /// The saved list and the notification-saved rows, read on [db]; null when nothing is saved. Corrupt JSON calls [onCorrupt] (if given) and returns null.
+  static Future<({List<Conversation> list, List<Message> push})?> readSnapshot(
+    StoreDatabase db, {
+    Future<void> Function()? onCorrupt,
+  }) async {
+    StartupMarks.mark('snap-read-start');
+    final metaRow = await (db.select(
+      db.meta,
+    )..where((m) => m.key.equals('chat_list_saved'))).getSingleOrNull();
+    if (metaRow == null) return null;
+
+    final rows = await (db.select(
+      db.conversations,
+    )..orderBy([(c) => OrderingTerm.asc(c.sortAt)])).get();
+    // Best effort, as before: a failed push read never costs the list.
+    var push = const <Message>[];
+    try {
+      push = await readPushInbox(db);
+    } catch (_) {}
+    StartupMarks.mark('snap-read-done');
+    try {
+      final list = rows.map((row) {
+        final json = jsonDecode(row.json) as Map<String, Object?>;
+        return Conversation.fromJson(json);
+      }).toList();
+      StartupMarks.mark('snap-decoded');
+      return (list: list, push: push);
+    } catch (_) {
+      // Corrupt JSON: clear and return null.
+      await onCorrupt?.call();
+      return null;
+    }
   }
 
   @override

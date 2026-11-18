@@ -87,22 +87,22 @@ flutter:
   generate: true
   uses-material-design: true
   assets:
-    - assets/fonts/OFL-manrope.txt
+    - assets/fonts/OFL-inter.txt
     - assets/fonts/OFL-sora.txt
     - assets/stickers/
     - assets/licenses/
   fonts:
-    - family: Manrope
+    - family: Inter
       fonts:
-        - asset: assets/fonts/Manrope-400.ttf
+        - asset: assets/fonts/Inter-400.ttf
           weight: 400
-        - asset: assets/fonts/Manrope-500.ttf
+        - asset: assets/fonts/Inter-500.ttf
           weight: 500
-        - asset: assets/fonts/Manrope-600.ttf
+        - asset: assets/fonts/Inter-600.ttf
           weight: 600
-        - asset: assets/fonts/Manrope-700.ttf
+        - asset: assets/fonts/Inter-700.ttf
           weight: 700
-        - asset: assets/fonts/Manrope-800.ttf
+        - asset: assets/fonts/Inter-800.ttf
           weight: 800
     - family: Sora
       fonts:

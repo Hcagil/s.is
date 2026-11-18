@@ -167,18 +167,18 @@ AnimatedOpacity chipOpacity(WidgetTester t, String site) => t.widget(
       .first,
 );
 
-/// The real fonts (Manrope, Roboto, Material icons), so a layout check
+/// The real fonts (Inter, Roboto, Material icons), so a layout check
 /// measures what a phone draws; copied from chat_delete_ui_test.dart.
 Future<void> loadAppFonts() async {
-  final manrope = FontLoader('Manrope');
+  final inter = FontLoader('Inter');
   for (final w in [400, 500, 600, 700, 800]) {
-    manrope.addFont(
-      File('assets/fonts/Manrope-$w.ttf')
+    inter.addFont(
+      File('assets/fonts/Inter-$w.ttf')
           .readAsBytes()
           .then(ByteData.sublistView),
     );
   }
-  await manrope.load();
+  await inter.load();
   final root = Platform.environment['FLUTTER_ROOT']!;
   final roboto = FontLoader('Roboto');
   final dir = Directory(

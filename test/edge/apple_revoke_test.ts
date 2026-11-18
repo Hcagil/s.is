@@ -14,13 +14,17 @@ Object.defineProperty(Deno, 'serve', {
 });
 
 const log: any[] = [];
+const idToken = (sub: string) => {
+  const b = (o: unknown) => btoa(JSON.stringify(o)).replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
+  return [b({ alg: 'none' }), b({ sub, iss: 'https://appleid.apple.com' }), 'c2ln'].join('.');
+};
 let userIdentities: any[] = [
   {
     identity_id: '00000000-0000-0000-0000-0000000000c1',
     id: 'x1',
     user_id: '00000000-0000-0000-0000-0000000000b1',
     provider: 'apple',
-    identity_data: {},
+    identity_data: { sub: 'x1' },
     created_at: '2026-01-01T00:00:00Z',
     last_sign_in_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
@@ -29,7 +33,7 @@ let userIdentities: any[] = [
 let markStatus = 204;
 let appleBehaviour = async (rec: any, signal: AbortSignal) => {
   if (rec.url.endsWith('/auth/token')) {
-    return Response.json({ refresh_token: 'rt-1' });
+    return Response.json({ refresh_token: 'rt-1', id_token: idToken('x1') });
   }
   return new Response('{}', { status: 200 });
 };
@@ -120,7 +124,7 @@ export function reset() {
       id: 'x1',
       user_id: '00000000-0000-0000-0000-0000000000b1',
       provider: 'apple',
-      identity_data: {},
+      identity_data: { sub: 'x1' },
       created_at: '2026-01-01T00:00:00Z',
       last_sign_in_at: '2026-01-01T00:00:00Z',
       updated_at: '2026-01-01T00:00:00Z',
@@ -129,7 +133,7 @@ export function reset() {
   markStatus = 204;
   appleBehaviour = async (rec: any, signal: AbortSignal) => {
     if (rec.url.endsWith('/auth/token')) {
-      return Response.json({ refresh_token: 'rt-1' });
+      return Response.json({ refresh_token: 'rt-1', id_token: idToken('x1') });
     }
     return new Response('{}', { status: 200 });
   };
@@ -290,7 +294,7 @@ Deno.test('user without an apple identity -> 400', async () => {
       id: 'g1',
       user_id: '00000000-0000-0000-0000-0000000000b1',
       provider: 'google',
-      identity_data: {},
+      identity_data: { sub: 'x1' },
       created_at: '2026-01-01T00:00:00Z',
       last_sign_in_at: '2026-01-01T00:00:00Z',
       updated_at: '2026-01-01T00:00:00Z',
@@ -404,7 +408,7 @@ for (const [name, fn] of revokeFailures) {
     reset();
     env();
     setApple((rec, signal) => {
-      if (rec.url.endsWith('/auth/token')) return Promise.resolve(Response.json({refresh_token:'rt-1'}));
+      if (rec.url.endsWith('/auth/token')) return Promise.resolve(Response.json({refresh_token:'rt-1', id_token: idToken('x1')}));
       return fn();
     });
     const r = await call();
@@ -430,7 +434,7 @@ Deno.test('revoke 204 counts as accepted', async () => {
   reset();
   env();
   setApple((rec, signal) => {
-    if (rec.url.endsWith('/auth/token')) return Promise.resolve(Response.json({refresh_token:'rt-1'}));
+    if (rec.url.endsWith('/auth/token')) return Promise.resolve(Response.json({refresh_token:'rt-1', id_token: idToken('x1')}));
     return Promise.resolve(new Response(null, {status:204}));
   });
   const r = await call();
@@ -459,7 +463,7 @@ Deno.test({name:'revoke call that hangs is cut at 8 s -> 502, no mark', sanitize
   reset();
   env();
   setApple((rec, signal) => {
-    if (rec.url.endsWith('/auth/token')) return Promise.resolve(Response.json({refresh_token:'rt-1'}));
+    if (rec.url.endsWith('/auth/token')) return Promise.resolve(Response.json({refresh_token:'rt-1', id_token: idToken('x1')}));
     return new Promise((_, reject) => {
       signal.addEventListener('abort', () => reject(new DOMException('aborted','AbortError')));
     });
@@ -475,10 +479,6 @@ Deno.test({name:'revoke call that hangs is cut at 8 s -> 502, no mark', sanitize
 }});
 
 // the id_token sub must match the caller's Apple identity
-const idToken = (sub: string) => {
-  const b = (o: unknown) => btoa(JSON.stringify(o)).replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
-  return [b({ alg: 'none' }), b({ sub, iss: 'https://appleid.apple.com' }), 'c2ln'].join('.');
-};
 const withSub = (sub: string) => {
   reset();
   env();
@@ -500,6 +500,22 @@ const withSub = (sub: string) => {
       : new Response('{}', { status: 200 })
   );
 };
+
+Deno.test('no id_token -> 502 apple_failed, no revoke, no mark', async () => {
+  reset(); env();
+  setApple(async (rec) => rec.url.endsWith('/auth/token') ? Response.json({ refresh_token: 'rt-1' }) : new Response('{}', { status: 200 }));
+  const r = await call();
+  assertEquals(r.status, 502); assertEquals(r.json, { error: 'apple_failed' });
+  assertEquals(apple().length, 1); assertEquals(marks().length, 0);
+});
+
+Deno.test('id_token that is not a JWT -> 502, no revoke, no mark', async () => {
+  reset(); env();
+  setApple(async (rec) => rec.url.endsWith('/auth/token') ? Response.json({ refresh_token: 'rt-1', id_token: 'garbage' }) : new Response('{}', { status: 200 }));
+  const r = await call();
+  assertEquals(r.status, 502); assertEquals(r.json, { error: 'apple_failed' });
+  assertEquals(apple().length, 1); assertEquals(marks().length, 0);
+});
 
 Deno.test('id_token sub of another Apple user -> refused, no mark', async () => {
   withSub('apple-sub-other');

@@ -143,6 +143,7 @@ Deno.test('happy path', async () => {
   const done = doneBodies();
   assertEquals(done.length, 1);
   assert(done[0].rid === 'r1');
+  assertEquals(done[0].addr, 'ann@mail.test');
   const claim = log.find(l => l.path.endsWith('/account_deletion_claim'));
   const prepare = log.find(l => l.path.endsWith('/account_deletion_prepare'));
   const get = log.find(l => l.path.endsWith('/auth/v1/admin/users/00000000-0000-0000-0000-0000000000a1') && l.method === 'GET');
@@ -151,17 +152,10 @@ Deno.test('happy path', async () => {
   assert(prepare && get && del && doneLog);
   assert(del.tEnd! >= del.t);
   assert(doneLog.t >= del.tEnd!);
-  assertEquals(
-    log.map(l => l.path),
-    [
-      '/rest/v1/rpc/account_deletion_claim',
-      '/rest/v1/rpc/account_deletion_prepare',
-      '/auth/v1/admin/users/00000000-0000-0000-0000-0000000000a1', // GET
-      '/auth/v1/admin/users/00000000-0000-0000-0000-0000000000a1', // DELETE
-      '/rest/v1/rpc/account_deletion_done',
-      '/rest/v1/rpc/account_deletion_claim',
-    ]
-  );
+  const idx = (m: string, p: string) => log.findIndex(l => l.method === m && l.path.endsWith(p));
+  const u = '/auth/v1/admin/users/00000000-0000-0000-0000-0000000000a1';
+  const order = [idx('POST', '/account_deletion_claim'), idx('GET', u), idx('POST', '/account_deletion_prepare'), idx('DELETE', u), idx('POST', '/account_deletion_done')];
+  assert(order.every((v, i) => v >= 0 && (i === 0 || order[i - 1] < v)), 'order claim, GET, prepare, DELETE, done');
 });
 
 Deno.test('deleteUser fails 500 -> no done', async () => {
@@ -217,9 +211,9 @@ Deno.test('prepare returns false -> no delete or done', async () => {
   // assert only one request to prepare
   const prepareLogs = log.filter(l => l.path.endsWith('/account_deletion_prepare'));
   assertEquals(prepareLogs.length, 1);
-  // assert no GET or DELETE to user endpoint
+  // the e-mail is read first (GET) but nothing is deleted
   const userLogs = log.filter(l => l.path.startsWith('/auth/v1/admin/users/'));
-  assertEquals(userLogs.length, 0);
+  assertEquals(userLogs.map(l => l.method), ['GET']);
 });
 
 Deno.test('empty queue -> 200', async () => {

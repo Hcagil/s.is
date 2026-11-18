@@ -721,6 +721,20 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
     final timeline = ref.watch(chatTimelineProvider);
     final loadingOlder = ref.watch(olderLoadingProvider);
     final value = messages.value ?? const <Message>[];
+    // Own send: the list returns to the newest row (it may sit at the unread line).
+    ref.listen(messagesProvider, (prev, next) {
+      final was = prev?.value, now = next.value;
+      if (was == null || was.isEmpty || now == null || now.isEmpty) return;
+      // Only a row appended after the old newest one counts (a jumped search window swaps or grows the list).
+      final appended =
+          now.last.id != was.last.id && now.any((m) => m.id == was.last.id);
+      final live = !ref.read(messagesProvider.notifier).isJumped;
+      if (live && appended && now.last.isFrom(me ?? '')) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _toLatest();
+        });
+      }
+    });
     _unreadAtOpen ??= widget.initialUnread == null ? listed?.unread : null;
     if (!_unreadDone && _unreadAtOpen != null && value.isNotEmpty) {
       // Capped: at the load cap, or with the chat's start loaded, the line goes on the oldest unread row that is loaded.

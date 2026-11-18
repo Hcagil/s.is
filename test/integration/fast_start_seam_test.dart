@@ -382,7 +382,7 @@ void main() {
       expect(wire.maxInFlight, 1, reason: 'nothing sent beside the list');
     });
 
-    test('chat_list holds what the eight old reads held', () async {
+    test('chat_list holds the eight old reads plus gone_peers', () async {
       final raw = Map<String, dynamic>.from(await bram.rpc('chat_list') as Map);
       expect(raw.keys.toSet(), {
         'members',
@@ -393,6 +393,7 @@ void main() {
         'profiles',
         'previews',
         'unread',
+        'gone_peers',
       });
       List<String> ids(Object? rows, String col) =>
           [for (final r in rows as List) (r as Map)[col] as String]..sort();

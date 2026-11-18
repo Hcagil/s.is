@@ -28,11 +28,27 @@ import '../../../l10n/app_localizations.dart';
 import 'conversation_tile.dart';
 
 /// The member's conversations, newest first, with a picker for starting one.
-class ConversationList extends ConsumerWidget {
+class ConversationList extends ConsumerStatefulWidget {
   const ConversationList({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ConversationList> createState() => _ConversationListState();
+}
+
+class _ConversationListState extends ConsumerState<ConversationList> {
+  final _buttonsKey = GlobalKey();
+  double _buttonsHeight = 0;
+
+  void _measureButtons() {
+    final box = _buttonsKey.currentContext?.findRenderObject();
+    if (box is! RenderBox || !box.hasSize) return;
+    if (box.size.height != _buttonsHeight) {
+      setState(() => _buttonsHeight = box.size.height);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final conversations = ref.watch(conversationListProvider);
     final groupsOnly = ref.watch(chatListGroupsOnlyProvider);
@@ -67,6 +83,18 @@ class ConversationList extends ConsumerWidget {
       StartupMarks.mark('list-rows');
     }
 
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _measureButtons();
+    });
+    // Room under the last row for the floating buttons (they sit 16 px above
+    // the safe area; the Undo bar lifts them by 64).
+    final reserve = selecting
+        ? 0.0
+        : _buttonsHeight +
+              16 +
+              MediaQuery.paddingOf(context).bottom +
+              (undoShowing ? 64 : 0);
+
     return Scaffold(
       body: Column(
         children: [
@@ -83,6 +111,7 @@ class ConversationList extends ConsumerWidget {
                       value,
                       hasArchived,
                       groupsOnly,
+                      reserve,
                     ),
                     AsyncError(:final error) => _Failed(
                       reason: failureReason(error),
@@ -101,6 +130,7 @@ class ConversationList extends ConsumerWidget {
           : Padding(
               padding: EdgeInsets.only(bottom: undoShowing ? 64 : 0),
               child: Wrap(
+                key: _buttonsKey,
                 spacing: 12,
                 runSpacing: 12,
                 alignment: WrapAlignment.end,
@@ -135,6 +165,7 @@ Widget _visibleList(
   List<Conversation> all,
   bool hasArchived,
   bool groupsOnly,
+  double bottomPadding,
 ) {
   final l = AppLocalizations.of(context);
   final shown = [
@@ -174,6 +205,7 @@ Widget _visibleList(
       _ => const SizedBox.shrink(),
     },
     onRefresh: () => ref.read(conversationListProvider.notifier).refresh(),
+    bottomPadding: bottomPadding,
   );
 }
 

@@ -6,7 +6,7 @@ release.yml creates those secrets. If the two sides use different names, the
 function finds nothing and quietly makes no call, and a pgTAP fixture that
 seeds the database's own names hides it. So this check compares the two sides
 as written:
-- read: every `vault.decrypted_secrets ... where name = '<n>'` inside the
+- read: every `vault.decrypted_secrets ... where name = '<n>'` or `where name in ('<n>', ..)` inside the
   latest definition of each function still alive after all migrations (in
   file order: `create [or replace] function`, `alter function .. rename to`,
   `drop function`);
@@ -27,8 +27,14 @@ EVENT = re.compile(
     rf"|drop\s+function\s+(?:if\s+exists\s+)?{FN}",
     re.I,
 )
-READ = re.compile(r"vault\.decrypted_secrets\s+where\s+name\s*=\s*'(\w+)'", re.I)
+READ = re.compile(r"vault\.decrypted_secrets\s+where\s+name\s*(?:=\s*('\w+')|in\s*\(([^)]*)\))", re.I)
+NAME = re.compile(r"'(\w+)'")
 WRITE = re.compile(r"vault\.create_secret\([^;]*?,\s*'(\w+)'\s*\)")
+
+
+def names_in(text):
+    """Every name a `where name = 'x'` or `where name in ('x', 'y')` reads."""
+    return {n for m in READ.finditer(text) for n in NAME.findall(m.group(1) or m.group(2))}
 
 
 def read_names(mig_dir):
@@ -42,7 +48,7 @@ def read_names(mig_dir):
             if created:
                 # shortcut: a function's text runs to the next create/alter/drop; fine while vault reads sit in function bodies.
                 end = events[i + 1].start() if i + 1 < len(events) else len(text)
-                live[created.lower()] = set(READ.findall(text[m.end():end]))
+                live[created.lower()] = names_in(text[m.end():end])
             elif old:
                 schema = old.rsplit(".", 1)[0] + "." if "." in old else ""
                 live[(schema + new).lower()] = live.pop(old.lower(), set())
@@ -81,6 +87,28 @@ class VaultNamesTest(unittest.TestCase):
             wf = p / "release.yml"
             wf.write_text("run: supabase db query --linked \"select vault.create_secret('$S', 'sales_url') is not null\"\n")
             self.assertNotEqual(read_names(p), written_names(wf), "a name mismatch is seen")
+
+    def test_the_checker_reads_in_lists(self):
+        self.assertEqual(
+            names_in("select 1 from vault.decrypted_secrets where name in ('x','y')"),
+            {"x", "y"},
+        )
+        self.assertEqual(
+            names_in("select 1 from vault.decrypted_secrets\n  where name in (\n 'a',\n 'b' )"),
+            {"a", "b"},
+        )
+        self.assertEqual(
+            names_in("... vault.decrypted_secrets where name in ('only')"),
+            {"only"},
+        )
+        self.assertEqual(
+            names_in("... vault.decrypted_secrets where name = 'eq'"),
+            {"eq"},
+        )
+        self.assertEqual(
+            names_in("select 1"),
+            set(),
+        )
 
 
 if __name__ == "__main__":

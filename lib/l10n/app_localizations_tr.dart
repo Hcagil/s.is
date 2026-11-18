@@ -80,13 +80,6 @@ class AppLocalizationsTr extends AppLocalizations {
   String get previewMine => 'Harika, pastayı ben getiririm';
 
   @override
-  String get textSystemFont => 'Telefonun kendi yazı tipini kullan';
-
-  @override
-  String get textSystemFontHint =>
-      'Telefonunuzun yazı tipini kullanır. Kapalıyken SIS kendi yazı tipini kullanır.';
-
-  @override
   String get textChatSize => 'Sohbet yazı boyutu';
 
   @override
@@ -3085,4 +3078,10 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get alertChoiceDefaultHint => 'Bildirim ayarlarınızı izler';
+
+  @override
+  String get messageShowMore => 'Devamını oku';
+
+  @override
+  String get messageShowLess => 'Daha az göster';
 }

@@ -23,8 +23,6 @@
   "appearanceBlur": "Bulanıklık",
   "previewTheirs": "Cumartesi için herkes hâlâ var mı?",
   "previewMine": "Harika, pastayı ben getiririm",
-  "textSystemFont": "Telefonun kendi yazı tipini kullan",
-  "textSystemFontHint": "Telefonunuzun yazı tipini kullanır. Kapalıyken SIS kendi yazı tipini kullanır.",
   "textChatSize": "Sohbet yazı boyutu",
   "textAppSize": "Uygulama yazı boyutu",
   "textAppSample": "Ayarlar ve sohbet listesi yazısı",
@@ -916,5 +914,7 @@
   "chatSettingsTitle": "Sohbet ayarları",
   "chatMutedSoundVibrationNote": "Bu sohbet sessizdeyken ses ve titreşim kapalıdır.",
   "chatMutedSoundNote": "Bu sohbet sessizdeyken ses kapalıdır.",
-  "alertChoiceDefaultHint": "Bildirim ayarlarınızı izler"
+  "alertChoiceDefaultHint": "Bildirim ayarlarınızı izler",
+  "messageShowMore": "Devamını oku",
+  "messageShowLess": "Daha az göster"
 }

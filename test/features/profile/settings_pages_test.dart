@@ -496,7 +496,7 @@ void main() {
       await t.pumpWidget(const SizedBox());
 
       final entries = await t.runAsync(() => LicenseRegistry.licenses.toList());
-      for (final font in ['manrope', 'sora']) {
+      for (final font in ['inter', 'sora']) {
         final e = entries!.where((e) => e.packages.contains(font)).toList();
         expect(e, hasLength(1), reason: 'no licence registered for $font');
         final text = e.single.paragraphs.map((p) => p.text).join('\n');
@@ -530,7 +530,7 @@ void main() {
             matching: find.byType(Scrollable),
           )
           .first;
-      for (final font in ['manrope', 'sora']) {
+      for (final font in ['inter', 'sora']) {
         await t.scrollUntilVisible(find.text(font), 300, scrollable: list);
         expect(find.text(font), findsOneWidget);
       }

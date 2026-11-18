@@ -179,7 +179,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // The bundled fonts are OFL: their licences ship with them.
   LicenseRegistry.addLicense(() async* {
-    for (final font in ['manrope', 'sora']) {
+    for (final font in ['inter', 'sora']) {
       yield LicenseEntryWithLineBreaks([
         font,
       ], await rootBundle.loadString('assets/fonts/OFL-$font.txt'));
@@ -253,7 +253,12 @@ Future<void> main() async {
     unawaited(
       DriftMessageStore.prefetchKey(
         () => StoreKey.inGroup(keychainGroup).peek(),
-      ).then((_) => DriftMessageStore.warmOpen(storeFile)),
+      ).then(
+        (_) => DriftMessageStore.warmOpen(
+          storeFile,
+          preload: DriftChatListSnapshotStore.readSnapshot,
+        ),
+      ),
     );
     // The two preference reads and the Supabase start run together.
     final (appearanceOverrides, autoDownloadOverrides, _) = await (

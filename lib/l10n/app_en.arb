@@ -92,14 +92,6 @@
   "@previewMine": {
     "description": "Sample outgoing message in the live preview"
   },
-  "textSystemFont": "Use the phone's own font",
-  "@textSystemFont": {
-    "description": "Switch title"
-  },
-  "textSystemFontHint": "Uses your phone's font. When off, SIS uses its own font.",
-  "@textSystemFontHint": {
-    "description": "Switch subtitle"
-  },
   "textChatSize": "Chat text size",
   "@textChatSize": {
     "description": "Section label"
@@ -2034,5 +2026,7 @@
   "chatMutedSoundNote": "Sound is off while this chat is muted.",
   "@chatMutedSoundNote": {"description": "Note under the grey Sound row while the chat is muted (iPhone)"},
   "alertChoiceDefaultHint": "Follows your notification settings",
-  "@alertChoiceDefaultHint": {"description": "Small line under the Default choice of the Sound and Vibration sheets"}
+  "@alertChoiceDefaultHint": {"description": "Small line under the Default choice of the Sound and Vibration sheets"},
+  "messageShowMore": "Show more",
+  "messageShowLess": "Show less"
 }

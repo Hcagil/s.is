@@ -17,8 +17,10 @@ void main() {
       await pumpCardList(t, chat: chat, mark: mark);
       expect(byKey('marked-dot-c1'), findsOneWidget);
 
-      expect(weight(t, byKey('conversation-c1')),
-          greaterThan(weight(t, byKey('conversation-c2'))));
+      expect(
+        weight(t, byKey('conversation-c1')),
+        greaterThan(weight(t, byKey('conversation-c2'))),
+      );
 
       await openCard(t, 'c1');
       await t.tap(byKey('chat-menu-unread'));
@@ -26,8 +28,10 @@ void main() {
 
       expect(chat.markedRead, contains('c1'));
       expect(byKey('marked-dot-c1'), findsNothing, reason: 'dot stayed');
-      expect(weight(t, byKey('conversation-c1')),
-          equals(weight(t, byKey('conversation-c2'))));
+      expect(
+        weight(t, byKey('conversation-c1')),
+        equals(weight(t, byKey('conversation-c2'))),
+      );
     });
 
     testWidgets('selection bar', (WidgetTester t) async {
@@ -40,8 +44,10 @@ void main() {
       await pumpCardList(t, chat: chat, mark: mark);
       expect(byKey('marked-dot-c1'), findsOneWidget);
 
-      expect(weight(t, byKey('conversation-c1')),
-          greaterThan(weight(t, byKey('conversation-c2'))));
+      expect(
+        weight(t, byKey('conversation-c1')),
+        greaterThan(weight(t, byKey('conversation-c2'))),
+      );
 
       await t.longPress(byKey('conversation-c1'));
       await t.pumpAndSettle();
@@ -54,8 +60,10 @@ void main() {
 
       expect(chat.markedRead, contains('c1'));
       expect(byKey('marked-dot-c1'), findsNothing, reason: 'dot stayed');
-      expect(weight(t, byKey('conversation-c1')),
-          equals(weight(t, byKey('conversation-c2'))));
+      expect(
+        weight(t, byKey('conversation-c1')),
+        equals(weight(t, byKey('conversation-c2'))),
+      );
     });
   });
 }

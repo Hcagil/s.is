@@ -310,6 +310,10 @@ begin
    where e.payload ->> 'actor_id' = uid::text
       or e.payload -> 'traits' ->> 'user_id' = uid::text
       or (mail is not null and (lower(e.payload ->> 'actor_username') = mail or lower(e.payload -> 'traits' ->> 'user_email') = mail));
+  -- final erasure: the e-mail leaves the invite list too (same transaction; a person who comes back is invited again). Only when the account is really gone.
+  if mail is not null and not exists (select 1 from auth.users u where u.id = uid) then
+    delete from app_private.allowlist a where lower(btrim(a.email)) = mail;
+  end if;
   insert into app_private.storage_removal_queue(bucket, path)
     select f.bucket, f.path from app_private.account_deletion_files f where f.request_id = rid
   on conflict (bucket, path) do nothing;

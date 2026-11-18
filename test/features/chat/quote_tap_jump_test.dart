@@ -188,6 +188,12 @@ bool flashing(WidgetTester tester, String id) {
 Offset? replyTop(WidgetTester t) =>
     t.getTopLeft(find.byKey(const ValueKey('message-r1')));
 
+/// The short notice runs a ~2 s timer; let it end so no Timer is pending at teardown.
+Future<void> endNotice(WidgetTester tester) async {
+  await tester.pump(const Duration(seconds: 3));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   group('quote tap', () {
     testWidgets('tapping a quote scrolls the original message into view', (
@@ -248,7 +254,8 @@ void main() {
         expect(quoteFinder, findsOneWidget);
 
         await tester.tap(quoteFinder);
-        await tester.pumpAndSettle();
+        await tester.pump(); // start tap animation
+        await tester.pump(const Duration(milliseconds: 300));
 
         expect(
           tester.takeException(),
@@ -259,6 +266,7 @@ void main() {
           find.byKey(const ValueKey('quote-deleted-notice')),
           findsOneWidget,
         );
+        await endNotice(tester);
       },
     );
 
@@ -429,5 +437,117 @@ void main() {
       );
       expect(replyTop(tester), equals(before));
     });
+
+    // --------------------------------------------------------------------
+    // New tests added below
+    // --------------------------------------------------------------------
+    /// [older] messages older than the newest page; the original 'm1' is the oldest.
+    /// Distinct seconds keep the order stable.
+    List<Message> deepHistory(int total, String replyTo) {
+      final base = DateTime.now().subtract(const Duration(hours: 5));
+      return [
+        for (var i = 0; i < total; i++)
+          Message(
+            id: i == 0 ? 'm1' : 'f$i',
+            conversationId: 'c1',
+            senderId: bob,
+            body: i == 0 ? 'first' : 'filler $i',
+            createdAt: base.add(Duration(seconds: i)),
+          ),
+        Message(
+          id: 'r1',
+          conversationId: 'c1',
+          senderId: me.userId,
+          body: 'sure',
+          replyTo: replyTo,
+          createdAt: base.add(Duration(seconds: total + 1)),
+        ),
+      ];
+    }
+
+    testWidgets(
+      'original exactly on page 20 (1000 older messages): found, jumped, highlighted',
+      (tester) async {
+        await pump(tester, deepHistory(1001, 'm1'));
+
+        final quoteFinder = find.byKey(const ValueKey('quote-r1'));
+        expect(quoteFinder, findsOneWidget);
+
+        await tester.tap(quoteFinder);
+        await tester.pump(); // start loading
+
+        final m1Finder = find.byKey(
+          const ValueKey('message-m1'),
+          skipOffstage: false,
+        );
+
+        // Wait until m1 appears
+        for (var i = 0; i < 400; i++) {
+          await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+          await tester.pump(const Duration(milliseconds: 50));
+          if (m1Finder.evaluate().isNotEmpty) break;
+        }
+        expect(m1Finder, findsOneWidget, reason: 'm1 should appear after load');
+
+        final screenRect =
+            Offset.zero &
+            (tester.view.physicalSize / tester.view.devicePixelRatio);
+        final m1Rect = tester.getRect(m1Finder);
+        expect(
+          m1Rect.top >= 0 && m1Rect.bottom <= screenRect.height,
+          isTrue,
+          reason: 'm1 fully visible',
+        );
+        expect(flashing(tester, 'm1'), isTrue, reason: 'm1 flashing');
+
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'original beyond page 20: no notice, no jump, no throw',
+      (tester) async {
+        await pump(tester, deepHistory(1100, 'm1'));
+
+        final before = replyTop(tester);
+
+        final quoteFinder = find.byKey(const ValueKey('quote-r1'));
+        expect(quoteFinder, findsOneWidget);
+
+        await tester.tap(quoteFinder);
+
+        // Let the 20 pages load
+        for (var i = 0; i < 200; i++) {
+          await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+          await tester.pump(const Duration(milliseconds: 50));
+        }
+
+        // Check immediately after loop
+        expect(
+          find.byKey(const ValueKey('quote-deleted-notice')),
+          findsNothing,
+          reason: 'no notice after tap',
+        );
+
+        final m1Finder = find.byKey(
+          const ValueKey('message-m1'),
+          skipOffstage: false,
+        );
+        expect(m1Finder, findsNothing, reason: 'm1 not loaded');
+
+        await tester.pump(const Duration(seconds: 3));
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        expect(
+          find.byKey(const ValueKey('quote-deleted-notice')),
+          findsNothing,
+          reason: 'no notice after settle',
+        );
+        expect(m1Finder, findsNothing);
+        expect(replyTop(tester), equals(before));
+      },
+    );
   });
 }

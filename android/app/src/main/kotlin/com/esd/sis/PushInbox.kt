@@ -7,12 +7,13 @@ import org.json.JSONObject
 /**
  * Kotlin twin of notification_inbox.dart (addToInbox, inboxSummary). Works on the text the Dart side
  * keeps in shared preferences: a JSON array of chats, oldest-updated first, each
- * {"c": id, "t": title, "g": group, "l": [{"s": sender, "x": text, "a": atMillis, "m": messageId?}],
+ * {"c": id, "t": title, "g": group, "l": [{"s": sender, "x": text, "a": atMillis, "m": messageId?, "u": senderId?}],
  * "n": count, "p": posted}. The native receiver stores a push here so that a chat's notification
  * keeps every unread line even while the Dart handler is still deferred.
  */
 object PushInbox {
     const val MAX_LINES = 25
+    private val UUID_SHAPE = Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
     /** Chats parsed from [raw]; empty on null or unreadable text. */
     fun parse(raw: String?): JSONArray {
@@ -39,6 +40,7 @@ object PushInbox {
         text: String,
         at: Long,
         messageId: String?,
+        senderId: String? = null,
     ): String {
         val chats = parse(raw)
         val existing = find(chats, conversationId)
@@ -64,6 +66,7 @@ object PushInbox {
 
         val line = JSONObject().put("s", lineSender).put("x", text).put("a", at)
         if (messageId != null) line.put("m", messageId)
+        if (senderId != null && UUID_SHAPE.matches(senderId)) line.put("u", senderId)
         val all = (0 until old.length()).map { old.getJSONObject(it) }.filter { !reaction || it.optString("m") != messageId } + line
         val lines = JSONArray(all.takeLast(MAX_LINES))
 

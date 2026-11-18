@@ -52,11 +52,6 @@ final List<Setter> setters = [
     expected: const AppearanceSettings(themeId: AppThemeId.forest),
   ),
   (
-    name: 'setSystemFont',
-    call: (c) => c.setSystemFont(false),
-    expected: const AppearanceSettings(systemFont: false),
-  ),
-  (
     name: 'setChatTextSize',
     call: (c) => c.setChatTextSize(TextSize.large),
     expected: const AppearanceSettings(chatTextSize: TextSize.large),

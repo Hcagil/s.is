@@ -92,14 +92,6 @@
   "@previewMine": {
     "description": "Sample outgoing message in the live preview"
   },
-  "textSystemFont": "Use the phone's own font",
-  "@textSystemFont": {
-    "description": "Switch title"
-  },
-  "textSystemFontHint": "Uses your phone's font. When off, SIS uses its own font.",
-  "@textSystemFontHint": {
-    "description": "Switch subtitle"
-  },
   "textChatSize": "Chat text size",
   "@textChatSize": {
     "description": "Section label"
@@ -1877,6 +1869,10 @@
   "@adminTalkAbout": {"description": "Admin panels screen text"},
   "adminQuestionsEmpty": "No open questions",
   "@adminQuestionsEmpty": {"description": "Admin panels screen text"},
+  "adminQuestionFromLabel": "From {conv}",
+  "@adminQuestionFromLabel": {"description": "Label on an admin question card: the Talk conversation it came from", "placeholders": {"conv": {"type": "String"}}},
+  "adminQuestionCountText": "{n} to answer",
+  "@adminQuestionCountText": {"description": "Count of open questions on an admin question group header", "placeholders": {"n": {"type": "int"}}},
   "adminBoxM": "Manager",
   "@adminBoxM": {"description": "Admin panels screen text"},
   "adminBoxC": "AI Control",
@@ -2044,5 +2040,7 @@
   "failDeleteAccountReauth": "Sign out and sign in again, then delete your account.",
   "@failDeleteAccountReauth": {"description": "Delete account text"},
   "failDeleteAccountApple": "Your account was not deleted. Apple sign-in could not be removed. Try again.",
-  "@failDeleteAccountApple": {"description": "Delete account text"}
+  "@failDeleteAccountApple": {"description": "Delete account text"},
+  "messageShowMore": "Show more",
+  "messageShowLess": "Show less"
 }

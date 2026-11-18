@@ -16,7 +16,6 @@ const keys = (
 
 const custom = AppearanceSettings(
   themeId: AppThemeId.ocean,
-  systemFont: false,
   chatTextSize: TextSize.large,
   appTextSize: TextSize.small,
   language: AppLanguage.tr,
@@ -42,7 +41,6 @@ void main() {
     test('defaults', () {
       const d = AppearanceSettings();
       expect(d.themeId, AppThemeId.violet);
-      expect(d.systemFont, isTrue);
       expect(d.chatTextSize, TextSize.medium);
       expect(d.appTextSize, TextSize.medium);
       expect(d.language, AppLanguage.system);
@@ -54,7 +52,6 @@ void main() {
       expect(const AppearanceSettings(), isNot(custom));
       for (final other in [
         custom.copyWith(themeId: AppThemeId.rose),
-        custom.copyWith(systemFont: true),
         custom.copyWith(chatTextSize: TextSize.medium),
         custom.copyWith(appTextSize: TextSize.medium),
         custom.copyWith(language: AppLanguage.en),
@@ -68,10 +65,6 @@ void main() {
       expect(
         d.copyWith(themeId: AppThemeId.ocean),
         const AppearanceSettings(themeId: AppThemeId.ocean),
-      );
-      expect(
-        d.copyWith(systemFont: false),
-        const AppearanceSettings(systemFont: false),
       );
       expect(
         d.copyWith(chatTextSize: TextSize.large),
@@ -106,7 +99,11 @@ void main() {
       expect(prefs.get(keys.chat), 'large');
       expect(prefs.get(keys.app), 'small');
       expect(prefs.get(keys.language), 'tr');
-      expect(prefs.containsKey(keys.font), isTrue);
+      expect(
+        prefs.containsKey(keys.font),
+        isFalse,
+        reason: 'the removed font switch is never written',
+      );
     });
 
     test('a second save overwrites the first', () async {
@@ -128,7 +125,6 @@ void main() {
         await store.load(),
         const AppearanceSettings(
           themeId: AppThemeId.graphite,
-          systemFont: false,
           chatTextSize: TextSize.small,
           appTextSize: TextSize.large,
           language: AppLanguage.en,
@@ -159,6 +155,20 @@ void main() {
         keys.language: <String>['tr'],
       });
       expect(await store.load(), const AppearanceSettings());
+    });
+
+    test('an old stored system_font value is ignored, without error', () async {
+      const legacyValues = [true, false, 'yes', 7];
+      for (final legacy in legacyValues) {
+        SharedPreferences.setMockInitialValues({
+          keys.font: legacy,
+          keys.theme: 'ocean',
+        });
+        expect(
+          await store.load(),
+          const AppearanceSettings(themeId: AppThemeId.ocean),
+        );
+      }
     });
   });
 }

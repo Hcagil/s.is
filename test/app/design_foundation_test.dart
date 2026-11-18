@@ -404,7 +404,7 @@ void main() {
       });
     });
 
-    group('text is set in the system font ($b)', () {
+    group('text is set in Inter ($b)', () {
       testWidgets('every text in the conversation list', (t) async {
         useBrightness(t, b);
         final chat = chatWorld()
@@ -437,11 +437,11 @@ void main() {
           expect(texts, contains(part));
         }
         expect(texts, contains(RegExp(r'\d\d[:.]\d\d')), reason: 'no time');
-        // The platform default font (Roboto under test); Manrope is gone.
+        // The bundled Inter font.
         expect(
-          seen.where((s) => s.$2 != 'Roboto').toList(),
+          seen.where((s) => s.$2 != 'Inter').toList(),
           isEmpty,
-          reason: 'text not in the system font',
+          reason: 'text not in Inter',
         );
       });
 
@@ -455,7 +455,7 @@ void main() {
           matching: find.text('Message'),
         );
         expect(hint, findsOneWidget);
-        expect(fontFamilies(t, hint), [('Message', 'Roboto')]);
+        expect(fontFamilies(t, hint), [('Message', 'Inter')]);
       });
 
       testWidgets('the wordmark stays in Sora', (t) async {

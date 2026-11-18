@@ -16,6 +16,8 @@ class AdminQuestionCard extends StatelessWidget {
     required this.controller,
     required this.onSelected,
     required this.onTextChanged,
+    required this.expanded,
+    required this.onToggle,
   });
 
   final AdminQuestion question;
@@ -24,52 +26,84 @@ class AdminQuestionCard extends StatelessWidget {
   final TextEditingController controller;
   final ValueChanged<int> onSelected;
   final VoidCallback onTextChanged;
+  final bool expanded;
+  final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final t = SisBrand.of(context);
+    final firstLine = question.text.split('\n').first;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '${question.id}  ${question.text}',
-            style: Theme.of(context).textTheme.titleMedium,
+          InkWell(
+            key: ValueKey('admin-question-header-${question.id}'),
+            onTap: onToggle,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${question.id}  ${expanded ? question.text : firstLine}',
+                    style: Theme.of(context).textTheme.titleMedium,
+                    maxLines: expanded ? null : 1,
+                    overflow: expanded
+                        ? TextOverflow.clip
+                        : TextOverflow.ellipsis,
+                  ),
+                ),
+                Icon(
+                  expanded ? Icons.expand_less : Icons.expand_more,
+                  color: t.muted,
+                ),
+              ],
+            ),
           ),
-          if (question.ctx.isNotEmpty)
+          if (question.conv case final conv?)
+            Text(
+              AppLocalizations.of(context).adminQuestionFromLabel(conv),
+              key: ValueKey('admin-question-conv-${question.id}'),
+              style: TextStyle(color: t.muted),
+            ),
+          if (expanded && question.ctx.isNotEmpty)
             Text(question.ctx, style: TextStyle(color: t.muted)),
+          // The status stays on the closed header too.
           if (waiting)
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Text(l.adminWaiting, style: TextStyle(color: t.muted)),
             )
-          else if (question.kind == 'action')
-            OutlinedButton(
-              key: ValueKey('admin-question-done-${question.id}'),
-              onPressed: () => onSelected(0),
-              child: Text(selected == 0 ? '${l.adminDone} ✓' : l.adminDone),
-            )
-          else if (question.kind == 'text')
-            _field()
-          else ...[
-            for (int i = 0; i < question.answers.length; i++)
+          else if (expanded) ...[
+            if (question.kind == 'action')
+              OutlinedButton(
+                key: ValueKey('admin-question-done-${question.id}'),
+                onPressed: () => onSelected(0),
+                child: Text(selected == 0 ? '${l.adminDone} ✓' : l.adminDone),
+              )
+            else if (question.kind == 'text')
+              _field()
+            else ...[
+              for (int i = 0; i < question.answers.length; i++)
+                SisChoiceCard<int>(
+                  value: i,
+                  groupValue: selected,
+                  onChanged: onSelected,
+                  title: question.answers[i],
+                  subtitle: i == question.recommended
+                      ? l.adminRecommended
+                      : null,
+                ),
               SisChoiceCard<int>(
-                value: i,
+                value: question.answers.length,
                 groupValue: selected,
                 onChanged: onSelected,
-                title: question.answers[i],
-                subtitle: i == question.recommended ? l.adminRecommended : null,
+                title: l.adminOther,
               ),
-            SisChoiceCard<int>(
-              value: question.answers.length,
-              groupValue: selected,
-              onChanged: onSelected,
-              title: l.adminOther,
-            ),
-            if (selected == question.answers.length) _field(),
+              if (selected == question.answers.length) _field(),
+            ],
           ],
         ],
       ),

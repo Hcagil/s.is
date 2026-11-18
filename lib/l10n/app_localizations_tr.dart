@@ -80,13 +80,6 @@ class AppLocalizationsTr extends AppLocalizations {
   String get previewMine => 'Harika, pastayı ben getiririm';
 
   @override
-  String get textSystemFont => 'Telefonun kendi yazı tipini kullan';
-
-  @override
-  String get textSystemFontHint =>
-      'Telefonunuzun yazı tipini kullanır. Kapalıyken SIS kendi yazı tipini kullanır.';
-
-  @override
   String get textChatSize => 'Sohbet yazı boyutu';
 
   @override
@@ -2819,6 +2812,16 @@ class AppLocalizationsTr extends AppLocalizations {
   String get adminQuestionsEmpty => 'Açık soru yok';
 
   @override
+  String adminQuestionFromLabel(String conv) {
+    return 'Kaynak: $conv';
+  }
+
+  @override
+  String adminQuestionCountText(int n) {
+    return '$n soru yanıt bekliyor';
+  }
+
+  @override
   String get adminBoxM => 'Manager';
 
   @override
@@ -3102,4 +3105,10 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get failDeleteAccountApple =>
       'Hesabınız silinmedi. Apple ile oturum açma kaldırılamadı. Tekrar deneyin.';
+
+  @override
+  String get messageShowMore => 'Devamını oku';
+
+  @override
+  String get messageShowLess => 'Daha az göster';
 }

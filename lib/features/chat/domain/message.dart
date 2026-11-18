@@ -15,6 +15,9 @@ import 'voice.dart';
 /// `public.messages.body`.
 const int maxMessageLength = 4000;
 
+/// A body longer than this shows cut with a "Show more" button in its bubble.
+const int foldMessageAfter = 1200;
+
 /// A random RFC 4122 v4 UUID, lowercase and hyphenated -- generated on the
 /// phone as a text message's id, so a retried send after a lost answer is
 /// idempotent: the server sees the same id twice and the second insert is a

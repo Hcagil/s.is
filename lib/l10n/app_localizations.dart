@@ -236,18 +236,6 @@ abstract class AppLocalizations {
   /// **'Great, I\'ll bring the cake'**
   String get previewMine;
 
-  /// Switch title
-  ///
-  /// In en, this message translates to:
-  /// **'Use the phone\'s own font'**
-  String get textSystemFont;
-
-  /// Switch subtitle
-  ///
-  /// In en, this message translates to:
-  /// **'Uses your phone\'s font. When off, SIS uses its own font.'**
-  String get textSystemFontHint;
-
   /// Section label
   ///
   /// In en, this message translates to:
@@ -4934,6 +4922,18 @@ abstract class AppLocalizations {
   /// **'No open questions'**
   String get adminQuestionsEmpty;
 
+  /// Label on an admin question card: the Talk conversation it came from
+  ///
+  /// In en, this message translates to:
+  /// **'From {conv}'**
+  String adminQuestionFromLabel(String conv);
+
+  /// Count of open questions on an admin question group header
+  ///
+  /// In en, this message translates to:
+  /// **'{n} to answer'**
+  String adminQuestionCountText(int n);
+
   /// Admin panels screen text
   ///
   /// In en, this message translates to:
@@ -5437,6 +5437,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Your account was not deleted. Apple sign-in could not be removed. Try again.'**
   String get failDeleteAccountApple;
+
+  /// No description provided for @messageShowMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Show more'**
+  String get messageShowMore;
+
+  /// No description provided for @messageShowLess.
+  ///
+  /// In en, this message translates to:
+  /// **'Show less'**
+  String get messageShowLess;
 }
 
 class _AppLocalizationsDelegate

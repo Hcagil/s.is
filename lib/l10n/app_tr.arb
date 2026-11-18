@@ -23,8 +23,6 @@
   "appearanceBlur": "Bulanıklık",
   "previewTheirs": "Cumartesi için herkes hâlâ var mı?",
   "previewMine": "Harika, pastayı ben getiririm",
-  "textSystemFont": "Telefonun kendi yazı tipini kullan",
-  "textSystemFontHint": "Telefonunuzun yazı tipini kullanır. Kapalıyken SIS kendi yazı tipini kullanır.",
   "textChatSize": "Sohbet yazı boyutu",
   "textAppSize": "Uygulama yazı boyutu",
   "textAppSample": "Ayarlar ve sohbet listesi yazısı",
@@ -838,6 +836,8 @@
   "adminWaiting": "Gönderildi, henüz okunmadı",
   "adminTalkAbout": "Bunun hakkında konuş",
   "adminQuestionsEmpty": "Açık soru yok",
+  "adminQuestionFromLabel": "Kaynak: {conv}",
+  "adminQuestionCountText": "{n} soru yanıt bekliyor",
   "adminBoxM": "Manager",
   "adminBoxC": "AI Control",
   "adminBoxS": "Support",
@@ -921,5 +921,7 @@
   "failDeleteAccount": "Hesabınız silinemedi. Tekrar deneyin.",
   "deletedAccountName": "Silinmiş hesap",
   "failDeleteAccountReauth": "Önce oturumu kapatıp yeniden oturum açın. Sonra hesabınızı silin.",
-  "failDeleteAccountApple": "Hesabınız silinmedi. Apple ile oturum açma kaldırılamadı. Tekrar deneyin."
+  "failDeleteAccountApple": "Hesabınız silinmedi. Apple ile oturum açma kaldırılamadı. Tekrar deneyin.",
+  "messageShowMore": "Devamını oku",
+  "messageShowLess": "Daha az göster"
 }

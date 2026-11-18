@@ -5,6 +5,7 @@ Entries before 2026-10-03 are in [DECISIONS-archive.md](DECISIONS-archive.md); s
 
 ## Current decisions
 
+- 2026-11-17 — [App text uses the bundled Inter font](#2026-11-17--app-text-uses-the-bundled-inter-font): App text uses the bundled Inter font (supersedes the system-font part of the 2026-10-05 entry)
 - 2026-10-25 — [One release per day at noon, Turkey time](#2026-10-25--one-release-per-day-at-noon-turkey-time): Merges land on `main` all day; one release at 12:00 Istanbul ships them together; an urgent fix may release at once
 - 2026-10-20 — [iPhone encryption is exempt; Info.plist stays NO](#2026-10-20--iphone-encryption-is-exempt-infoplist-stays-no): App Store Connect's own encryption questionnaire found SIS exempt, so `ITSAppUsesNonExemptEncryption` stays `false` and builds carry no per-build answer.
 - 2026-10-17 — [The server knows the app language](#2026-10-17--the-server-knows-the-app-language): The server stores the app language (profiles.app_language, en or tr) for the app's own messages
@@ -232,7 +233,8 @@ language switch. The generated Dart files are checked in, so analysis and
 builds do not depend on a generation step. This adds the SDK package
 `flutter_localizations` and its required `intl` dependency. Text uses the
 platform default font (no `fontFamily` in the theme); the Sora wordmark is
-unchanged.
+unchanged. *Superseded 2026-11-17: the font part now reads "App text uses the
+bundled Inter font"; the rest of this entry stands.*
 
 **Consequences.**
 - Every new string goes into both ARB files in the same change, and a test
@@ -709,3 +711,22 @@ Nothing contacts the site before that tap.
 ## 2026-11-17 — Private chat notifications offer Mark as read
 
 Owner Q-M-00277: encrypted chat notifications get the same Mark as read button as every other chat, on Android and iPhone. The server token of a private chat already signs `mark_read` only, and Mark as read sends no message text, so nothing is weakened. Reply stays the locked Reply handed to the app.
+
+## 2026-11-17 — App text uses the bundled Inter font
+
+**Context.** The designer's final delivery sets all text in Inter. The
+2026-10-05 entry chose the phone's own font and kept Manrope only as a
+switch-off font.
+
+**Decision.** The app theme sets `fontFamily: 'Inter'` once. Inter 4.1 (SIL
+Open Font License 1.1, rsms/inter) is bundled as static TTF files for weights
+400, 500, 600, 700 and 800, the weights the app uses; static files because
+Flutter picks a file per `FontWeight`, which a variable font does not do
+reliably. The licence is `assets/fonts/OFL-inter.txt` and is listed in the
+app's licence page. Manrope is removed; the Sora wordmark is unchanged. The
+font is never fetched at run time.
+
+**Consequences.**
+- Text looks the same on every phone; the app grows by the Inter files
+  (about 2.1 MB uncompressed, 0.5 MB of Manrope removed).
+- `sisTheme` no longer takes a `systemFont` argument.

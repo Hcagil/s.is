@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo="$(cd "$(dirname "$0")/../.." && pwd)"
+wf="$repo/.github/workflows/release.yml"
+
+fails=0
+fail() { echo "FAIL: $*"; fails=$((fails+1)); }
+
+job_block() { awk -v n="  $1:" '$0==n{f=1;print;next} f&&/^  [a-z_]+:/{exit} f{print}' "$wf"; }
+step_block() { job_block "$1" | awk -v t="      - name: $2" '$0==t{f=1;print;next} f&&/^      - name:/{exit} f{print}'; }
+lineno() { grep -n -F -x -- "$1" "$wf" | head -1 | cut -d: -f1 || true; }
+
+body() { step_block "$1" "$2" | awk '/^        run: \|$/{f=1;next} f&&/^          /{sub(/^          /,"");print;next} f{exit}'; }
+
+tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+
+mk() {
+  rm -rf "$tmp/r" "$tmp/bin"
+  mkdir -p "$tmp/bin" "$tmp/r/supabase/migrations"
+  cat >"$tmp/bin/gh" <<'EOF'
+#!/usr/bin/env bash
+echo v1.0.5+5
+EOF
+  chmod +x "$tmp/bin/gh"
+  (cd "$tmp/r" && git init -q && git config user.email a@mail.test && git config user.name a && git config commit.gpgsign false)
+  echo "select 0;" >"$tmp/r/supabase/migrations/001_old.sql"
+}
+
+tagit() {
+  (cd "$tmp/r" && git add -A && git commit -qm base && git tag 'v1.0.5+5')
+}
+
+addm() {
+  (cd "$tmp/r" && printf '%s\n' "$2" > "supabase/migrations/$1" && git add -A && git commit -qm "m $1")
+}
+
+fbody=$(body old_app 'Raise on request of a new migration')
+if [[ -z "$fbody" ]]; then fail "f0: no force step body"; fi
+
+runforce() {
+  : >"$tmp/go"
+  (cd "$tmp/r" && PATH="$tmp/bin:$PATH" RELEASE_CODE=250 GITHUB_OUTPUT="$tmp/go" bash -c "$fbody")
+  go=$(cat "$tmp/go")
+}
+
+# f1
+mk; tagit; addm 002_new.sql $'-- raise-minimum: old chat keys break\nselect 1;'; runforce
+[[ "$go" == *"raise_to=250"* ]] || fail "f1: raise_to missing"
+[[ "$go" == *"raise_reason=old chat keys break"* ]] || fail "f1: raise_reason missing"
+
+# f2
+mk; echo '-- raise-minimum: already shipped' >>"$tmp/r/supabase/migrations/001_old.sql"; tagit; addm 002_new.sql 'select 1;'; runforce
+[[ -z "$go" ]] || fail "f2: output should be empty"
+
+# f3
+mk; tagit; addm 002_new.sql 'select 1;'; runforce
+[[ -z "$go" ]] || fail "f3: output should be empty"
+
+# f4
+mk; tagit; echo '-- raise-minimum: edited later' >>"$tmp/r/supabase/migrations/001_old.sql"; (cd "$tmp/r" && git commit -am "edit old" -q); runforce
+[[ -z "$go" ]] || fail "f4: output should be empty"
+
+# f5
+mk; tagit; addm 002_a.sql 'select 1;'; addm 003_b.sql $'-- raise-minimum: second one\nselect 2;'; runforce
+[[ "$go" == *"raise_to=250"* ]] || fail "f5: raise_to missing"
+[[ "$go" == *"raise_reason=second one"* ]] || fail "f5: raise_reason missing"
+
+[ "$fails" -eq 0 ] || { echo "old_app_force_test: $fails failed"; exit 1; }
+echo "old_app_force_test: OK"

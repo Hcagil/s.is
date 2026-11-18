@@ -35,6 +35,7 @@ import '../domain/staff_registry.dart';
 import '../domain/conversation.dart';
 import '../domain/delivery.dart';
 import '../domain/emoji.dart';
+import '../domain/first_unread.dart';
 import '../domain/group_member.dart';
 import '../domain/highlight.dart';
 import '../domain/link_preview.dart';
@@ -132,8 +133,10 @@ Future<void> openConversation(
   // -> Message); leaving it must hand the screen back to that one.
   final previous = ref.read(openConversationProvider);
   ref.read(openConversationProvider.notifier).open(conversationId);
+  // The count the chat had when it opened, taken before it is marked read (the unread line needs it).
+  final unread = _unreadCountAtOpen(ref, conversationId);
   // Opening is reading. Not awaited: the screen must not wait on it.
-  unawaited(list.markRead(conversationId));
+  unawaited(unread.then((_) => list.markRead(conversationId)));
   // Its notification leaves the shade.
   unawaited(ref.read(pushSourceProvider).clearConversation(conversationId));
   await Navigator.of(context).push(
@@ -144,6 +147,7 @@ Future<void> openConversation(
         group: group,
         initialSearchQuery: searchQuery,
         initialSearchHitId: searchHitId,
+        initialUnread: unread,
       ),
     ),
   );
@@ -163,6 +167,22 @@ Future<void> openConversation(
   // The list is also kept live by Realtime; this re-read is the fallback when
   // that subscription could not be established.
   await container.read(conversationListProvider.notifier).reloadQuietly();
+}
+
+/// The unread count [conversationId] has in the chat list now; when the list does not know the chat yet (a notification opened it), the count once the list has loaded, at most 5 seconds; null when unknown.
+Future<int?> _unreadCountAtOpen(WidgetRef ref, String conversationId) {
+  int? known() =>
+      (ref.read(conversationListProvider).value ?? const <Conversation>[])
+          .where((c) => c.id == conversationId)
+          .firstOrNull
+          ?.unread;
+  final now = known();
+  if (now != null) return Future.value(now);
+  return ref
+      .read(conversationListProvider.future)
+      .then<int?>((_) => known())
+      .timeout(const Duration(seconds: 5), onTimeout: () => null)
+      .catchError((Object _) => null);
 }
 
 /// "typing…" beats "online", which beats "last seen". In a 1:1 chat the
@@ -208,6 +228,7 @@ class MessageScreen extends ConsumerStatefulWidget {
     this.group = false,
     this.initialSearchQuery,
     this.initialSearchHitId,
+    this.initialUnread,
   });
 
   final String? title;
@@ -225,6 +246,9 @@ class MessageScreen extends ConsumerStatefulWidget {
 
   /// The hit made current once [initialSearchQuery] has run.
   final String? initialSearchHitId;
+
+  /// The chat's unread count at the moment it was opened (taken before the chat is marked read); null: take it from the chat list.
+  final Future<int?>? initialUnread;
 
   @override
   ConsumerState<MessageScreen> createState() => _MessageScreenState();
@@ -254,10 +278,26 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
   /// soon as a newer call has superseded it.
   int _generation = 0;
 
+  /// The chat's unread count when it opened, the first unread message found from it, and whether that was settled. The line stays until this screen is left (owner rule: not removed by time or scrolling).
+  int? _unreadAtOpen;
+  String? _unreadFromId;
+  bool _unreadDone = false;
+
+  /// Most rows paged in to find the first unread one: 200 (4 pages of 50). Past it the line goes on the oldest unread row that is loaded.
+  static const _unreadLoadCap = 200;
+
   @override
   void initState() {
     super.initState();
     _scroll.addListener(_maybeLoadOlder);
+    final pending = widget.initialUnread;
+    if (pending != null) {
+      unawaited(
+        pending.then((n) {
+          if (mounted) setState(() => _unreadAtOpen = n ?? 0);
+        }),
+      );
+    }
   }
 
   /// The list is reversed: "after" is older, "before" is newer. Near the top
@@ -367,7 +407,11 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
   /// again blind. [generation] stops this loop as soon as a newer
   /// `_goToHit`/`_closeSearch` call has started -- two of these racing on
   /// the same [_scroll] would otherwise fight each other.
-  Future<void> _scrollTo(String messageId, int generation) async {
+  Future<void> _scrollTo(
+    String messageId,
+    int generation, {
+    double alignment = 0.5,
+  }) async {
     if (!mounted || !_scroll.hasClients || generation != _generation) return;
     final list = ref.read(messagesProvider).value ?? const [];
     final matchIndex = list.indexWhere((m) => m.id == messageId);
@@ -384,17 +428,22 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
       }
       _scroll.jumpTo(pixels);
       await WidgetsBinding.instance.endOfFrame;
+      // A newer scroll (an own send, a jump) took over while this one waited for the frame.
+      if (!mounted || generation != _generation) return;
       final ctx = _bubbleKeys[messageId]?.currentContext;
       if (ctx != null && ctx.mounted) {
         Scrollable.ensureVisible(
           ctx,
-          alignment: 0.5,
+          alignment: alignment,
           duration: const Duration(milliseconds: 200),
         );
         return;
       }
       final nearest = _nearestBuiltIndex(list, matchIndex);
       if (nearest == null) return;
+      // The extent is only an estimate until rows are built: let the upper bound follow it.
+      final extent = _scroll.position.maxScrollExtent;
+      if (extent > high) high = extent;
       // Larger matchIndex = newer = fewer pixels. A built neighbour newer
       // than the target means the target needs MORE pixels (scroll deeper);
       // older means it needs fewer.
@@ -674,6 +723,45 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
     final timeline = ref.watch(chatTimelineProvider);
     final loadingOlder = ref.watch(olderLoadingProvider);
     final value = messages.value ?? const <Message>[];
+    // Own send: the list returns to the newest row (it may sit at the unread line).
+    ref.listen(messagesProvider, (prev, next) {
+      final was = prev?.value, now = next.value;
+      if (was == null || was.isEmpty || now == null || now.isEmpty) return;
+      // Only a row appended after the old newest one counts (a jumped search window swaps or grows the list).
+      final appended =
+          now.last.id != was.last.id && now.any((m) => m.id == was.last.id);
+      final live = !ref.read(messagesProvider.notifier).isJumped;
+      if (live && appended && now.last.isFrom(me ?? '')) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || !_scroll.hasClients) return;
+          _generation++; // stops a scroll to the unread line still running
+          _scroll.position.jumpTo(
+            0,
+          ); // at once: the new bubble shows in this frame
+        });
+      }
+    });
+    _unreadAtOpen ??= widget.initialUnread == null ? listed?.unread : null;
+    if (!_unreadDone && _unreadAtOpen != null && value.isNotEmpty) {
+      // Capped: at the load cap, or with the chat's start loaded, the line goes on the oldest unread row that is loaded.
+      final capped =
+          value.length >= _unreadLoadCap ||
+          !ref.read(messagesProvider.notifier).hasOlder;
+      final id = firstUnreadId(value, _unreadAtOpen!, me, orOldest: capped);
+      _unreadDone = _unreadAtOpen == 0 || id != null || capped;
+      _unreadFromId = id;
+      if (id != null) {
+        final generation = ++_generation;
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => unawaited(_scrollTo(id, generation, alignment: 0.1)),
+        );
+      } else if (!_unreadDone) {
+        // Not covered yet: read the next older page; its arrival builds again.
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => unawaited(ref.read(messagesProvider.notifier).loadOlder()),
+        );
+      }
+    }
     final messageIndexById = {
       for (var idx = 0; idx < (messages.value ?? const []).length; idx++)
         (messages.value ?? const [])[idx].id: idx,
@@ -1068,7 +1156,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                         child: bubble,
                                       )
                                     : bubble;
-                              }),
+                              }, unreadFromId: _unreadFromId),
                             ),
                           AsyncError(:final error) => Center(
                             child: Padding(

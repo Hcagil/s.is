@@ -473,3 +473,45 @@ Deno.test({name:'revoke call that hangs is cut at 8 s -> 502, no mark', sanitize
   assertEquals(apple().length, 2);
   assertEquals(marks().length, 0);
 }});
+
+// the id_token sub must match the caller's Apple identity
+const idToken = (sub: string) => {
+  const b = (o: unknown) => btoa(JSON.stringify(o)).replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
+  return [b({ alg: 'none' }), b({ sub, iss: 'https://appleid.apple.com' }), 'c2ln'].join('.');
+};
+const withSub = (sub: string) => {
+  reset();
+  env();
+  setIdentities([
+    {
+      identity_id: '00000000-0000-0000-0000-0000000000c1',
+      id: 'apple-sub-1',
+      user_id: '00000000-0000-0000-0000-0000000000b1',
+      provider: 'apple',
+      identity_data: { sub: 'apple-sub-1' },
+      created_at: '2026-01-01T00:00:00Z',
+      last_sign_in_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    },
+  ]);
+  setApple(async (rec) =>
+    rec.url.endsWith('/auth/token')
+      ? Response.json({ refresh_token: 'rt-1', id_token: idToken(sub) })
+      : new Response('{}', { status: 200 })
+  );
+};
+
+Deno.test('id_token sub of another Apple user -> refused, no mark', async () => {
+  withSub('apple-sub-other');
+  const r = await call();
+  assert(r.status !== 200);
+  assertEquals(marks().length, 0);
+  assert(!r.text.includes('rt-1'));
+});
+
+Deno.test('id_token sub equal to the caller identity -> 200, mark called', async () => {
+  withSub('apple-sub-1');
+  const r = await call();
+  assertEquals(r.status, 200);
+  assertEquals(marks().length, 1);
+});

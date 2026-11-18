@@ -35,6 +35,11 @@ Deno.serve(async (req) => {
     if (!data || data.length === 0) break;
 
     for (const row of data as { user_id: string; request_id: string }[]) {
+      // the e-mail is only held in memory, to clean Auth's audit rows after the delete; never logged, never stored
+      const { data: found } = await db.auth.admin.getUserById(row.user_id);
+      const addr = found?.user?.email ?? null;
+
+      // last check right before the delete: false = the person signed in again (cancelled) or it is not due
       const { data: ok, error: prepErr } = await db.rpc('account_deletion_prepare', { uid: row.user_id });
       if (prepErr) { failed++; continue; }
       if (ok !== true) { skipped++; continue; }
@@ -46,7 +51,7 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const { error: doneErr } = await db.rpc('account_deletion_done', { rid: row.request_id });
+      const { error: doneErr } = await db.rpc('account_deletion_done', { rid: row.request_id, addr });
       if (doneErr) {
         console.log('account-deletion: done failed');
       }

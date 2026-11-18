@@ -37,6 +37,23 @@ revoke all on table app_private.account_deletion_log from public, anon, authenti
 alter table app_private.apple_revocations enable row level security;
 revoke all on table app_private.apple_revocations from public, anon, authenticated;
 
+-- Files of a person, noted by account_deletion_prepare and handed to the storage sweeper only after the account is really deleted (account_deletion_done); a cancel drops them.
+create table app_private.account_deletion_files (
+  request_id uuid not null,
+  bucket text not null,
+  path text not null,
+  primary key (request_id, bucket, path)
+);
+-- who the request was for, until the deletion is final (the log itself has no user id)
+create table app_private.account_deletion_after (
+  request_id uuid primary key,
+  user_id uuid not null
+);
+alter table app_private.account_deletion_files enable row level security;
+revoke all on table app_private.account_deletion_files from public, anon, authenticated;
+alter table app_private.account_deletion_after enable row level security;
+revoke all on table app_private.account_deletion_after from public, anon, authenticated;
+
 -- the HMAC key lives only in Vault; created here once, so nobody has to set it by hand
 do $$
 begin
@@ -64,6 +81,8 @@ begin
   delete from app_private.account_deletions where user_id = uid returning request_id into rid;
   if rid is not null then
     update app_private.account_deletion_log set outcome = 'cancelled', done_at = now() where request_id = rid;
+    delete from app_private.account_deletion_files where request_id = rid;
+    delete from app_private.account_deletion_after where request_id = rid;
   end if;
 end;
 $$;
@@ -206,7 +225,7 @@ $$;
 revoke all on function public.account_deletion_claim(int) from public, anon, authenticated;
 grant execute on function public.account_deletion_claim(int) to service_role;
 
--- false = cancelled or not due: the caller must not delete the account
+-- false = cancelled or not due: the caller must not delete the account. Called right before deleteUser, so it is also the last check.
 create function public.account_deletion_prepare(uid uuid)
   returns boolean
   language plpgsql
@@ -214,40 +233,40 @@ create function public.account_deletion_prepare(uid uuid)
   set search_path = ''
 as $$
 #variable_conflict use_column
+declare
+  rid uuid;
 begin
-  if not exists (
-    select 1 from app_private.account_deletions d
-    where d.user_id = uid and d.due_at <= now()
-  ) then
+  select d.request_id into rid from app_private.account_deletions d
+   where d.user_id = uid and d.due_at <= now();
+  if rid is null then
     return false;
   end if;
 
-  -- the person's messages go with the account: queue their files for the storage sweeper
-  insert into app_private.storage_removal_queue(bucket, path)
-    select 'attachments', m.attachment_path
-    from public.messages m
-    where m.sender_id = uid and m.attachment_path is not null
-  union all
-    select 'attachments', m.attachment_path || '.t'
-    from public.messages m
-    where m.sender_id = uid and m.attachment_path is not null
-  union all
-    select 'attachments', m.attachment_path || '.s'
-    from public.messages m
-    where m.sender_id = uid and m.attachment_path is not null
-  on conflict (bucket, path) do nothing;
+  insert into app_private.account_deletion_after(request_id, user_id) values (rid, uid)
+  on conflict (request_id) do nothing;
 
-  insert into app_private.storage_removal_queue(bucket, path)
-    select 'link-previews', m.conversation_id::text || '/' || m.id::text || '.jpg'
+  -- the person's messages go with the account. Their files are only NOTED here; the storage sweeper gets them in account_deletion_done, after the account is really gone (a cancel must never lose a file).
+  insert into app_private.account_deletion_files(request_id, bucket, path)
+    select rid, 'attachments', m.attachment_path
+    from public.messages m
+    where m.sender_id = uid and m.attachment_path is not null
+  union
+    select rid, 'attachments', m.attachment_path || '.t'
+    from public.messages m
+    where m.sender_id = uid and m.attachment_path is not null
+  union
+    select rid, 'attachments', m.attachment_path || '.s'
+    from public.messages m
+    where m.sender_id = uid and m.attachment_path is not null
+  union
+    select rid, 'link-previews', m.conversation_id::text || '/' || m.id::text || '.jpg'
     from public.messages m
     where m.sender_id = uid and (m.link_preview is not null or m.edited_at is not null)
-  on conflict (bucket, path) do nothing;
-
-  insert into app_private.storage_removal_queue(bucket, path)
-    select 'avatars', p.avatar_path
+  union
+    select rid, 'avatars', p.avatar_path
     from public.profiles p
     where p.user_id = uid and p.avatar_path is not null
-  on conflict (bucket, path) do nothing;
+  on conflict (request_id, bucket, path) do nothing;
 
   return true;
 end;
@@ -255,21 +274,39 @@ $$;
 revoke all on function public.account_deletion_prepare(uuid) from public, anon, authenticated;
 grant execute on function public.account_deletion_prepare(uuid) to service_role;
 
-create function public.account_deletion_done(rid uuid)
+-- Called after deleteUser succeeded. addr (the e-mail, read just before the delete, never stored) is optional. Does nothing for a request that was cancelled.
+create function public.account_deletion_done(rid uuid, addr text default null)
   returns void
   language plpgsql
   security definer
   set search_path = ''
 as $$
 #variable_conflict use_column
+declare
+  uid uuid;
 begin
+  if not exists (select 1 from app_private.account_deletion_log where request_id = rid and outcome = 'pending') then
+    delete from app_private.account_deletion_files where request_id = rid;
+    delete from app_private.account_deletion_after where request_id = rid;
+    return;
+  end if;
+  select a.user_id into uid from app_private.account_deletion_after a where a.request_id = rid;
+  -- Auth's own audit rows name the person (actor_id, traits.user_id, actor_username, traits.user_email): remove them, the deleteUser call has just added one more
+  delete from auth.audit_log_entries e
+   where (uid is not null and (e.payload ->> 'actor_id' = uid::text or e.payload -> 'traits' ->> 'user_id' = uid::text))
+      or (addr is not null and addr <> '' and (lower(e.payload ->> 'actor_username') = lower(addr) or lower(e.payload -> 'traits' ->> 'user_email') = lower(addr)));
+  insert into app_private.storage_removal_queue(bucket, path)
+    select f.bucket, f.path from app_private.account_deletion_files f where f.request_id = rid
+  on conflict (bucket, path) do nothing;
+  delete from app_private.account_deletion_files where request_id = rid;
+  delete from app_private.account_deletion_after where request_id = rid;
   update app_private.account_deletion_log
   set outcome = 'done', done_at = now()
   where request_id = rid and outcome = 'pending';
 end;
 $$;
-revoke all on function public.account_deletion_done(uuid) from public, anon, authenticated;
-grant execute on function public.account_deletion_done(uuid) to service_role;
+revoke all on function public.account_deletion_done(uuid, text) from public, anon, authenticated;
+grant execute on function public.account_deletion_done(uuid, text) to service_role;
 
 create function public.mark_apple_revoked(uid uuid)
   returns void
@@ -322,11 +359,16 @@ as $$
 declare
   url text;
   secret text;
+  rid uuid;
 begin
   -- a deletion whose row is gone and which was not cancelled finished, even if the edge function died before reporting
-  update app_private.account_deletion_log l set outcome = 'done', done_at = now()
-   where l.outcome = 'pending'
-     and not exists (select 1 from app_private.account_deletions d where d.request_id = l.request_id);
+  for rid in
+    select l.request_id from app_private.account_deletion_log l
+     where l.outcome = 'pending'
+       and not exists (select 1 from app_private.account_deletions d where d.request_id = l.request_id)
+  loop
+    perform public.account_deletion_done(rid);
+  end loop;
   select decrypted_secret into url from vault.decrypted_secrets where name in ('account_deletion_url');
   select decrypted_secret into secret from vault.decrypted_secrets where name in ('account_deletion_secret');
   if url is null or secret is null then
@@ -383,6 +425,7 @@ as $$
    where c.direct_key is not null
      and p.other is not null
      and p.other <> auth.uid()
+     and (select app_private.has_app_access())
      and auth.uid()::text in (split_part(c.direct_key, ':', 1), split_part(c.direct_key, ':', 2))
      and not exists (select 1 from public.conversation_members m where m.conversation_id = c.id and m.user_id = p.other)
      and not exists (select 1 from auth.users u where u.id = p.other);

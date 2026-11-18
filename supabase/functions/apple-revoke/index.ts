@@ -24,6 +24,18 @@ const pemToDer = (pem: string): Uint8Array => {
   return bytes;
 };
 
+/** The `sub` claim of an id_token (the payload part only; no signature check, see the caller), or null when it cannot be read. */
+const idTokenSub = (jwt: string): string | null => {
+  try {
+    const part = jwt.split('.')[1] ?? '';
+    const json = atob(part.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(part.length / 4) * 4, '='));
+    const sub = JSON.parse(json).sub;
+    return typeof sub === 'string' && sub !== '' ? sub : null;
+  } catch {
+    return null;
+  }
+};
+
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return reply(405, { error: 'method' });
 
@@ -104,6 +116,13 @@ Deno.serve(async (req) => {
     if (!tokenRes.ok) throw new Error('apple_failed');
     const tokenJson = await tokenRes.json();
     if (typeof tokenJson.refresh_token !== 'string') throw new Error('apple_failed');
+    // The code must belong to the caller's own Apple account. The id_token comes straight from Apple over TLS in this very call, so its signature needs no check here: only whose account it names. A missing id_token or a different `sub` refuses the request before anything is revoked or marked.
+    if (typeof tokenJson.id_token !== 'string') throw new Error('apple_failed');
+    const sub = idTokenSub(tokenJson.id_token);
+    const own = sub !== null && (u.user.identities ?? []).some(
+      (i) => i.provider === 'apple' && (i.identity_data?.sub === sub || i.id === sub),
+    );
+    if (!own) throw new Error('apple_failed');
     refreshToken = tokenJson.refresh_token;
   } catch {
     console.log('apple-revoke: token request failed');

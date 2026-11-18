@@ -22,6 +22,7 @@ import 'package:sis/features/auth/domain/session_state.dart';
 import 'package:sis/core/failure.dart';
 import 'package:sis/features/chat/application/chat_controllers.dart';
 import 'package:sis/features/chat/domain/conversation.dart';
+import 'package:sis/features/chat/domain/group_member.dart';
 import 'package:sis/features/chat/domain/message.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/presence/application/presence_controllers.dart';
@@ -65,6 +66,7 @@ Future<ProviderContainer> pump(
   List<Message> messages, {
   LinkOpenerFake? opener,
   GalleryFake? gallery,
+  void Function(ChatFake chat)? setup,
 }) async {
   final chat =
       ChatFake(self: me.userId, latency: const Duration(milliseconds: 5))
@@ -76,6 +78,7 @@ Future<ProviderContainer> pump(
   for (final m in messages) {
     if (m.attachmentPath case final path?) chat.store(path);
   }
+  setup?.call(chat);
   final container = await settled(
     ProviderContainer.test(
       overrides: [
@@ -143,6 +146,48 @@ Future<void> raiseKeyboard(WidgetTester tester) async {
 
 Finder message(String id) => find.byKey(ValueKey('message-$id'));
 
+/// Helper that returns a list of messages where the original is far older
+/// than the newest page, so it is not loaded initially.
+List<Message> oldOriginal(String replyTo) => [
+  msg('m1', from: bob, body: 'first', minute: 0),
+  for (var i = 1; i <= 300; i++)
+    msg('f$i', from: bob, body: 'filler $i', minute: 1),
+  msg('r1', body: 'sure', replyTo: replyTo, minute: 59),
+];
+
+/// Helper to configure a group conversation.
+void asGroup(ChatFake chat) {
+  chat.conversationsResult = const Ok([Conversation(id: 'c1', title: 'Club')]);
+  chat.groupRosters['c1'] = [
+    const GroupMember(member: me, isAdmin: true),
+    const GroupMember(
+      member: Member(userId: bob, displayName: 'Bob'),
+      isAdmin: false,
+    ),
+  ];
+}
+
+/// Helper that checks whether the message with [id] is flashing.
+bool flashing(WidgetTester tester, String id) {
+  final key = find.byKey(ValueKey('message-$id'));
+  final containers = <Element>[
+    ...find
+        .descendant(
+          of: key,
+          matching: find.byType(AnimatedContainer),
+          matchRoot: true,
+        )
+        .evaluate(),
+  ];
+  return containers.any(
+    (e) => (e.widget as AnimatedContainer).foregroundDecoration != null,
+  );
+}
+
+/// Helper that returns the top-left offset of the quoted message.
+Offset? replyTop(WidgetTester t) =>
+    t.getTopLeft(find.byKey(const ValueKey('message-r1')));
+
 void main() {
   group('quote tap', () {
     testWidgets('tapping a quote scrolls the original message into view', (
@@ -194,7 +239,7 @@ void main() {
     });
 
     testWidgets(
-      'tapping a quote of a message that was never loaded does not throw',
+      'tapping a quote of a message that does not exist any more: notice, no throw',
       (tester) async {
         final messages = [msg('m2', body: 'sure', replyTo: 'zz-never-loaded')];
         await pump(tester, messages);
@@ -209,6 +254,10 @@ void main() {
           tester.takeException(),
           isNull,
           reason: 'tapping a quote to an unloaded message should not throw',
+        );
+        expect(
+          find.byKey(const ValueKey('quote-deleted-notice')),
+          findsOneWidget,
         );
       },
     );
@@ -227,36 +276,31 @@ void main() {
         final quoteFinder = find.byKey(const ValueKey('quote-m42'));
         expect(quoteFinder, findsOneWidget);
 
-        bool flashing() {
-          final key = find.byKey(const ValueKey('message-m1'));
-          final containers = <Element>[
-            ...find
-                .descendant(
-                  of: key,
-                  matching: find.byType(AnimatedContainer),
-                  matchRoot: true,
-                )
-                .evaluate(),
-            // removed ancestor spread
-          ];
-          return containers.any(
-            (e) => (e.widget as AnimatedContainer).foregroundDecoration != null,
-          );
-        }
-
-        expect(flashing(), isFalse, reason: 'no highlight before the tap');
+        expect(
+          flashing(tester, 'm1'),
+          isFalse,
+          reason: 'no highlight before the tap',
+        );
         await tester.tap(quoteFinder);
         await tester.pump(); // start tap animation
 
         // Wait until highlight appears, up to 30 * 50ms = 1500ms
         for (var i = 0; i < 30; i++) {
           await tester.pump(const Duration(milliseconds: 50));
-          if (flashing()) break;
+          if (flashing(tester, 'm1')) break;
         }
-        expect(flashing(), isTrue, reason: 'highlight shows after the jump');
+        expect(
+          flashing(tester, 'm1'),
+          isTrue,
+          reason: 'highlight shows after the jump',
+        );
 
         await tester.pumpAndSettle();
-        expect(flashing(), isFalse, reason: 'highlight cleared after settle');
+        expect(
+          flashing(tester, 'm1'),
+          isFalse,
+          reason: 'highlight cleared after settle',
+        );
         expect(
           tester.binding.hasScheduledFrame,
           isFalse,
@@ -264,5 +308,126 @@ void main() {
         );
       },
     );
+
+    testWidgets(
+      'quote of an old unloaded original (1:1): tap loads older messages, jumps and highlights',
+      (tester) async {
+        await pump(tester, oldOriginal('m1'));
+
+        final quoteFinder = find.byKey(const ValueKey('quote-r1'));
+        expect(quoteFinder, findsOneWidget);
+
+        final m1Finder = find.byKey(
+          const ValueKey('message-m1'),
+          skipOffstage: false,
+        );
+        expect(m1Finder, findsNothing, reason: 'm1 not loaded initially');
+
+        await tester.tap(quoteFinder);
+        await tester.pump(); // start loading
+
+        // Wait until m1 appears
+        for (var i = 0; i < 60; i++) {
+          await tester.pump(const Duration(milliseconds: 50));
+          if (m1Finder.evaluate().isNotEmpty) break;
+        }
+        expect(m1Finder, findsOneWidget, reason: 'm1 should appear after load');
+
+        final screenRect =
+            Offset.zero &
+            (tester.view.physicalSize / tester.view.devicePixelRatio);
+        final m1Rect = tester.getRect(m1Finder);
+        expect(
+          m1Rect.top >= 0 && m1Rect.bottom <= screenRect.height,
+          isTrue,
+          reason: 'm1 fully visible',
+        );
+        expect(flashing(tester, 'm1'), isTrue, reason: 'm1 flashing');
+
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'in a group: quote of an old unloaded original (1:1) loads older messages, jumps and highlights',
+      (tester) async {
+        await pump(tester, oldOriginal('m1'), setup: asGroup);
+
+        final quoteFinder = find.byKey(const ValueKey('quote-r1'));
+        expect(quoteFinder, findsOneWidget);
+
+        final m1Finder = find.byKey(
+          const ValueKey('message-m1'),
+          skipOffstage: false,
+        );
+        expect(m1Finder, findsNothing, reason: 'm1 not loaded initially');
+
+        await tester.tap(quoteFinder);
+        await tester.pump(); // start loading
+
+        for (var i = 0; i < 60; i++) {
+          await tester.pump(const Duration(milliseconds: 50));
+          if (m1Finder.evaluate().isNotEmpty) break;
+        }
+        expect(m1Finder, findsOneWidget, reason: 'm1 should appear after load');
+
+        final screenRect =
+            Offset.zero &
+            (tester.view.physicalSize / tester.view.devicePixelRatio);
+        final m1Rect = tester.getRect(m1Finder);
+        expect(
+          m1Rect.top >= 0 && m1Rect.bottom <= screenRect.height,
+          isTrue,
+          reason: 'm1 fully visible',
+        );
+        expect(flashing(tester, 'm1'), isTrue, reason: 'm1 flashing');
+
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'older fetch fails (offline): list stays where it was, no throw',
+      (tester) async {
+        await pump(
+          tester,
+          oldOriginal('m1'),
+          setup: (c) =>
+              c.messagesAroundResult = const Err(NetworkFailure('offline')),
+        );
+
+        final before = replyTop(tester);
+        final quoteFinder = find.byKey(const ValueKey('quote-r1'));
+        await tester.tap(quoteFinder);
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        expect(replyTop(tester), equals(before));
+        expect(
+          find.byKey(const ValueKey('message-m1'), skipOffstage: false),
+          findsNothing,
+        );
+      },
+    );
+
+    testWidgets('quote of a deleted original: notice, list stays, no throw', (
+      tester,
+    ) async {
+      await pump(tester, oldOriginal('gone-forever'));
+
+      final before = replyTop(tester);
+      final quoteFinder = find.byKey(const ValueKey('quote-r1'));
+      await tester.tap(quoteFinder);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        find.byKey(const ValueKey('quote-deleted-notice')),
+        findsOneWidget,
+      );
+      expect(replyTop(tester), equals(before));
+    });
   });
 }

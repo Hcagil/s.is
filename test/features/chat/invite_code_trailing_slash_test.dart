@@ -23,13 +23,15 @@ void main() {
       );
     });
 
-    test('URL with path, trailing slash and surrounding whitespace returns code',
-        () {
-      expect(
-        inviteCodeFrom('  https://invite.sis.test/join/$code/\n'),
-        equals(code),
-      );
-    });
+    test(
+      'URL with path, trailing slash and surrounding whitespace returns code',
+      () {
+        expect(
+          inviteCodeFrom('  https://invite.sis.test/join/$code/\n'),
+          equals(code),
+        );
+      },
+    );
 
     test('URL with path, trailing slash, tab and space returns code', () {
       expect(
@@ -39,24 +41,15 @@ void main() {
     });
 
     test('URL with no code returns null', () {
-      expect(
-        inviteCodeFrom('https://invite.sis.test/join/'),
-        isNull,
-      );
+      expect(inviteCodeFrom('https://invite.sis.test/join/'), isNull);
     });
 
     test('URL with short code returns null', () {
-      expect(
-        inviteCodeFrom('https://invite.sis.test/join/short/'),
-        isNull,
-      );
+      expect(inviteCodeFrom('https://invite.sis.test/join/short/'), isNull);
     });
 
     test('code plus one extra character returns null', () {
-      expect(
-        inviteCodeFrom('${code}X/'),
-        isNull,
-      );
+      expect(inviteCodeFrom('${code}X/'), isNull);
     });
   });
 }

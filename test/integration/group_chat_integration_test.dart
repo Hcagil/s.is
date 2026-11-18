@@ -51,7 +51,15 @@ Future<SupabaseClient> signedIn(String email) async {
   final client = _client(_url);
   try {
     await client.auth.signInWithPassword(email: email, password: _password);
-  } on AuthException {
+  } on AuthException catch (first) {
+    // Names the real cause when the fallback below fails; never the password.
+    final status = first.statusCode;
+    final code = first.code;
+    // ignore: avoid_print
+    print(
+      'integration signedIn: first sign-in failed: ${first.runtimeType} '
+      'status=$status code=$code message=${first.message}',
+    );
     try {
       await client.auth.signUp(email: email, password: _password);
     } on AuthApiException catch (e) {

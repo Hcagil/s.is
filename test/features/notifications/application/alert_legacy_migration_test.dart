@@ -149,18 +149,16 @@ void main() {
     journal = Journal();
     store = JournalStore(journal: journal);
     remote = FakeRemote(journal);
-    remote.loadResult = const Ok(
-      RemoteAlerts(sound: true, vibration: true, chats: {}),
-    );
+    remote.loadResult = const Ok(RemoteAlerts(chats: {}));
   });
 
-  test('F1: an account row made before the update (true/true defaults) must not overwrite the phone off choice',
+  test('F1: an account row made before the update (sound/vibration null, never saved) must not overwrite the phone off choice',
       () async {
     store = JournalStore(
       journal: journal,
       defaults: const AlertDefaults(sound: false, vibration: false),
     );
-    remote.loadResult = const Ok(RemoteAlerts(sound: true, vibration: true, chats: {}));
+    remote.loadResult = const Ok(RemoteAlerts(chats: {}));
     c = make();
     final p = await prefs();
     await Future<void>.delayed(const Duration(milliseconds: 50));

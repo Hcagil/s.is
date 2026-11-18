@@ -912,5 +912,7 @@
   "adminReasonDeskOnly": "Bunu yalnızca bilgisayarınızın başında yanıtlayabilirsiniz.",
   "adminReasonUnknownItem": "Bu öğe artık bilgisayarınızda yok.",
   "adminReasonGeneric": "Bir hata oluştu. Tekrar deneyin.",
-  "adminDashboardStale": "Bilgisayarınızdan güncel durum gelmiyor. Bilgisayarınız kapalı veya uykuda olabilir."
+  "adminDashboardStale": "Bilgisayarınızdan güncel durum gelmiyor. Bilgisayarınız kapalı veya uykuda olabilir.",
+  "messageShowMore": "Devamını oku",
+  "messageShowLess": "Daha az göster"
 }

@@ -28,6 +28,18 @@ class _LinkedText extends ConsumerStatefulWidget {
 }
 
 class _LinkedTextState extends ConsumerState<_LinkedText> {
+  bool _expanded = false;
+
+  String _cut(String t) {
+    final c = t.characters;
+    final head = c.take(foldMessageAfter);
+    final next = c.skip(foldMessageAfter).first;
+    if (next.trim().isEmpty) return head.toString().trimRight();
+    final s = head.toString();
+    final i = s.lastIndexOf(RegExp(r'\s'));
+    return i <= 0 ? s : s.substring(0, i).trimRight();
+  }
+
   // One recognizer per link, disposed with the widget: a recognizer that is
   // never disposed leaks its gesture arena entry.
   final _taps = <TapGestureRecognizer>[];
@@ -94,15 +106,13 @@ class _LinkedTextState extends ConsumerState<_LinkedText> {
     return spans;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    _clear();
-    final segments = linkSegments(widget.text);
+  Widget _content(String shown) {
+    final segments = linkSegments(shown);
     final highlighting =
         widget.highlightQuery != null &&
         widget.highlightQuery!.trim().isNotEmpty;
     if (segments.every((s) => s.link == null) && !highlighting) {
-      return Text(widget.text, style: widget.style);
+      return Text(shown, style: widget.style);
     }
     final spans = <TextSpan>[];
     for (final s in segments) {
@@ -128,5 +138,50 @@ class _LinkedTextState extends ConsumerState<_LinkedText> {
       );
     }
     return Text.rich(TextSpan(style: widget.style, children: spans));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _clear();
+    final long = widget.text.characters.length > foldMessageAfter;
+    if (!long) return _content(widget.text);
+    final style = TextButton.styleFrom(
+      padding: EdgeInsets.zero,
+      minimumSize: const Size(0, 32),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      foregroundColor: widget.linkColor,
+      textStyle: const TextStyle(fontSize: 14),
+    );
+    final l10n = AppLocalizations.of(context);
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _content(_expanded ? widget.text : _cut(widget.text)),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(
+            key: ValueKey(_expanded ? 'read-less' : 'read-more'),
+            onPressed: () => setState(() => _expanded = !_expanded),
+            style: style,
+            child: Text(
+              _expanded ? l10n.messageShowLess : l10n.messageShowMore,
+            ),
+          ),
+        ),
+      ],
+    );
+    // Open/close takes 200 ms; with reduced motion it is a 150 ms fade instead.
+    if (MediaQuery.disableAnimationsOf(context)) {
+      return AnimatedSwitcher(
+        duration: const Duration(milliseconds: 150),
+        child: KeyedSubtree(key: ValueKey(_expanded), child: body),
+      );
+    }
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 200),
+      alignment: Alignment.topLeft,
+      child: body,
+    );
   }
 }

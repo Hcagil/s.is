@@ -39,9 +39,14 @@ class DeletedUsersController extends Notifier<Set<String>> {
         .toSet();
     if (fresh.isEmpty) return;
     _inFlight.addAll(fresh);
-    final r = await ref
-        .read(accountDeletionRepositoryProvider)
-        .missingUsers(fresh.toList());
+    Result<Set<String>>? r;
+    try {
+      r = await ref
+          .read(accountDeletionRepositoryProvider)
+          .missingUsers(fresh.toList());
+    } catch (_) {
+      // A missing repository or a thrown call is a failed ask: the label check never breaks a screen.
+    }
     _inFlight.removeAll(fresh);
     if (!ref.mounted) return;
     switch (r) {
@@ -49,7 +54,7 @@ class DeletedUsersController extends Notifier<Set<String>> {
         _answered.addAll(fresh);
         fresh.forEach(_retryAt.remove);
         if (value.isNotEmpty) state = {...state, ...value};
-      case Err():
+      case Err() || null:
         final retry = clock.now().add(const Duration(minutes: 1));
         for (final id in fresh) {
           _retryAt[id] = retry;

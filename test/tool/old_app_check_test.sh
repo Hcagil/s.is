@@ -263,7 +263,11 @@ cat >"$tmp/reset.sh" <<'EOF'
 echo "$*" >> "$RESET_LOG"
 case " $* " in
   *" --no-seed "*) [ -z "${RESET_FAIL_NOSEED:-}" ] || exit 1 ;;
-  *) [ -z "${RESET_FAIL_PLAIN:-}" ] || exit 1 ;;
+  *) [ -z "${RESET_FAIL_PLAIN:-}" ] || { echo "RESET-OUT-MARK"; exit 1; }
+     if [ -n "${RESET_FAIL_TIMES:-}" ]; then
+       n=$(cat "$RESET_LOG.cnt" 2>/dev/null || echo 0)
+       if [ "$n" -lt "$RESET_FAIL_TIMES" ]; then echo $((n+1)) > "$RESET_LOG.cnt"; echo "RESET-OUT-MARK"; exit 1; fi
+     fi ;;
 esac
 exit 0
 EOF
@@ -279,7 +283,7 @@ EOF
 chmod +x "$tmp/bin/docker"
 
 seedrun() {
-  rm -f "$tmp/reset.log" "$tmp/docker.log" "$tmp/docker.in"
+  rm -f "$tmp/reset.log" "$tmp/docker.log" "$tmp/docker.in" "$tmp/reset.log.cnt"
   WITH_INTEG=1 SEEDS=1 mkrepo 101 120
   runreal PATH="$tmp/bin:$PATH" \
           RESET_LOG="$tmp/reset.log" \
@@ -342,6 +346,18 @@ seedrun RESET_FAIL_PLAIN=1
 has c24-restore "ERROR: could not restore the current seed"
 has c24-pass "PASS v1.0.101+101"
 eqv c24-code "$code" 1
+# c24b: first restore fails, second passes
+seedrun RESET_FAIL_TIMES=1
+eqv c24b-code "$code" 0
+has c24b-tail "RESET-OUT-MARK"
+[[ "$out" != *"could not restore the current seed"* ]] || fail c24b-no-error
+eqv c24b-count "$(grep -vc -- '--no-seed' "$tmp/reset.log")" 2
+# c24c: both restores fail: tail printed, error, exit 1
+seedrun RESET_FAIL_TIMES=2
+eqv c24c-code "$code" 1
+has c24c-tail "RESET-OUT-MARK"
+has c24c-error "ERROR: could not restore the current seed after the replays"
+eqv c24c-count "$(grep -vc -- '--no-seed' "$tmp/reset.log")" 2
 # c25
 rm -f "$tmp/reset.log" "$tmp/docker.log" "$tmp/docker.in"
 WITH_INTEG=1 SEEDS=1 mkrepo 101 120

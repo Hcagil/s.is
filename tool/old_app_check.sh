@@ -353,9 +353,18 @@ else
 fi
 
 # Put the current seed back, so later steps (pgTAP, the next suite) see this branch's fixtures.
-if $reset_done && ! $OLD_APP_RESET_CMD >/dev/null 2>&1; then
-  say "ERROR: could not restore the current seed after the replays"
-  any_fail=true
+if $reset_done; then
+  reset_log=$(mktemp)
+  restored=false
+  for attempt in 1 2; do
+    if $OLD_APP_RESET_CMD >"$reset_log" 2>&1; then restored=true; break; fi
+    tail -n 20 "$reset_log" >&2
+  done
+  rm -f "$reset_log"
+  if ! $restored; then
+    say "ERROR: could not restore the current seed after the replays"
+    any_fail=true
+  fi
 fi
 
 if $any_fail; then

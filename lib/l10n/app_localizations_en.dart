@@ -2848,6 +2848,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminQuestionsEmpty => 'No open questions';
 
   @override
+  String adminQuestionFromLabel(String conv) {
+    return 'From $conv';
+  }
+
+  @override
+  String adminQuestionCountText(int n) {
+    return '$n to answer';
+  }
+
+  @override
   String get adminBoxM => 'Manager';
 
   @override

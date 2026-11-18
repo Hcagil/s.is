@@ -1,5 +1,5 @@
 begin;
-select plan(35);
+select plan(38);
 
 -- chat_alert_settings: a member reads and writes only their own rows, only for
 -- chats they are in; no anon access. public.push_alerts is for service_role
@@ -129,6 +129,14 @@ reset role;
 delete from auth.sessions where id = 'ca000000-0000-0000-0000-000000000004';
 select test_as('00000000-0000-0000-0000-0000000ca004', 'ca000000-0000-0000-0000-000000000004');
 select is((select count(*) from public.chat_alert_settings)::int, 0, 'dee loses access with her session');
+reset role;
+
+insert into public.chat_alert_settings(user_id, conversation_id, sound) select '00000000-0000-0000-0000-0000000ca003', id, 'on' from _grp;
+delete from app_private.allowlist where email = 'cleo@cas.test';
+select test_as('00000000-0000-0000-0000-0000000ca003', 'ca000000-0000-0000-0000-000000000003');
+select is((select count(*) from public.chat_alert_settings)::int, 0, 'cleo, removed from the allowlist with an active session, can no longer read her rows');
+select throws_ok($$insert into public.chat_alert_settings(conversation_id, sound) select id, 'off' from _grp$$, '42501', null, 'cleo, removed from the allowlist, can no longer insert (she is still a member of the chat)');
+select is(test_row_count('update public.chat_alert_settings set sound = ''off'' where user_id = ''00000000-0000-0000-0000-0000000ca003'''), 0::bigint, 'cleo, removed from the allowlist, can no longer update her row');
 reset role;
 
 -- BLOCK RESOLUTION

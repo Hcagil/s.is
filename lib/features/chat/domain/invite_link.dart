@@ -17,7 +17,7 @@ final class InviteLink {
   /// The chosen time limit in days (1, 7 or 30); null = no limit.
   final int? validDays;
 
-  /// Returns true if [expiresAt] is not after [now], or if there is no expiry.
+  /// Returns true if [expiresAt] is not after [now]; false when there is no expiry.
   bool expiredAt(DateTime now) => expiresAt != null && !expiresAt!.isAfter(now);
 }
 
@@ -45,7 +45,11 @@ final RegExp inviteCodePattern = RegExp(r'^[A-Za-z0-9_-]{24}$');
 
 /// The code from a pasted invite, which is either the bare code or a web address ending in it; null when it is not a code.
 String? inviteCodeFrom(String pasted) {
-  final code = pasted.trim().split(RegExp(r'[/#=]')).last;
+  final code = pasted
+      .trim()
+      .replaceFirst(RegExp(r'/+$'), '')
+      .split(RegExp(r'[/#=]'))
+      .last;
   return inviteCodePattern.hasMatch(code) ? code : null;
 }
 

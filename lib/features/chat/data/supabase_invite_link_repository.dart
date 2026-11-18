@@ -27,6 +27,15 @@ final class SupabaseInviteLinkRepository implements InviteLinkRepository {
     _ => readableFailure(e),
   };
 
+  InviteLink _inviteLinkFrom(Map<String, dynamic> row) => InviteLink(
+    token: row['token'] as String,
+    createdAt: DateTime.parse(row['created_at'] as String),
+    expiresAt: row['expires_at'] != null
+        ? DateTime.parse(row['expires_at'] as String)
+        : null,
+    validDays: row['limit_days'] as int?,
+  );
+
   /// preview_invite_link and join_by_link return their refusal in an `error` column (LINK1..LINK4; null = fine) so the server counts the try.
   Failure? _linkRefusal(String? code) => switch (code) {
     null => null,
@@ -47,16 +56,7 @@ final class SupabaseInviteLinkRepository implements InviteLinkRepository {
         return const Ok(null);
       }
       final row = rows.cast<Map<String, dynamic>>().first;
-      return Ok(
-        InviteLink(
-          token: row['token'] as String,
-          createdAt: DateTime.parse(row['created_at'] as String),
-          expiresAt: row['expires_at'] != null
-              ? DateTime.parse(row['expires_at'] as String)
-              : null,
-          validDays: row['limit_days'] as int?,
-        ),
-      );
+      return Ok(_inviteLinkFrom(row));
     } catch (e) {
       return Err(_asFailure(e));
     }
@@ -73,16 +73,7 @@ final class SupabaseInviteLinkRepository implements InviteLinkRepository {
         params: {'conversation': conversationId, 'valid_days': validDays},
       );
       final row = (rows as List).cast<Map<String, dynamic>>().first;
-      return Ok(
-        InviteLink(
-          token: row['token'] as String,
-          createdAt: DateTime.parse(row['created_at'] as String),
-          expiresAt: row['expires_at'] != null
-              ? DateTime.parse(row['expires_at'] as String)
-              : null,
-          validDays: row['limit_days'] as int?,
-        ),
-      );
+      return Ok(_inviteLinkFrom(row));
     } catch (e) {
       return Err(_asFailure(e));
     }
@@ -99,16 +90,7 @@ final class SupabaseInviteLinkRepository implements InviteLinkRepository {
         params: {'conversation': conversationId, 'valid_days': validDays},
       );
       final row = (rows as List).cast<Map<String, dynamic>>().first;
-      return Ok(
-        InviteLink(
-          token: row['token'] as String,
-          createdAt: DateTime.parse(row['created_at'] as String),
-          expiresAt: row['expires_at'] != null
-              ? DateTime.parse(row['expires_at'] as String)
-              : null,
-          validDays: row['limit_days'] as int?,
-        ),
-      );
+      return Ok(_inviteLinkFrom(row));
     } catch (e) {
       return Err(_asFailure(e));
     }

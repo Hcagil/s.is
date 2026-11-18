@@ -75,8 +75,8 @@ begin
   end if;
 end $$;
 
--- chat_list as in 20261126120000, plus a "marked_unread" key: the conversations this user marked unread (own rows only, via RLS).
-CREATE OR REPLACE FUNCTION public.chat_list()
+-- chat_list_v2: chat_list as in 20261126120000 plus a "marked_unread" key (own rows only, via RLS). Released apps keep calling chat_list (unchanged answer).
+CREATE OR REPLACE FUNCTION public.chat_list_v2()
 RETURNS jsonb
 LANGUAGE sql
 STABLE
@@ -153,5 +153,18 @@ SELECT jsonb_build_object(
 );
 $$;
 
+REVOKE ALL ON FUNCTION public.chat_list_v2() FROM public, anon;
+GRANT EXECUTE ON FUNCTION public.chat_list_v2() TO authenticated;
+
+-- chat_list keeps its old answer: v2 minus the new key.
+CREATE OR REPLACE FUNCTION public.chat_list()
+RETURNS jsonb
+LANGUAGE sql
+STABLE
+SECURITY INVOKER
+SET search_path = ''
+AS $$
+SELECT public.chat_list_v2() - 'marked_unread';
+$$;
 REVOKE ALL ON FUNCTION public.chat_list() FROM public, anon;
 GRANT EXECUTE ON FUNCTION public.chat_list() TO authenticated;

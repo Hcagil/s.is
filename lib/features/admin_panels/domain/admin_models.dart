@@ -1,3 +1,17 @@
+/// Allowed values for [AdminQuestion.topic].
+const adminQuestionTopics = <String>[
+  'chat',
+  'groups',
+  'notifications',
+  'sign-in',
+  'speed',
+  'release',
+  'admin panels',
+  'rules and cards',
+  'tools',
+  'other',
+];
+
 /// A question item from the admin export.
 final class AdminQuestion {
   /// Creates an [AdminQuestion] with the given values.
@@ -9,6 +23,9 @@ final class AdminQuestion {
     required this.recommended,
     required this.answers,
     required this.waiting,
+    this.topic = 'other',
+    this.sub = '',
+    this.conv,
   });
 
   /// Parses values safely using `is` checks. Never throws.
@@ -29,6 +46,17 @@ final class AdminQuestion {
 
     final waiting = f['state'] == 'waiting';
 
+    final topicRaw = f['topic'];
+    final topic = topicRaw is String && adminQuestionTopics.contains(topicRaw)
+        ? topicRaw
+        : 'other';
+    final subRaw = f['sub'];
+    final sub = subRaw is String
+        ? (subRaw.length > 200 ? subRaw.substring(0, 200) : subRaw)
+        : '';
+    final convRaw = f['conv'];
+    final conv = convRaw is String && convRaw.isNotEmpty ? convRaw : null;
+
     return AdminQuestion(
       id: id,
       text: text,
@@ -37,6 +65,9 @@ final class AdminQuestion {
       recommended: recommended,
       answers: answers,
       waiting: waiting,
+      topic: topic,
+      sub: sub,
+      conv: conv,
     );
   }
 
@@ -60,6 +91,15 @@ final class AdminQuestion {
 
   /// Answered and sent, not yet read by the computer.
   final bool waiting;
+
+  /// One of [adminQuestionTopics].
+  final String topic;
+
+  /// Subtopic, empty when none.
+  final String sub;
+
+  /// Conversation label like c-NN, null when none.
+  final String? conv;
 }
 
 /// A task item from the admin export.

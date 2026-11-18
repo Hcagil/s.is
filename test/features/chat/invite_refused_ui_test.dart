@@ -31,6 +31,7 @@ void main() {
       await paste(t, w, 'zzzzzzzzzzzzzzzzzzzzzzzz');
       expect(byKey('invite-refused-page'), findsOneWidget);
       expect(find.text(l10nEn.inviteInvalidTitle), findsOneWidget);
+      expect(find.text(l10nEn.inviteInvalidPageTitle), findsWidgets);
       expect(w.invite.calls.where((c) => c.startsWith('join')).isEmpty, isTrue);
       await t.pump(const Duration(seconds: 30));
     });
@@ -42,6 +43,7 @@ void main() {
       await paste(t, w, token);
       expect(byKey('invite-refused-page'), findsOneWidget);
       expect(find.text(l10nEn.inviteInvalidTitle), findsOneWidget);
+      expect(find.text(l10nEn.inviteInvalidPageTitle), findsWidgets);
       await t.pump(const Duration(seconds: 30));
     });
 
@@ -52,6 +54,7 @@ void main() {
       await paste(t, w, token);
       expect(byKey('invite-refused-page'), findsOneWidget);
       expect(find.text(l10nEn.inviteClosedBody), findsOneWidget);
+      expect(find.text(l10nEn.composerGroupClosedNoName), findsWidgets);
       expect(find.text(l10nEn.inviteInvalidTitle), findsNothing);
       await t.pump(const Duration(seconds: 30));
     });

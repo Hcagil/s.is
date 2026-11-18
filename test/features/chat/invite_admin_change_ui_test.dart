@@ -86,6 +86,22 @@ void main() {
       await t.pump(const Duration(seconds: 30));
     });
 
+    testWidgets('turn off cancel keeps the link', (t) async {
+      final w = InviteWorld();
+      await t.runAsync(() => w.invite.resetInviteLink('g1', validDays: 7));
+      await openGroupPage(t, w);
+      await tapKey(t, 'setting-invite-link');
+      final before = w.invite.calls.length;
+      await tapKey(t, 'invite-turn-off');
+      await tapKey(t, 'invite-confirm-cancel');
+      expect(
+        w.invite.calls.skip(before).any((c) => c.startsWith('off')),
+        false,
+      );
+      expect(byKey('invite-link-text'), findsOneWidget);
+      await t.pump(const Duration(seconds: 30));
+    });
+
     testWidgets('turn off asks first and then removes the link', (t) async {
       final w = InviteWorld();
       await t.runAsync(() => w.invite.resetInviteLink('g1', validDays: 7));

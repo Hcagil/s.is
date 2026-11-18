@@ -1089,7 +1089,7 @@
   "commonSelect": "Select",
   "@commonSelect": {"description": "Chat menu row that starts selecting chats"},
   "chatMarkedUnread": "Chat marked as unread",
-  "@chatMarkedUnread": {"description": "Snackbar after marking a chat unread, with the Undo button"},
+  "@chatMarkedUnread": {"description": "Short notice (no action button) shown after marking a chat unread"},
   "chatDeleteAction": "Delete",
   "@chatDeleteAction": {"description": "Delete button of the selection bar and of the many-chats dialog"},
   "chatDeleteCancel": "Cancel",

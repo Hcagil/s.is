@@ -2636,7 +2636,7 @@ abstract class AppLocalizations {
   /// **'Select'**
   String get commonSelect;
 
-  /// Snackbar after marking a chat unread, with the Undo button
+  /// Short notice (no action button) shown after marking a chat unread
   ///
   /// In en, this message translates to:
   /// **'Chat marked as unread'**

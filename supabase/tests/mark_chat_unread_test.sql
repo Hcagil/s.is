@@ -1,5 +1,5 @@
 begin;
-select plan(53);
+select plan(60);
 
 -- Fixtures: emails @markunread.test; users uma(…ee01), vic(…ee02), wes(…ee03), gus(…ee04),
 -- ids 00000000-0000-0000-0000-00000000ee0N; sessions ids e1000000-0000-0000-0000-00000000ee0N (N = 1..4).
@@ -250,37 +250,47 @@ select is(
   'uma can mark again after reading'
 );
 
--- GROUP D: chat_list
+-- GROUP D: chat_list_v2 (chat_list keeps the old 8 keys)
 
 -- S1: insert chat_list for each user
 select test_as('00000000-0000-0000-0000-00000000ee01', 'e1000000-0000-0000-0000-00000000ee01');
 delete from _r;
-insert into _r select 'uma', public.chat_list();
+insert into _r select 'uma', public.chat_list_v2();
+insert into _r select 'uma-old', public.chat_list();
 reset role;
 
 select test_as('00000000-0000-0000-0000-00000000ee02', 'e1000000-0000-0000-0000-00000000ee02');
-insert into _r select 'vic', public.chat_list();
+insert into _r select 'vic', public.chat_list_v2();
 reset role;
 
 select test_as('00000000-0000-0000-0000-00000000ee03', 'e1000000-0000-0000-0000-00000000ee03');
-insert into _r select 'wes', public.chat_list();
+insert into _r select 'wes', public.chat_list_v2();
 reset role;
 
 -- Assertions (as postgres)
-select ok((select j ? 'marked_unread' from _r where who='uma'), 'chat_list has the marked_unread key');
-select ok((select j ?& array['archives','conversations','hides','members','pins','previews','profiles','unread'] from _r where who='uma'), 'chat_list keeps every old key');
+select ok((select j ? 'marked_unread' from _r where who='uma'), 'chat_list_v2 has the marked_unread key');
+select ok((select j ?& array['archives','conversations','hides','members','pins','previews','profiles','unread'] from _r where who='uma'), 'chat_list_v2 keeps every old key');
 select is((select jsonb_array_length(j->'marked_unread') from _r where who='uma'), 1, 'uma has one marked chat');
 select is((select (j->'marked_unread'->0->>'conversation_id')::uuid from _r where who='uma'), (select id from _c where k='D'), 'uma''s marked chat is D');
 select is((select jsonb_array_length(j->'marked_unread') from _r where who='vic'), 1, 'vic has one marked chat');
 select is((select (j->'marked_unread'->0->>'conversation_id')::uuid from _r where who='vic'), (select id from _c where k='D'), 'vic''s marked chat is D');
 select ok((select j ? 'marked_unread' and jsonb_array_length(j->'marked_unread') = 0 from _r where who='wes'), 'wes has the key and no marks');
 select ok((select j ?& array['archives','conversations','hides','members','pins','previews','profiles','unread'] from _r where who='wes'), 'wes still gets every old key');
+select ok(not (select j ? 'marked_unread' from _r where who='uma-old'), 'chat_list has NO marked_unread key');
+select is((select array(select jsonb_object_keys(j) order by 1) from _r where who='uma-old'), array['archives','conversations','hides','members','pins','previews','profiles','unread'], 'chat_list returns exactly the 8 old keys');
+select is(has_function_privilege('anon', 'public.chat_list_v2()', 'execute'), false, 'anon has no execute on chat_list_v2');
+select is(has_function_privilege('authenticated', 'public.chat_list_v2()', 'execute'), true, 'authenticated may execute chat_list_v2');
+select is((select prosecdef from pg_proc where oid = 'public.chat_list_v2()'::regprocedure), false, 'chat_list_v2 is security invoker');
+select ok((select 'search_path=""' = any(proconfig) from pg_proc where oid = 'public.chat_list_v2()'::regprocedure), 'chat_list_v2 pins search_path to empty');
+set local role anon;
+select throws_ok('select public.chat_list_v2()', '42501', null, 'anon call to chat_list_v2 is refused');
+reset role;
 
 -- S2: vic reads D
 select test_as('00000000-0000-0000-0000-00000000ee02', 'e1000000-0000-0000-0000-00000000ee02');
 select public.mark_read((select id from _c where k='D'));
 delete from _r where who='vic';
-insert into _r select 'vic', public.chat_list();
+insert into _r select 'vic', public.chat_list_v2();
 reset role;
 
 select is((select jsonb_array_length(j->'marked_unread') from _r where who='vic'), 0, 'vic reading D empties his marked list');
@@ -288,7 +298,7 @@ select is((select jsonb_array_length(j->'marked_unread') from _r where who='vic'
 -- S3: uma still has her D mark
 select test_as('00000000-0000-0000-0000-00000000ee01', 'e1000000-0000-0000-0000-00000000ee01');
 delete from _r where who='uma';
-insert into _r select 'uma', public.chat_list();
+insert into _r select 'uma', public.chat_list_v2();
 reset role;
 
 select is((select jsonb_array_length(j->'marked_unread') from _r where who='uma'), 1, 'vic reading D did not clear uma''s mark');

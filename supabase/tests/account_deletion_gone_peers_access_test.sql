@@ -73,14 +73,14 @@ select test_as(3);
 select is((select count(*)::int from public.chat_gone_peers()), 0, 'zed: chat_gone_peers has no rows');
 reset role;
 
--- 3. Zed chat_list()->gone_peers is empty array
+-- 3. Zed chat_list_v2()->gone_peers is empty array
 select test_as(3);
-select is(coalesce(public.chat_list()->'gone_peers','[]'::jsonb)::text, '[]', 'zed: chat_list gone_peers empty');
+select is(coalesce(public.chat_list_v2()->'gone_peers','[]'::jsonb)::text, '[]', 'zed: chat_list_v2 gone_peers empty');
 reset role;
 
--- 4. Uma chat_list()->gone_peers array length 1
+-- 4. Uma chat_list_v2()->gone_peers array length 1
 select test_as(1);
-select is(jsonb_array_length(public.chat_list()->'gone_peers')::text, '1', 'uma: chat_list gone_peers length 1');
+select is(jsonb_array_length(public.chat_list_v2()->'gone_peers')::text, '1', 'uma: chat_list_v2 gone_peers length 1');
 reset role;
 
 select * from finish();

@@ -1,5 +1,5 @@
 begin;
-select plan(34);
+select plan(35);
 
 -- public.chat_list(): the whole chat list in one call, for the caller only
 -- (security invoker, so RLS decides every row).
@@ -113,10 +113,19 @@ select test_as('00000000-0000-0000-0000-00000000cc03', 'c1000000-0000-0000-0000-
 insert into _r select 'wes', public.chat_list();
 reset role;
 
+-- new v2 calls
+select test_as('00000000-0000-0000-0000-00000000cc01', 'c1000000-0000-0000-0000-00000000cc01');
+insert into _r select 'uma-v2', public.chat_list_v2();
+reset role;
+
 -- shape ------------------------------------------------------------------
 select is((select array(select jsonb_object_keys(j) order by 1) from _r where who='uma'),
-  array['archives','conversations','gone_peers','hides','members','pins','previews','profiles','unread'],
-  'nine keys');
+  array['archives','conversations','hides','members','pins','previews','profiles','unread'],
+  'eight keys, no gone_peers');
+
+select is((select array(select jsonb_object_keys(j) order by 1) from _r where who='uma-v2'),
+  array['archives','conversations','gone_peers','hides','marked_unread','members','pins','previews','profiles','unread'],
+  'chat_list_v2 has ten keys');
 
 -- member sees only own rows ------------------------------------------------
 select is((select array(select (e->>'id')::text from _r, jsonb_array_elements(j->'conversations') e
@@ -149,7 +158,7 @@ select is((select count(*)::int from _r, jsonb_array_elements(j->'members') e
 -- outsider gets [] everywhere ---------------------------------------------
 select is((select count(*)::int from _r, jsonb_each(j) kv where who='xan' and kv.value <> '[]'::jsonb), 0,
   'xan: every key is []');
-select is((select count(*)::int from _r, jsonb_each(j) kv where who='xan'), 9, 'xan: all nine keys still there');
+select is((select count(*)::int from _r, jsonb_each(j) kv where who='xan'), 8, 'xan: all eight keys still there');
 
 -- anon cannot execute ------------------------------------------------------
 select is(has_function_privilege('anon', 'public.chat_list()', 'execute'), false, 'anon has no execute');

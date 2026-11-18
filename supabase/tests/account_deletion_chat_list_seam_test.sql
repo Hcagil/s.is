@@ -1,6 +1,6 @@
--- gone_peers seam: when the other person of a 1:1 chat is deleted, only the remaining member's chat_list() names the deleted id; never for groups, nobody else, not while the partner exists.
+-- gone_peers seam: when the other person of a 1:1 chat is deleted, only the remaining member's chat_list_v2() names the deleted id; never for groups, nobody else, not while the partner exists.
 begin;
-select plan(12);
+select plan(13);
 insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data) values
   ('00000000-0000-0000-0000-0000000fd001','gp-uma@mail.test',now(),'{"full_name":"Uma"}'),
   ('00000000-0000-0000-0000-0000000fd002','gp-vic@mail.test',now(),'{"full_name":"Vic"}'),
@@ -43,12 +43,12 @@ create function c(k text) returns uuid language sql as $$ select id from _c wher
 create temp table _r (who text primary key, j jsonb);
 grant select, insert on _r to authenticated;
 create function r(w text) returns jsonb language sql as $$ select j from _r where who = w $$;
-select test_as(1); insert into _r select 'uma_before', public.chat_list()->'gone_peers'; reset role;
-select test_as(3); insert into _r select 'wes_before', public.chat_list()->'gone_peers'; reset role;
+select test_as(1); insert into _r select 'uma_before', public.chat_list_v2()->'gone_peers'; reset role;
+select test_as(3); insert into _r select 'wes_before', public.chat_list_v2()->'gone_peers'; reset role;
 delete from auth.users where id in (u(2), u(4));
-select test_as(1); insert into _r select 'uma_after', public.chat_list()->'gone_peers'; reset role;
-select test_as(3); insert into _r select 'wes_after', public.chat_list()->'gone_peers'; reset role;
-select test_as(5); insert into _r select 'yan_after', public.chat_list()->'gone_peers'; reset role;
+select test_as(1); insert into _r select 'uma_after', public.chat_list_v2()->'gone_peers'; reset role;
+select test_as(3); insert into _r select 'wes_after', public.chat_list_v2()->'gone_peers'; reset role;
+select test_as(5); insert into _r select 'yan_after', public.chat_list_v2()->'gone_peers'; reset role;
 
 -- Assertions
 select is(r('uma_before')::text, '[]', 'uma before: partner alive, nothing');
@@ -60,6 +60,9 @@ select is(jsonb_array_length(r('wes_after'))::text, '1', 'wes after: one gone pe
 select is((r('wes_after')->0->>'conversation_id')::text, c('D2')::text, 'wes after: conversation id matches D2');
 select is((r('wes_after')->0->>'user_id')::text, u(4)::text, 'wes after: user id matches Xan');
 select is(r('yan_after')::text, '[]', 'yan has no chats: nothing');
+select test_as(1);
+select is((select public.chat_list() ? 'gone_peers'), false, 'old chat_list has no gone_peers key');
+reset role;
 
 -- Yan: chat_gone_peers has no rows
 select test_as(5);

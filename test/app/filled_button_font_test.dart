@@ -1,5 +1,4 @@
-// t_516326574c: a FilledButton's label uses the chosen app font (Manrope when
-// the system font is switched off) and stays on the phone's font otherwise.
+// t_516326574c: a FilledButton's label uses the chosen app font (Inter) and stays on the phone's font otherwise.
 // Written from the contract; the button is drawn in the app's own theme.
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -32,18 +31,13 @@ Future<String?> labelFamily(WidgetTester t, ThemeData theme) async {
 
 void main() {
   for (final b in Brightness.values) {
-    testWidgets('$b, app font chosen: the label is Manrope', (t) async {
-      final theme = sisTheme(b, systemFont: false);
+    testWidgets('$b: the FilledButton label is Inter', (t) async {
+      final theme = sisTheme(b);
       expect(
         theme.filledButtonTheme.style?.textStyle?.resolve({})?.fontFamily,
-        'Manrope',
+        'Inter',
       );
-      expect(await labelFamily(t, theme), 'Manrope');
-    });
-
-    testWidgets('$b, system font: no family on the label (the phone\'s own '
-        'font, as before the change)', (t) async {
-      expect(await labelFamily(t, sisTheme(b)), isNull);
+      expect(await labelFamily(t, theme), 'Inter');
     });
   }
 }

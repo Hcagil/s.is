@@ -44,7 +44,7 @@ void main() {
       expect(byKey('unread-c1'), findsNothing);
     });
 
-    testWidgets('Mark as unread: dot, snackbar with Undo, one server call', (
+    testWidgets('Mark as unread: dot, notice, one server call', (
       WidgetTester t,
     ) async {
       final chat = ChatFake()..conversationsResult = Ok([conv('c1', bob, 1)]);
@@ -56,11 +56,33 @@ void main() {
       await t.pump(const Duration(milliseconds: 400));
       expect(mark.calls, ['c1']);
       expect(find.text(l10nEn.chatMarkedUnread), findsOneWidget);
-      expect(find.text(l10nEn.chatDeleteUndo), findsOneWidget);
       expect(byKey('marked-dot-c1'), findsOneWidget);
+      expect(ui.notice, findsOneWidget);
+      await ui.drainNotice(t);
     });
 
-    testWidgets('Undo takes the mark back', (WidgetTester t) async {
+    testWidgets(
+      'no Undo button; Mark as read in the menu takes the mark back',
+      (WidgetTester t) async {
+        final chat = ChatFake()..conversationsResult = Ok([conv('c1', bob, 1)]);
+        final mark = MarkFake();
+        await pumpCardList(t, chat: chat, mark: mark);
+        await openCard(t, 'c1');
+        await t.tap(byKey('chat-menu-unread'));
+        await t.pump();
+        await t.pump(const Duration(milliseconds: 400));
+        expect(find.text(l10nEn.chatDeleteUndo), findsNothing);
+        await ui.drainNotice(t);
+        await openCard(t, 'c1');
+        await t.tap(byKey('chat-menu-unread'));
+        await t.pump();
+        await t.pump(const Duration(milliseconds: 400));
+        expect(chat.markedRead, contains('c1'));
+        expect(byKey('marked-dot-c1'), findsNothing);
+      },
+    );
+
+    testWidgets('the notice is gone after 2 s', (WidgetTester t) async {
       final chat = ChatFake()..conversationsResult = Ok([conv('c1', bob, 1)]);
       final mark = MarkFake();
       await pumpCardList(t, chat: chat, mark: mark);
@@ -68,29 +90,14 @@ void main() {
       await t.tap(byKey('chat-menu-unread'));
       await t.pump();
       await t.pump(const Duration(milliseconds: 400));
-      await t.tap(find.text(l10nEn.chatDeleteUndo));
-      await t.pump();
-      await t.pump(const Duration(milliseconds: 400));
-      expect(chat.markedRead, contains('c1'));
-      expect(byKey('marked-dot-c1'), findsNothing);
-    });
-
-    testWidgets('the snackbar lasts 5 seconds', (WidgetTester t) async {
-      final chat = ChatFake()..conversationsResult = Ok([conv('c1', bob, 1)]);
-      final mark = MarkFake();
-      await pumpCardList(t, chat: chat, mark: mark);
-      await openCard(t, 'c1');
-      await t.tap(byKey('chat-menu-unread'));
-      await t.pump();
-      await t.pump(const Duration(seconds: 4));
       expect(find.text(l10nEn.chatMarkedUnread), findsOneWidget);
-      await t.pump(const Duration(seconds: 6));
+      await ui.drainNotice(t);
       await t.pumpAndSettle();
       expect(find.text(l10nEn.chatMarkedUnread), findsNothing);
       expect(byKey('marked-dot-c1'), findsOneWidget);
     });
 
-    testWidgets('a refusal shows an error notice, no dot, no snackbar', (
+    testWidgets('a refusal shows an error notice, no dot, no mark notice', (
       WidgetTester t,
     ) async {
       final chat = ChatFake()..conversationsResult = Ok([conv('c1', bob, 1)]);
@@ -116,7 +123,7 @@ void main() {
       expect(chat.markedRead, contains('c1'));
     });
 
-    testWidgets('Turkish snackbar', (WidgetTester t) async {
+    testWidgets('Turkish notice', (WidgetTester t) async {
       final chat = ChatFake()..conversationsResult = Ok([conv('c1', bob, 1)]);
       final mark = MarkFake();
       await pumpCardList(t, chat: chat, mark: mark, locale: const Locale('tr'));
@@ -126,6 +133,7 @@ void main() {
       await t.pump(const Duration(milliseconds: 400));
       expect(find.text(l10nTr.chatMarkedUnread), findsOneWidget);
       expect(find.text(l10nTr.chatMenuMarkUnread), findsNothing);
+      await ui.drainNotice(t);
     });
   });
 }

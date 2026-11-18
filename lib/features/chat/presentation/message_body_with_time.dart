@@ -49,7 +49,7 @@ class _BodyWithTime extends StatelessWidget {
     final direction = Directionality.of(context);
     final scaler = MediaQuery.textScalerOf(context);
     // Text/Text.rich merge the given style onto the ambient DefaultTextStyle
-    // (which is where the app's Manrope font family comes from); a bare
+    // (which is where the app's Inter font family comes from); a bare
     // TextStyle here would measure in the platform default font instead and
     // report the wrong width.
     final defaultStyle = DefaultTextStyle.of(context).style;

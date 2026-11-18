@@ -87,7 +87,6 @@ class SisApp extends ConsumerWidget {
       theme: sisTheme(
         Brightness.light,
         theme: look.themeId,
-        systemFont: look.systemFont,
         brand: custom == null
             ? null
             : sisBrandForCustom(
@@ -99,7 +98,6 @@ class SisApp extends ConsumerWidget {
       darkTheme: sisTheme(
         Brightness.dark,
         theme: look.themeId,
-        systemFont: look.systemFont,
         brand: custom == null
             ? null
             : sisBrandForCustom(

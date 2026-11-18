@@ -92,14 +92,6 @@
   "@previewMine": {
     "description": "Sample outgoing message in the live preview"
   },
-  "textSystemFont": "Use the phone's own font",
-  "@textSystemFont": {
-    "description": "Switch title"
-  },
-  "textSystemFontHint": "Uses your phone's font. When off, SIS uses its own font.",
-  "@textSystemFontHint": {
-    "description": "Switch subtitle"
-  },
   "textChatSize": "Chat text size",
   "@textChatSize": {
     "description": "Section label"

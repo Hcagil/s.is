@@ -54,7 +54,15 @@ Future<SupabaseClient> signedIn(String email, {bool activate = true}) async {
   try {
     await client.auth.signInWithPassword(email: email, password: _password);
   } on AuthException {
-    await client.auth.signUp(email: email, password: _password);
+    try {
+      await client.auth.signUp(email: email, password: _password);
+    } on AuthApiException catch (e) {
+      // The account exists, so the sign-in above failed for another reason
+      // (a transient error); the sign-up fallback is refused. Sign in again.
+      if (e.code != 'user_already_exists') rethrow;
+      await Future<void>.delayed(const Duration(seconds: 1));
+      await client.auth.signInWithPassword(email: email, password: _password);
+    }
   }
   expect(client.auth.currentUser, isNotNull, reason: 'sign-in failed');
   if (activate) {

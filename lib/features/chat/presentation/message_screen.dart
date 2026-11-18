@@ -721,13 +721,13 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
         ),
       if (!isGroup && otherUserId != null && title != null) otherUserId: title,
     };
-    // A sender the roster cannot name may be an account that no longer exists: ask the server once per id.
     // A 1:1 partner with no name may be a deleted account: ask the server once.
     if (!isGroup &&
         listed?.other != null &&
         listed!.other!.displayName.isEmpty) {
       askDeletedAccounts(ref, [listed.other!.userId]);
     }
+    // A group sender the roster cannot name may be an account that no longer exists: ask the server once per id.
     final unnamed = {
       for (final m in messages.value ?? const <Message>[])
         if (isGroup &&
@@ -735,13 +735,7 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
             !names.containsKey(m.senderId))
           m.senderId,
     };
-    if (unnamed.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          ref.read(deletedUsersControllerProvider.notifier).check(unnamed);
-        }
-      });
-    }
+    askDeletedAccounts(ref, unnamed);
     String nameFor(String id) =>
         names[id] ??
         (deletedIds.contains(id)

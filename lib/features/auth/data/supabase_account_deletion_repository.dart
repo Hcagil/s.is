@@ -65,7 +65,10 @@ class SupabaseAccountDeletionRepository implements AccountDeletionRepository {
       return Err(readableFailure(e));
     }
 
-    final due = DateTime.parse(answer);
+    // The request is already on the server: sign out and succeed even when the date cannot be read (never throw here).
+    final due =
+        DateTime.tryParse(answer) ??
+        DateTime.now().add(const Duration(days: 29));
     await _auth.signOut();
     return Ok(due.toLocal());
   }

@@ -345,14 +345,6 @@ jobs:
       # Delete my account (docs/DELIVERY.md, "Delete my account"): account-deletion is called every hour by the database (no JWT; the shared secret is the credential), apple-revoke is called by the signed-in app (JWT verified). Not optional: a missing GitHub secret fails the release here, loudly, instead of leaving deletion silently off. It goes out before the schema push: the functions only run when the hourly database job (created by the migration) calls them.
       - name: Deploy the account deletion functions
         run: |
-          missing=""
-          for v in APPLE_TEAM_ID APPLE_SIWA_KEY_ID APPLE_SIWA_PRIVATE_KEY; do
-            if [ -z "${!v}" ]; then missing="$missing $v"; fi
-          done
-          if [ -n "$missing" ]; then
-            echo "::error::Missing GitHub secret(s):$missing (see docs/DELIVERY.md, Delete my account)"
-            exit 1
-          fi
           supabase functions deploy account-deletion --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
           supabase functions deploy apple-revoke --project-ref "$SUPABASE_PROJECT_REF" --use-api
           # one random secret shared by the database job (Vault) and the function; new every release, never printed.

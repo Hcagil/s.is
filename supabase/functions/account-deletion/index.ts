@@ -59,7 +59,9 @@ Deno.serve(async (req) => {
 
       const { error: doneErr } = await db.rpc('account_deletion_done', { rid: row.request_id, addr });
       if (doneErr) {
+        failed++;
         console.log('account-deletion: done failed');
+        continue;
       }
       removed++;
     }

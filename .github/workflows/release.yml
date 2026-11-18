@@ -150,8 +150,8 @@ jobs:
       contents: read
       packages: read
     outputs:
-      raise_to: ${{ steps.replay.outputs.raise_to }}
-      raise_reason: ${{ steps.replay.outputs.raise_reason }}
+      raise_to: ${{ steps.force.outputs.raise_to || steps.replay.outputs.raise_to }}
+      raise_reason: ${{ steps.force.outputs.raise_reason || steps.replay.outputs.raise_reason }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -191,6 +191,21 @@ jobs:
           prev=$(gh release list --limit 1 --json tagName --jq '.[0].tagName // empty')
           compose="docker compose -f compose.yaml -f .github/compose.ci.yaml"
           OLD_APP_MODE=release OLD_APP_BASE="$prev" OLD_APP_COMPOSE="$compose" OLD_APP_DB_CONTAINER=supabase_db_s.is OLD_APP_RESET_CMD="$compose run --rm -T supabase db reset" tool/old_app_check.sh
+      # A migration added since the last release can ask for the minimum to go to this release's own build (docs/DELIVERY.md, "Raise the minimum supported build", way 4). The raise itself waits for the iOS build (job raise_own).
+      - name: Raise on request of a new migration
+        id: force
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_CODE: ${{ needs.scope.outputs.code }}
+        run: |
+          prev=$(gh release list --limit 1 --json tagName --jq '.[0].tagName // empty')
+          range="HEAD"
+          [ -n "$prev" ] && range="$prev..HEAD"
+          reason=$(git diff --diff-filter=A --name-only "$range" -- supabase/migrations | while read -r f; do sed -n 's/^-- raise-minimum: \(.\{1,\}\)$/\1/p' "$f"; done | head -n 1)
+          if [ -n "$reason" ]; then
+            echo "raise_to=$RELEASE_CODE" >> "$GITHUB_OUTPUT"
+            echo "raise_reason=$reason" >> "$GITHUB_OUTPUT"
+          fi
 
   publish:
     needs: [scope, old_app]

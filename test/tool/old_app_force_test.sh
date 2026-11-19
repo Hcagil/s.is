@@ -7,11 +7,11 @@ wf="$repo/.github/workflows/release.yml"
 fails=0
 fail() { echo "FAIL: $*"; fails=$((fails+1)); }
 
-job_block() { awk -v n="  $1:" '$0==n{f=1;print;next} f&&/^  [a-z_]+:/{exit} f{print}' "$wf"; }
-step_block() { job_block "$1" | awk -v t="      - name: $2" '$0==t{f=1;print;next} f&&/^      - name:/{exit} f{print}'; }
+job_block() { local o; o=$(awk -v n="  $1:" '$0==n{f=1;print;next} f&&/^  [a-z_]+:/{exit} f{print}' "$wf"); printf '%s\n' "$o"; }
+step_block() { local o; o=$(job_block "$1" | awk -v t="      - name: $2" '!d&&$0==t{f=1;print;next} f&&/^      - name:/{f=0;d=1} f&&!d{print}'); printf '%s\n' "$o"; }
 lineno() { grep -n -F -x -- "$1" "$wf" | head -1 | cut -d: -f1 || true; }
 
-body() { step_block "$1" "$2" | awk '/^        run: \|$/{f=1;next} f&&/^          /{sub(/^          /,"");print;next} f{exit}'; }
+body() { local o; o=$(step_block "$1" "$2" | awk '!d&&/^        run: \|$/{f=1;next} f&&/^          /{sub(/^          /,"");print;next} f{f=0;d=1}'); printf '%s\n' "$o"; }
 
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 

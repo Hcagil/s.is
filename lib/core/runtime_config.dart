@@ -4,6 +4,7 @@ class RuntimeConfig {
     required this.supabasePublishableKey,
     required this.googleWebClientId,
     this.mapsApiKey = '',
+    this.inviteLinkBase = '',
   });
 
   factory RuntimeConfig.fromEnvironment() {
@@ -14,6 +15,7 @@ class RuntimeConfig {
       ),
       googleWebClientId: String.fromEnvironment('GOOGLE_WEB_CLIENT_ID'),
       mapsApiKey: String.fromEnvironment('MAPS_API_KEY'),
+      inviteLinkBase: String.fromEnvironment('INVITE_LINK_BASE'),
     );
   }
 
@@ -25,6 +27,9 @@ class RuntimeConfig {
   /// none (the app then uses OpenStreetMap). Not required: [isComplete]
   /// ignores it.
   final String mapsApiKey;
+
+  /// The web address invite links start with, without a trailing slash; empty for now (the invite is then the bare code, pasted into the app). Filling it in later makes links tappable; not required: [isComplete] ignores it.
+  final String inviteLinkBase;
 
   bool get isComplete =>
       supabaseUrl.isNotEmpty &&

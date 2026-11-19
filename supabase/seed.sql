@@ -347,6 +347,11 @@ insert into app_private.allowlist(email) values
   ('clo-boss@mail.test'),
   ('clo-mate@mail.test'),
   ('clo-other@mail.test'),
+  -- invite by link (test/integration/invite_link_repository_test.dart)
+  ('ilk-boss@mail.test'),
+  ('ilk-mate@mail.test'),
+  ('ilk-other@mail.test'),
+  ('ilk-rater@mail.test'),
   -- removed tester status (test/integration/removed_tester_status_test.dart)
   ('removed-status@mail.test'),
   -- background delivery (test/integration/background_delivery_seam_test.dart):

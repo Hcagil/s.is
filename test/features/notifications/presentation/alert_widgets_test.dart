@@ -120,10 +120,12 @@ void main() {
     return t.widget<SisSwitchTile>(byKey(key)).value;
   }
 
-  Future<void> choose(WidgetTester t, String dropdownKey, String item) async {
-    await t.tap(byKey(dropdownKey));
+  Future<void> choose(WidgetTester t, String rowKey, String choice) async {
+    await t.tap(byKey(rowKey));
     await t.pumpAndSettle();
-    await t.tap(find.text(item).last);
+    await t.tap(byKey('alert-choice-$choice'));
+    await t.pumpAndSettle();
+    await t.tap(byKey('alert-choice-save'));
     await t.pumpAndSettle();
   }
 
@@ -289,20 +291,18 @@ void main() {
 
     onPlatform(
       TargetPlatform.android,
-      'Android: sound and vibration, each Default/On/Off',
+      'Android: sound and vibration rows open a Default/On/Off sheet with Save',
       (t) async {
         await mount(t, const ChatAlertTiles(conversationId: 'g1'));
 
         expect(byKey('chat-alert-sound'), findsOneWidget);
         expect(byKey('chat-alert-vibration'), findsOneWidget);
-        expect(byKey('chat-alert-sound-choice'), findsOneWidget);
-        expect(byKey('chat-alert-vibration-choice'), findsOneWidget);
-
-        await t.tap(byKey('chat-alert-sound-choice'));
+        await t.tap(byKey('chat-alert-sound'));
         await t.pumpAndSettle();
-        for (final item in ['Default', 'On', 'Off']) {
-          expect(find.text(item), findsWidgets, reason: item);
-        }
+        expect(byKey('alert-choice-byDefault'), findsOneWidget);
+        expect(byKey('alert-choice-on'), findsOneWidget);
+        expect(byKey('alert-choice-off'), findsOneWidget);
+        expect(byKey('alert-choice-save'), findsOneWidget);
       },
     );
 
@@ -310,9 +310,7 @@ void main() {
       await mount(t, const ChatAlertTiles(conversationId: 'g1'));
 
       expect(byKey('chat-alert-sound'), findsOneWidget);
-      expect(byKey('chat-alert-sound-choice'), findsOneWidget);
       expect(byKey('chat-alert-vibration'), findsNothing);
-      expect(byKey('chat-alert-vibration-choice'), findsNothing);
     });
 
     onPlatform(
@@ -321,10 +319,10 @@ void main() {
       (t) async {
         await mount(t, const ChatAlertTiles(conversationId: 'g1'));
 
-        await choose(t, 'chat-alert-sound-choice', 'Off');
+        await choose(t, 'chat-alert-sound', 'off');
         expect(store.chats, {'g1': const ChatAlert(sound: AlertChoice.off)});
 
-        await choose(t, 'chat-alert-vibration-choice', 'On');
+        await choose(t, 'chat-alert-vibration', 'on');
         expect(store.chats, {
           'g1': const ChatAlert(
             sound: AlertChoice.off,
@@ -332,28 +330,62 @@ void main() {
           ),
         });
 
-        await choose(t, 'chat-alert-sound-choice', 'Default');
-        await choose(t, 'chat-alert-vibration-choice', 'Default');
+        await choose(t, 'chat-alert-sound', 'byDefault');
+        await choose(t, 'chat-alert-vibration', 'byDefault');
         expect(store.chats, isEmpty);
         expect(store.saved.last, ('g1', const ChatAlert()));
       },
     );
 
-    onPlatform(TargetPlatform.android, 'shows the saved choice of THIS chat', (
+    onPlatform(
+      TargetPlatform.android,
+      'the sheet starts on the saved choice of THIS chat',
+      (t) async {
+        store.chats['g1'] = const ChatAlert(sound: AlertChoice.off);
+        store.chats['g2'] = const ChatAlert(sound: AlertChoice.on);
+        await mount(t, const ChatAlertTiles(conversationId: 'g1'));
+        await t.tap(byKey('chat-alert-sound'));
+        await t.pumpAndSettle();
+        expect(
+          t
+              .widget<SisChoiceCard<AlertChoice>>(byKey('alert-choice-off'))
+              .groupValue,
+          AlertChoice.off,
+        );
+        await t.tapAt(const Offset(10, 10));
+        await t.pumpAndSettle();
+        expect(byKey('alert-choice-save'), findsNothing);
+        expect(store.saved, isEmpty);
+      },
+    );
+
+    onPlatform(
+      TargetPlatform.android,
+      'a muted chat: rows greyed and untappable, with the note',
+      (t) async {
+        await mount(t, const ChatAlertTiles(conversationId: 'g1', muted: true));
+        expect(byKey('chat-alert-muted-note'), findsOneWidget);
+        final o = t.widget<Opacity>(
+          find
+              .ancestor(
+                of: byKey('chat-alert-sound'),
+                matching: find.byType(Opacity),
+              )
+              .first,
+        );
+        expect(o.opacity, 0.4);
+        await t.tap(byKey('chat-alert-sound'), warnIfMissed: false);
+        await t.pumpAndSettle();
+        expect(byKey('alert-choice-save'), findsNothing);
+        expect(store.saved, isEmpty);
+      },
+    );
+
+    onPlatform(TargetPlatform.android, 'an unmuted chat shows no note', (
       t,
     ) async {
-      store.chats['g1'] = const ChatAlert(sound: AlertChoice.off);
-      store.chats['g2'] = const ChatAlert(sound: AlertChoice.on);
       await mount(t, const ChatAlertTiles(conversationId: 'g1'));
-
-      final d = t.widget<DropdownButton<AlertChoice>>(
-        find.descendant(
-          of: byKey('chat-alert-sound-choice'),
-          matching: find.byType(DropdownButton<AlertChoice>),
-          matchRoot: true,
-        ),
-      );
-      expect(d.value, AlertChoice.off);
+      expect(byKey('chat-alert-muted-note'), findsNothing);
     });
   });
 
@@ -404,7 +436,15 @@ void main() {
         );
         await t.pumpAndSettle();
 
-        await choose(t, 'chat-alert-sound-choice', 'Off');
+        expect(
+          byKey('chat-alert-sound'),
+          findsNothing,
+          reason: 'only the row is on the group page',
+        );
+        await t.ensureVisible(byKey('chat-settings-row'));
+        await t.tap(byKey('chat-settings-row'));
+        await t.pumpAndSettle();
+        await choose(t, 'chat-alert-sound', 'off');
         expect(store.chats.keys, ['g1']);
       },
     );
@@ -433,7 +473,15 @@ void main() {
         );
         await t.pumpAndSettle();
 
-        await choose(t, 'chat-alert-sound-choice', 'Off');
+        expect(
+          byKey('chat-alert-sound'),
+          findsNothing,
+          reason: 'only the row is on the person page',
+        );
+        await t.ensureVisible(byKey('chat-settings-row'));
+        await t.tap(byKey('chat-settings-row'));
+        await t.pumpAndSettle();
+        await choose(t, 'chat-alert-sound', 'off');
         expect(store.chats, {'c-bob': const ChatAlert(sound: AlertChoice.off)});
       },
     );

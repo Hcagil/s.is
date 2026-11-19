@@ -6,6 +6,8 @@
 // a date, and a date shown in UTC is a different day here.
 import 'dart:io';
 
+import 'package:flutter/foundation.dart'
+    show debugDefaultTargetPlatformOverride;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
@@ -27,6 +29,9 @@ import 'package:sis/features/chat/domain/group_settings.dart';
 import 'package:sis/features/chat/domain/group_colors.dart';
 import 'package:sis/features/chat/domain/initials.dart';
 import 'package:sis/features/chat/domain/message.dart';
+import 'package:sis/features/notifications/application/alert_controller.dart';
+import 'package:sis/features/notifications/application/notification_settings_controller.dart';
+import 'package:sis/features/notifications/domain/alert_settings.dart';
 import 'package:sis/features/chat/presentation/message_screen.dart';
 import 'package:sis/features/chat/presentation/photo_viewer.dart';
 import 'package:sis/features/chat/presentation/profile_pages.dart';
@@ -1148,7 +1153,7 @@ void main() {
         const GroupMember(member: cem, isAdmin: false, colorSlot: 2),
       ];
       await clubPage(t, w);
-      expect(t.widget(byKey('mute-tile')), isA<SisSettingsRow>());
+      expect(t.widget(byKey('chat-settings-row')), isA<SisSettingsRow>());
       await reveal(t, byKey('add-members'));
       expect(t.widget(byKey('add-members')), isA<SisSettingsRow>());
       for (final k in [
@@ -1194,7 +1199,7 @@ void main() {
         'close-group',
         'remove-member-u3',
         'leave-group',
-        'mute-tile',
+        'chat-settings-row',
       ]) {
         await reveal(t, byKey(k));
         expect(byKey(k), findsOneWidget, reason: k);
@@ -1204,6 +1209,42 @@ void main() {
       for (final tab in ['tab-media', 'tab-links']) {
         await tapKey(t, tab);
       }
+      expect(t.takeException(), isNull);
+    });
+
+    testWidgets('the Chat settings page, with its muted note, lays out '
+        'without overflow', (t) async {
+      t.view.physicalSize = const Size(1080, 2340);
+      t.view.devicePixelRatio = 3;
+      addTearDown(t.view.reset);
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      final w = World(
+        self: 'u1',
+        extra: [
+          alertStoreProvider.overrideWithValue(_AlertStoreFake()),
+          notificationSettingsRepositoryProvider.overrideWithValue(
+            NotificationSettingsFake(),
+          ),
+        ],
+      );
+      w.chat.groupRosters['g1'] = [
+        const GroupMember(member: me, isAdmin: true),
+        const GroupMember(member: bob, isAdmin: false, colorSlot: 1),
+        const GroupMember(member: cem, isAdmin: false, colorSlot: 2),
+      ];
+      await clubPage(t, w);
+      await tapKey(t, 'chat-settings-row');
+      for (final k in [
+        'mute-tile',
+        'chat-alert-sound',
+        'chat-alert-vibration',
+      ]) {
+        expect(byKey(k), findsOneWidget, reason: k);
+      }
+      await tapKey(t, 'mute-tile');
+      await tapKey(t, 'mute-oneHour');
+      expect(byKey('chat-alert-muted-note'), findsOneWidget);
+      debugDefaultTargetPlatformOverride = null;
       expect(t.takeException(), isNull);
     });
   });
@@ -1246,6 +1287,21 @@ void main() {
       expect(textOf(byKey('group-member-u9')), contains(l10nEn.commonMember));
     });
   });
+}
+
+/// The alert settings kept in memory: loads at once, saves are kept.
+class _AlertStoreFake implements AlertStore {
+  @override
+  Future<AlertDefaults> loadDefaults() async => const AlertDefaults();
+
+  @override
+  Future<Map<String, ChatAlert>> loadChats() async => {};
+
+  @override
+  Future<void> saveDefaults(AlertDefaults d) async {}
+
+  @override
+  Future<void> saveChat(String id, ChatAlert c) async {}
 }
 
 Future<void> openCardAt(WidgetTester t) async {

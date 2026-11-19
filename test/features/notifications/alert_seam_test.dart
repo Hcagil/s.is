@@ -141,10 +141,10 @@ void main() {
     await settle(t);
   }
 
-  Future<void> choose(WidgetTester t, String dropdownKey, String item) async {
-    await tapAndSettle(t, dropdownKey);
-    await t.tap(find.text(item).last);
-    await settle(t);
+  Future<void> choose(WidgetTester t, String rowKey, String choice) async {
+    await tapAndSettle(t, rowKey);
+    await tapAndSettle(t, 'alert-choice-$choice');
+    await tapAndSettle(t, 'alert-choice-save');
   }
 
   /// A push drawn in the background. Since Update 1 the native receiver
@@ -246,18 +246,18 @@ void main() {
     expect(post['channelId'], 'msg-off-v1');
     expect(post['playSound'], isFalse);
 
-    await choose(t, 'chat-alert-sound-choice', 'On');
+    await choose(t, 'chat-alert-sound', 'on');
     expect(saved('alert_chats')['c1'], containsPair('s', 'on'));
     post = await backgroundPush(t, 'c1');
     expect(post['channelId'], 'msg-sys-v1');
     expect(post['playSound'], isTrue);
 
-    await choose(t, 'chat-alert-vibration-choice', 'Off');
+    await choose(t, 'chat-alert-vibration', 'off');
     post = await backgroundPush(t, 'c1');
     expect(post['channelId'], 'msg-sys-v0');
     expect(post['enableVibration'], isFalse);
 
-    await choose(t, 'chat-alert-sound-choice', 'Default');
+    await choose(t, 'chat-alert-sound', 'byDefault');
     await tapAndSettle(t, 'alert-sound'); // global sound back on
     post = await backgroundPush(t, 'c1');
     expect(post['channelId'], 'msg-sys-v0', reason: 'Default follows global');
@@ -335,7 +335,7 @@ void main() {
       await openApp(t);
 
       await tapAndSettle(t, 'alert-sound');
-      await choose(t, 'chat-alert-sound-choice', 'On');
+      await choose(t, 'chat-alert-sound', 'on');
       expect(t.takeException(), isNull);
       expect(switchOn(t, 'alert-sound'), isFalse);
 

@@ -79,6 +79,8 @@ void main() {
     );
     await t.pumpAndSettle();
 
+    await t.tap(byKey('chat-settings-row'));
+    await t.pumpAndSettle();
     await muteViaTile(t);
 
     final (kind, target, until) = fake.muteCalls.single;

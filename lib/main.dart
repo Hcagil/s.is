@@ -41,6 +41,7 @@ import 'features/auth/data/secure_session_storage.dart';
 import 'features/auth/data/supabase_account_deletion_repository.dart';
 import 'features/auth/data/supabase_auth_repository.dart';
 import 'features/chat/application/chat_controllers.dart';
+import 'features/chat/application/invite_link_controller.dart';
 import 'features/chat/application/pending_push_messages_provider.dart';
 import 'features/chat/application/staff_registry_controller.dart';
 import 'features/chat/application/link_preview_controller.dart';
@@ -94,6 +95,7 @@ import 'features/chat/data/supabase_chat_file_repository.dart';
 import 'features/chat/data/supabase_chat_mark_repository.dart';
 import 'features/chat/data/supabase_chat_pin_repository.dart';
 import 'features/chat/data/supabase_group_settings_repository.dart';
+import 'features/chat/data/supabase_invite_link_repository.dart';
 import 'features/chat/data/supabase_chat_repository.dart';
 import 'features/chat/data/supabase_encrypted_message_repository.dart';
 import 'features/chat/data/supabase_location_share_repository.dart';
@@ -132,6 +134,7 @@ import 'features/notifications/data/platform_app_badge.dart';
 import 'features/notifications/data/reaction_opener.dart';
 import 'features/notifications/data/shared_prefs_alert_store.dart';
 import 'features/notifications/data/shared_prefs_notification_explainer_store.dart';
+import 'features/notifications/data/supabase_alert_remote.dart';
 import 'features/notifications/data/supabase_notification_settings_repository.dart';
 import 'features/notifications/data/supabase_push_receipts.dart';
 import 'features/notifications/data/supabase_push_registry.dart';
@@ -351,6 +354,9 @@ Future<void> main() async {
           ),
           groupSettingsRepositoryProvider.overrideWithValue(
             SupabaseGroupSettingsRepository(client),
+          ),
+          inviteLinkRepositoryProvider.overrideWithValue(
+            SupabaseInviteLinkRepository(client),
           ),
           chatArchiveRepositoryProvider.overrideWithValue(
             SupabaseChatArchiveRepository(client),
@@ -592,6 +598,7 @@ Future<void> main() async {
             SupabaseNotificationSettingsRepository(client),
           ),
           alertStoreProvider.overrideWithValue(const SharedPrefsAlertStore()),
+          alertRemoteProvider.overrideWithValue(SupabaseAlertRemote(client)),
           tonePickerProvider.overrideWithValue(const ChannelTonePicker()),
           notificationExplainerStoreProvider.overrideWithValue(
             const SharedPrefsNotificationExplainerStore(),

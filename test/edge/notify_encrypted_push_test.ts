@@ -216,7 +216,7 @@ test('preview full (unset): data keeps every key and adds ct = the row ciphertex
     assertEquals(attempts[0].message.token, bob.token);
     // A pre-key (ot 0) push also carries the sender's key and id (sk, si; see the sender key tests below).
     assertEquals(Object.keys(d).sort(),
-      ['action_token', 'action_url', 'badge', 'body', 'conversation_id', 'ct', 'encrypted', 'message_id', 'ot',
+      ['action_token', 'action_url', 'alert_sound', 'alert_vibration', 'badge', 'body', 'conversation_id', 'ct', 'encrypted', 'message_id', 'ot',
         ...(ot === 0 ? ['si', 'sk'] : []), 'title', 'user_id'],
       `the key set: ${attempts[0].raw}`);
     assertEquals([d.user_id, d.message_id, d.conversation_id, d.encrypted, d.body, d.title],

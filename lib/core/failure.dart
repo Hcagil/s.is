@@ -60,6 +60,19 @@ final class SearchLimitFailure extends Failure {
   String get message => failureStrings.failSearchLimit;
 }
 
+/// Why an invite link cannot be used: the server's 'LINK1' (no such link, or it was reset or turned off), 'LINK2' (its time ran out), 'LINK3' (the group is closed), 'LINK4' (an admin removed this person; only an admin adding them brings them back).
+enum InviteLinkProblem { invalid, expired, closed, removed }
+
+/// An invite link was refused for [problem]; the screen shows its own translated line (texts come from the words check, so [message] is the plain refusal for now).
+final class InviteLinkFailure extends Failure {
+  const InviteLinkFailure(this.problem);
+
+  final InviteLinkProblem problem;
+
+  @override
+  String get message => failureStrings.failDenied;
+}
+
 /// A sticker limit hit on the server: 'STKA1' (10 albums), 'STKA2' (50 stickers in an album) or 'STKF1' (200 favourites); the screen shows its own translated line.
 final class StickerLimitFailure extends Failure {
   const StickerLimitFailure(this.code);

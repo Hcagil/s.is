@@ -2636,7 +2636,7 @@ abstract class AppLocalizations {
   /// **'Select'**
   String get commonSelect;
 
-  /// Snackbar after marking a chat unread, with the Undo button
+  /// Short notice (no action button) shown after marking a chat unread
   ///
   /// In en, this message translates to:
   /// **'Chat marked as unread'**
@@ -5473,6 +5473,342 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Your account was not deleted. Apple sign-in could not be removed. Try again.'**
   String get failDeleteAccountApple;
+
+  /// Title of the per-chat notification settings page
+  ///
+  /// In en, this message translates to:
+  /// **'Chat settings'**
+  String get chatSettingsTitle;
+
+  /// Note under the grey Sound and Vibration rows while the chat is muted (Android)
+  ///
+  /// In en, this message translates to:
+  /// **'Sound and vibration are off while this chat is muted.'**
+  String get chatMutedSoundVibrationNote;
+
+  /// Note under the grey Sound row while the chat is muted (iPhone)
+  ///
+  /// In en, this message translates to:
+  /// **'Sound is off while this chat is muted.'**
+  String get chatMutedSoundNote;
+
+  /// Small line under the Default choice of the Sound and Vibration sheets
+  ///
+  /// In en, this message translates to:
+  /// **'Follows your notification settings'**
+  String get alertChoiceDefaultHint;
+
+  /// Invite by link: Page title; also the row name in Group settings (Q71)
+  ///
+  /// In en, this message translates to:
+  /// **'Invite link'**
+  String get groupInviteTitle;
+
+  /// Invite by link: Line above the link
+  ///
+  /// In en, this message translates to:
+  /// **'Only accounts invited to SIS can join with this link.'**
+  String get groupInviteHelp;
+
+  /// Invite by link: Row name; also the sheet title
+  ///
+  /// In en, this message translates to:
+  /// **'Time limit'**
+  String get groupInviteTimeLimit;
+
+  /// Invite by link: Choice and row value
+  ///
+  /// In en, this message translates to:
+  /// **'No limit'**
+  String get groupInviteNoLimit;
+
+  /// Invite by link: Choices 1, 7, 30
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 day} other{{count} days}}'**
+  String groupInviteDays(int count);
+
+  /// Invite by link: Note above Save
+  ///
+  /// In en, this message translates to:
+  /// **'The time starts when you save.'**
+  String get groupInviteTimeNote;
+
+  /// Invite by link: Line under the time row
+  ///
+  /// In en, this message translates to:
+  /// **'Works until {date}, {time}.'**
+  String groupInviteValidUntil(String date, String time);
+
+  /// Invite by link: Row
+  ///
+  /// In en, this message translates to:
+  /// **'Share link'**
+  String get groupInviteShare;
+
+  /// Invite by link: Row
+  ///
+  /// In en, this message translates to:
+  /// **'Reset link'**
+  String get groupInviteReset;
+
+  /// Invite by link: Red row under Reset link, admins only
+  ///
+  /// In en, this message translates to:
+  /// **'Turn off link'**
+  String get groupInviteTurnOff;
+
+  /// Invite by link: Toast after reset
+  ///
+  /// In en, this message translates to:
+  /// **'Link reset'**
+  String get groupInviteResetDone;
+
+  /// Invite by link: Toast after turn off
+  ///
+  /// In en, this message translates to:
+  /// **'Link turned off'**
+  String get groupInviteTurnedOff;
+
+  /// Invite by link: Confirm title
+  ///
+  /// In en, this message translates to:
+  /// **'Reset link?'**
+  String get groupInviteResetTitle;
+
+  /// Invite by link: Confirm text
+  ///
+  /// In en, this message translates to:
+  /// **'The old link will stop working. A new link is made with the same time limit, and the time starts again.'**
+  String get groupInviteResetBody;
+
+  /// Invite by link: Confirm title
+  ///
+  /// In en, this message translates to:
+  /// **'Turn off link?'**
+  String get groupInviteTurnOffTitle;
+
+  /// Invite by link: Confirm text
+  ///
+  /// In en, this message translates to:
+  /// **'No one can join with this link anymore. You can create a new link later.'**
+  String get groupInviteTurnOffBody;
+
+  /// Invite by link: Red button
+  ///
+  /// In en, this message translates to:
+  /// **'Turn off'**
+  String get groupInviteTurnOffAction;
+
+  /// Invite by link: Empty title
+  ///
+  /// In en, this message translates to:
+  /// **'No link yet'**
+  String get groupInviteNoneTitle;
+
+  /// Invite by link: Empty text
+  ///
+  /// In en, this message translates to:
+  /// **'Create a link and share it with accounts invited to SIS.'**
+  String get groupInviteNoneBody;
+
+  /// Invite by link: Button
+  ///
+  /// In en, this message translates to:
+  /// **'Create link'**
+  String get groupInviteCreate;
+
+  /// Invite by link: Line under the grey link
+  ///
+  /// In en, this message translates to:
+  /// **'Expired · No one can join with this link anymore.'**
+  String get groupInviteExpiredNote;
+
+  /// Invite by link: Button
+  ///
+  /// In en, this message translates to:
+  /// **'Create new link'**
+  String get groupInviteCreateNew;
+
+  /// Invite by link: Red box (old link and time kept)
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save the change. The current link has not changed.'**
+  String get groupInviteSaveFailed;
+
+  /// Invite by link: Red box (copy and share work; time and reset grey)
+  ///
+  /// In en, this message translates to:
+  /// **'No internet connection. You can copy and share the link, but you can\'t change it now.'**
+  String get groupInviteOffline;
+
+  /// Invite by link: Empty text
+  ///
+  /// In en, this message translates to:
+  /// **'Connect to the internet to create a link.'**
+  String get groupInviteNoneOfflineBody;
+
+  /// Invite by link: Red box; offline page title
+  ///
+  /// In en, this message translates to:
+  /// **'No internet connection'**
+  String get inviteNoInternet;
+
+  /// Invite by link: Text sent with the link to other apps; no group name
+  ///
+  /// In en, this message translates to:
+  /// **'SIS group invite. In SIS, choose Join with a link and paste this link: {link}'**
+  String groupInviteShareText(String link);
+
+  /// Invite by link: Menu row and page title
+  ///
+  /// In en, this message translates to:
+  /// **'Join with a link'**
+  String get joinLinkTitle;
+
+  /// Invite by link: Text field hint
+  ///
+  /// In en, this message translates to:
+  /// **'Paste the invite link'**
+  String get joinLinkHint;
+
+  /// Invite by link: Help under the field
+  ///
+  /// In en, this message translates to:
+  /// **'Ask a group admin for the invite link, then paste it here.'**
+  String get joinLinkHelp;
+
+  /// Invite by link: Small button in the field
+  ///
+  /// In en, this message translates to:
+  /// **'Paste'**
+  String get commonPaste;
+
+  /// Invite by link: Field error: the text is not a SIS invite link (checked on the phone)
+  ///
+  /// In en, this message translates to:
+  /// **'This is not a SIS invite link. Check it and try again.'**
+  String get joinLinkNotInvite;
+
+  /// Invite by link: Error: too many tries
+  ///
+  /// In en, this message translates to:
+  /// **'Too many tries. Try again later.'**
+  String get joinLinkTooManyTries;
+
+  /// Invite by link: Error when offline
+  ///
+  /// In en, this message translates to:
+  /// **'No internet connection. Connect and try again.'**
+  String get joinLinkOffline;
+
+  /// Invite by link: Page title
+  ///
+  /// In en, this message translates to:
+  /// **'Link can\'t be used'**
+  String get inviteInvalidPageTitle;
+
+  /// Invite by link: Title (one screen for expired, reset, turned off and unknown links; Q79)
+  ///
+  /// In en, this message translates to:
+  /// **'This invite link is not valid'**
+  String get inviteInvalidTitle;
+
+  /// Invite by link: Text
+  ///
+  /// In en, this message translates to:
+  /// **'It may have expired, or an admin may have reset or turned it off.'**
+  String get inviteInvalidBody;
+
+  /// Invite by link: Page title and button
+  ///
+  /// In en, this message translates to:
+  /// **'Join group'**
+  String get inviteJoinGroup;
+
+  /// Invite by link: Line when the group switch is off (Q-M-00302)
+  ///
+  /// In en, this message translates to:
+  /// **'New members can\'t see earlier messages.'**
+  String get inviteJoinNoHistory;
+
+  /// Invite by link: Status line
+  ///
+  /// In en, this message translates to:
+  /// **'Joining the group…'**
+  String get inviteJoiningStatus;
+
+  /// Invite by link: Locked button
+  ///
+  /// In en, this message translates to:
+  /// **'Joining…'**
+  String get inviteJoining;
+
+  /// Invite by link: Red box
+  ///
+  /// In en, this message translates to:
+  /// **'Could not join the group. Try again.'**
+  String get inviteJoinFailed;
+
+  /// Invite by link: Text
+  ///
+  /// In en, this message translates to:
+  /// **'You need the internet to join the group.'**
+  String get inviteJoinOfflineBody;
+
+  /// Invite by link: Red box
+  ///
+  /// In en, this message translates to:
+  /// **'You have not joined yet.'**
+  String get inviteJoinNotDone;
+
+  /// Invite by link: Toast after joining
+  ///
+  /// In en, this message translates to:
+  /// **'You joined the group'**
+  String get inviteJoinedToast;
+
+  /// Invite by link: Group system line, seen by all members
+  ///
+  /// In en, this message translates to:
+  /// **'{name} joined the group via invite link'**
+  String eventJoinedByLink(String name);
+
+  /// Invite by link: Page title
+  ///
+  /// In en, this message translates to:
+  /// **'Already a member'**
+  String get inviteAlreadyTitle;
+
+  /// Invite by link: Text
+  ///
+  /// In en, this message translates to:
+  /// **'You are already in this group.'**
+  String get inviteAlreadyBody;
+
+  /// Invite by link: Button
+  ///
+  /// In en, this message translates to:
+  /// **'Go to group'**
+  String get inviteOpenGroup;
+
+  /// Invite by link: Text
+  ///
+  /// In en, this message translates to:
+  /// **'No one can join it anymore.'**
+  String get inviteClosedBody;
+
+  /// Invite by link: Page title
+  ///
+  /// In en, this message translates to:
+  /// **'You were removed'**
+  String get inviteRemovedTitle;
+
+  /// Invite by link: Refusal text (Q-M-00319)
+  ///
+  /// In en, this message translates to:
+  /// **'Only a group admin can add you back.'**
+  String get inviteRemovedBody;
 
   /// No description provided for @messageShowMore.
   ///

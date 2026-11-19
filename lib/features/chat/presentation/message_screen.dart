@@ -363,11 +363,24 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
   /// Alpha of the highlight on [_flashId] (null = none); see _Bubble.flash.
   double? _flashAlpha;
 
-  /// A tap on a quote: scrolls the original into view and flashes it. Does nothing when the original is not loaded here.
+  /// A tap on a quote: scrolls the original into view and flashes it; an original older than what is loaded is paged in first, a deleted one shows a short notice.
   Future<void> _jumpToQuoted(String id) async {
     final list = ref.read(messagesProvider).value ?? const <Message>[];
-    if (!list.any((m) => m.id == id)) return;
-    await _scrollTo(id, ++_generation);
+    final generation = ++_generation;
+    if (!list.any((m) => m.id == id)) {
+      // The original is older than what is loaded: page it in first.
+      final found = await ref.read(messagesProvider.notifier).loadUntil(id);
+      if (!mounted || generation != _generation) return;
+      if (found == false) {
+        showSisNotice(
+          context,
+          AppLocalizations.of(context).quoteDeleted,
+          noticeKey: const ValueKey('quote-deleted-notice'),
+        );
+      }
+      if (found != true) return;
+    }
+    await _scrollTo(id, generation);
     if (!mounted) return;
     setState(() {
       _flashId = id;
@@ -1169,11 +1182,9 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
                                         quotedCount: quoted == null
                                             ? 0
                                             : albumOf(value, quoted).length,
-                                        onQuoteTap: quoted == null
-                                            ? null
-                                            : () => unawaited(
-                                                _jumpToQuoted(quoted.id),
-                                              ),
+                                        onQuoteTap: () => unawaited(
+                                          _jumpToQuoted(message.replyTo!),
+                                        ),
                                         flash: _flashId == message.id
                                             ? _flashAlpha
                                             : null,

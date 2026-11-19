@@ -200,26 +200,26 @@ void main() {
     await t.runAsync(() => cleo.removeAllChannels());
   }
 
-  /// Long-press selects the row; the selection bar's mute opens the card
-  /// with the mute lengths (an unmuted chat).
+  /// Long-press opens the chat card; its Mute row expands the mute lengths
+  /// (an unmuted chat).
   Future<void> openMuteOptions(WidgetTester t) async {
     await t.longPress(row());
     await frames(t);
-    await t.tap(byKey('selection-mute'));
-    await frames(t);
     expect(byKey('chat-menu'), findsOneWidget);
-    if (byKey('chat-mute-oneHour').evaluate().isEmpty) {
-      await t.tap(byKey('chat-menu-mute'));
-      await frames(t);
-    }
+    await t.tap(byKey('chat-menu-mute'));
+    await frames(t);
   }
 
-  /// On a muted chat the selection bar's mute is "Unmute" and acts at once.
+  /// On a muted chat the card's expanded Mute row offers "Unmute", which acts
+  /// at once.
   Future<void> unmuteFromBar(WidgetTester t) async {
     await t.longPress(row());
     await frames(t);
-    expect(find.byTooltip('Unmute'), findsOneWidget);
-    await t.tap(byKey('selection-mute'));
+    expect(byKey('chat-menu'), findsOneWidget);
+    await t.tap(byKey('chat-menu-mute'));
+    await frames(t);
+    expect(byKey('chat-mute-off'), findsOneWidget);
+    await t.tap(byKey('chat-mute-off'));
     await frames(t);
   }
 

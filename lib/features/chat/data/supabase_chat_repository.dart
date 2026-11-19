@@ -136,7 +136,7 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
       // members, titles, archive/pin/hide marks, names, previews and unread.
       // GET (read-only STABLE function) so a network error retries once.
       final data = Map<String, dynamic>.from(
-        await _client.rpc('chat_list', params: {}, get: true).retriedOnce()
+        await _client.rpc('chat_list_v2', params: {}, get: true).retriedOnce()
             as Map,
       );
       List<Map<String, dynamic>> rows(String key) =>
@@ -148,6 +148,13 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
       };
       final pinnedIds = {
         for (final row in rows('pins')) row['conversation_id'] as String,
+      };
+      // Absent from an older server answer: nothing marked.
+      final markedUnreadIds = {
+        for (final row
+            in (data['marked_unread'] as List? ?? const [])
+                .cast<Map<String, dynamic>>())
+          row['conversation_id'] as String,
       };
 
       final hiddenIds = {
@@ -323,6 +330,7 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
             settings: settingsById[id] ?? const GroupSettings(),
             archived: archivedIds.contains(id),
             pinned: pinnedIds.contains(id),
+            markedUnread: markedUnreadIds.contains(id),
             pinnedMessageId: pinnedMessageById[id],
             isAdmin: adminOf.contains(id),
             senders: titleById[id] == null

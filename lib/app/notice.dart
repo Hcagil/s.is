@@ -79,6 +79,7 @@ void showSisNotice(
   BuildContext context,
   String message, {
   bool isError = false,
+  Key? noticeKey,
 }) {
   final overlay = Overlay.of(context, rootOverlay: true);
   late final OverlayEntry entry;
@@ -88,7 +89,7 @@ void showSisNotice(
       left: 24,
       right: 24,
       child: Center(
-        child: SisNotice(message: message, isError: isError),
+        child: SisNotice(key: noticeKey, message: message, isError: isError),
       ),
     ),
   );

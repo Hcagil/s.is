@@ -383,7 +383,7 @@ void main() {
     });
 
     test(
-      'chat_list_v2 holds exactly the eight old keys plus marked_unread',
+      'chat_list_v2 holds the eight old keys plus marked_unread and gone_peers',
       () async {
         final raw = Map<String, dynamic>.from(
           await bram.rpc('chat_list_v2') as Map,
@@ -398,14 +398,18 @@ void main() {
           'previews',
           'unread',
           'marked_unread',
+          'gone_peers',
         });
         expect(raw['marked_unread'], isA<List>());
+        expect(raw['gone_peers'], isA<List>());
         final old = Map<String, dynamic>.from(
           await bram.rpc('chat_list') as Map,
         );
         List<String> ids(Object? rows) =>
             [for (final r in rows as List) (r as Map)['id'] as String]..sort();
         expect(ids(raw['conversations']), ids(old['conversations']));
+        expect(old.keys.toSet().length, 8);
+        expect(old.containsKey('gone_peers'), isFalse);
       },
     );
 

@@ -14,6 +14,7 @@ import '../../appearance/presentation/appearance_labels.dart';
 import '../../appearance/presentation/appearance_page.dart';
 import '../../appearance/presentation/language_page.dart';
 import '../../appearance/presentation/text_size_page.dart';
+import '../../auth/application/account_deletion_controller.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
 import '../../autodownload/presentation/auto_download_page.dart';
@@ -440,10 +441,78 @@ class AccountScreen extends ConsumerWidget {
               },
               child: Text(l.settingsSignOut),
             ),
+            const SizedBox(height: 16),
+            TextButton(
+              key: const ValueKey('account-delete'),
+              style: TextButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.error,
+              ),
+              onPressed: () => _deleteAccount(context, ref),
+              child: Text(l.settingsDeleteAccount),
+            ),
           ],
         ),
       ),
     );
+  }
+}
+
+/// Asks to confirm, then asks the server to delete the account in 30 days; a failure shows as a notice, backing out of the sign-in shows nothing.
+Future<void> _deleteAccount(BuildContext context, WidgetRef ref) async {
+  final l = AppLocalizations.of(context);
+  final controller = ref.read(accountDeletionControllerProvider.notifier);
+  final go = await showDialog<bool>(
+    context: context,
+    builder: (d) => AlertDialog(
+      title: Text(l.settingsDeleteAccountTitle),
+      content: Text(l.settingsDeleteAccountBody),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(d).pop(false),
+          child: Text(l.settingsDeleteAccountCancel),
+        ),
+        TextButton(
+          key: const ValueKey('account-delete-confirm'),
+          style: TextButton.styleFrom(
+            foregroundColor: Theme.of(d).colorScheme.error,
+          ),
+          onPressed: () => Navigator.of(d).pop(true),
+          child: Text(l.settingsDeleteAccountConfirm),
+        ),
+      ],
+    ),
+  );
+  if (go != true || !context.mounted) return;
+  final r = await controller.request();
+  if (r is Err<DateTime> && context.mounted) {
+    final f = r.failure;
+    if (f is ProviderFailure && f.userCanceled) return;
+    if (f is ReauthRequiredFailure) {
+      // read before the box: signing out swaps the root screen
+      final session = ref.read(sessionControllerProvider.notifier);
+      final out = await showDialog<bool>(
+        context: context,
+        builder: (d) => AlertDialog(
+          content: Text(f.message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(d).pop(false),
+              child: Text(l.settingsDeleteAccountCancel),
+            ),
+            TextButton(
+              key: const ValueKey('account-delete-sign-out'),
+              onPressed: () => Navigator.of(d).pop(true),
+              child: Text(l.settingsSignOut),
+            ),
+          ],
+        ),
+      );
+      if (out != true || !context.mounted) return;
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      await session.signOut();
+      return;
+    }
+    showSisNotice(context, f.message, isError: true);
   }
 }
 

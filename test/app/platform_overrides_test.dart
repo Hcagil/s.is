@@ -76,7 +76,8 @@ void main() {
       ios: platform == TargetPlatform.iOS,
     );
     final overrides = platformOverrides(platform, client, _config);
-    expect(overrides, hasLength(3));
+    // auth, account deletion, update and push registry overrides.
+    expect(overrides, hasLength(4));
     return ProviderContainer.test(overrides: overrides);
   }
 

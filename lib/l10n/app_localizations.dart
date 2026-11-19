@@ -5420,6 +5420,60 @@ abstract class AppLocalizations {
   /// **'No fresh status from your computer. It may be off or asleep.'**
   String get adminDashboardStale;
 
+  /// Account settings button
+  ///
+  /// In en, this message translates to:
+  /// **'Delete my account'**
+  String get settingsDeleteAccount;
+
+  /// Delete account confirm dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Delete your account?'**
+  String get settingsDeleteAccountTitle;
+
+  /// Delete account confirm dialog text
+  ///
+  /// In en, this message translates to:
+  /// **'You will be signed out on every phone right away. Your account will be deleted in 30 days. To keep it, sign in again before then. Until then, others see your name and messages as before. After that, your messages show the name \"Deleted account\".'**
+  String get settingsDeleteAccountBody;
+
+  /// Delete account confirm dialog button
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get settingsDeleteAccountCancel;
+
+  /// Delete account confirm dialog button
+  ///
+  /// In en, this message translates to:
+  /// **'Delete my account'**
+  String get settingsDeleteAccountConfirm;
+
+  /// Error text shown to the member
+  ///
+  /// In en, this message translates to:
+  /// **'Your account could not be deleted. Try again.'**
+  String get failDeleteAccount;
+
+  /// Delete account text
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted account'**
+  String get deletedAccountName;
+
+  /// Delete account text
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out and sign in again, then delete your account.'**
+  String get failDeleteAccountReauth;
+
+  /// Delete account text
+  ///
+  /// In en, this message translates to:
+  /// **'Your account was not deleted. Apple sign-in could not be removed. Try again.'**
+  String get failDeleteAccountApple;
+
   /// Title of the per-chat notification settings page
   ///
   /// In en, this message translates to:

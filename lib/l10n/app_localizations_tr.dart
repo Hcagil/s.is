@@ -3095,6 +3095,36 @@ class AppLocalizationsTr extends AppLocalizations {
       'Bilgisayarınızdan güncel durum gelmiyor. Bilgisayarınız kapalı veya uykuda olabilir.';
 
   @override
+  String get settingsDeleteAccount => 'Hesabımı sil';
+
+  @override
+  String get settingsDeleteAccountTitle => 'Hesabınız silinsin mi?';
+
+  @override
+  String get settingsDeleteAccountBody =>
+      'Tüm telefonlarda oturumunuz hemen kapanır. Hesabınız 30 gün sonra silinir. Hesabınızı korumak için bu süre dolmadan yeniden oturum açın. O zamana kadar başkaları adınızı ve mesajlarınızı eskisi gibi görür. Sonrasında mesajlarınız \"Silinmiş hesap\" adıyla görünür.';
+
+  @override
+  String get settingsDeleteAccountCancel => 'İptal et';
+
+  @override
+  String get settingsDeleteAccountConfirm => 'Hesabımı sil';
+
+  @override
+  String get failDeleteAccount => 'Hesabınız silinemedi. Tekrar deneyin.';
+
+  @override
+  String get deletedAccountName => 'Silinmiş hesap';
+
+  @override
+  String get failDeleteAccountReauth =>
+      'Önce oturumu kapatıp yeniden oturum açın. Sonra hesabınızı silin.';
+
+  @override
+  String get failDeleteAccountApple =>
+      'Hesabınız silinmedi. Apple ile oturum açma kaldırılamadı. Tekrar deneyin.';
+
+  @override
   String get chatSettingsTitle => 'Sohbet ayarları';
 
   @override

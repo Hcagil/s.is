@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/notice.dart';
 import '../../../core/failure.dart';
+import '../../auth/application/deleted_users_controller.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session_state.dart';
 import '../domain/message.dart';
@@ -92,6 +93,7 @@ class ConversationTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l = AppLocalizations.of(context);
+    final deleted = ref.watch(deletedUsersControllerProvider);
     // A staff chat is named by the server; until it answers, a neutral name.
     final name =
         ref
@@ -100,7 +102,7 @@ class ConversationTile extends ConsumerWidget {
               conversation.staffKey,
               Localizations.localeOf(context).languageCode,
             ) ??
-        conversationLabel(l, conversation);
+        conversationLabel(l, conversation, deleted: deleted);
     // Whose messages are "mine" comes from the session, as on the message
     // screen.
     final me = switch (ref.watch(sessionControllerProvider).value) {
@@ -140,6 +142,15 @@ class ConversationTile extends ConsumerWidget {
             conversation.lastSenderId != me
         ? conversation.senders[conversation.lastSenderId]
         : null;
+    // Ids with no name may be deleted accounts: ask the server once per id.
+    askDeletedAccounts(ref, [
+      if (conversation.other != null && conversation.other!.displayName.isEmpty)
+        conversation.other!.userId,
+      if (voice != null &&
+          voice.name.isEmpty &&
+          conversation.lastSenderId != null)
+        conversation.lastSenderId!,
+    ]);
     final pinned = conversation.pinned;
     final selected = ref.watch(
       chatSelectionProvider.select((s) => s.contains(conversation.id)),
@@ -197,7 +208,12 @@ class ConversationTile extends ConsumerWidget {
                 TextSpan(
                   children: [
                     TextSpan(
-                      text: nameOrMember(l, voice.name),
+                      text: nameOrDeleted(
+                        l,
+                        voice.name,
+                        conversation.lastSenderId ?? '',
+                        deleted,
+                      ),
                       style: TextStyle(
                         color: groupColor(context, voice.slot),
                         fontWeight: FontWeight.w600,

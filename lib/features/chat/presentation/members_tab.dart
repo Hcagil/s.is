@@ -196,6 +196,7 @@ class _MembersTab extends ConsumerWidget {
       _ => null,
     };
     final online = ref.watch(onlineMembersProvider);
+    final deleted = ref.watch(deletedUsersControllerProvider);
     final l = AppLocalizations.of(context);
     final membersCanAdd = ref
         .watch(groupSettingsProvider(conversationId))
@@ -212,6 +213,11 @@ class _MembersTab extends ConsumerWidget {
           for (final m in roster)
             if (m.hasLeft) m,
         ];
+        // Members with no name may be deleted accounts: ask the server once per id.
+        askDeletedAccounts(ref, [
+          for (final m in roster)
+            if (m.member.displayName.isEmpty) m.member.userId,
+        ]);
         final closed =
             ref
                 .watch(groupCloseEventsProvider(conversationId))
@@ -241,7 +247,12 @@ class _MembersTab extends ConsumerWidget {
               _MemberRow(
                 key: ValueKey('group-member-${m.member.userId}'),
                 avatar: PersonAvatar(
-                  label: nameOrMember(l, m.member.displayName),
+                  label: nameOrDeleted(
+                    l,
+                    m.member.displayName,
+                    m.member.userId,
+                    deleted,
+                  ),
                   seed: m.member.userId,
                   online: online.contains(m.member.userId),
                   avatarPath: m.member.avatarPath,
@@ -250,7 +261,12 @@ class _MembersTab extends ConsumerWidget {
                 ),
                 title: m.member.userId == me
                     ? l.membersYou(nameOrMember(l, m.member.displayName))
-                    : nameOrMember(l, m.member.displayName),
+                    : nameOrDeleted(
+                        l,
+                        m.member.displayName,
+                        m.member.userId,
+                        deleted,
+                      ),
                 subtitle: [
                   if (m.isAdmin) l.membersAdmin,
                   if (m.member.tag != null) '@${m.member.tag}',

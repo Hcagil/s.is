@@ -237,6 +237,14 @@ final class SupabaseChatRepository implements ChatRepository, JoinCancellable {
           myLeftAtByConversation[conversationId] = leftAt;
         }
       }
+      // A 1:1 whose partner's account is deleted has no member row for them any more; the server names them here so the row can say "Deleted account".
+      for (final row in (data['gone_peers'] as List? ?? const [])) {
+        final gone = row as Map<String, dynamic>;
+        otherByConversation.putIfAbsent(
+          gone['conversation_id'] as String,
+          () => gone['user_id'] as String,
+        );
+      }
       // A group is listed by its title, so it needs no "other" member; only
       // 1:1 conversations do.
       final conversationIds = {...titleById.keys, ...otherByConversation.keys};

@@ -341,6 +341,26 @@ All of it is deployed by `release.yml` after the migrations: it sets the
 name, deploys the function, and creates the Vault URL if it is missing.
 Nothing is done by hand.
 
+### Delete my account
+
+Order in the release: the secrets are checked in the first steps of job `publish` (step "Check the Apple secrets for account deletion"), before any build or database change; the functions are deployed before `Apply database migrations` (they only run when the hourly database job, created by that migration, calls them); job `ios` waits for `publish`, so no TestFlight build ships unless the deploy succeeded. The migration carries `-- raise-minimum:`, so the release that ships it raises the minimum supported build to its own build (after the iOS build is distributed).
+
+`release.yml` ("Deploy the account deletion functions") deploys two functions and wires their secrets; nothing is done by hand except creating the GitHub secrets below once. The step has no `continue-on-error`: a missing secret fails the release with an error line naming it, so deletion is never left silently off.
+
+- `account-deletion`: deployed with `--no-verify-jwt`; the database job `account-deletion` (hourly, `pg_cron` + `pg_net`) calls it with the header `x-deletion-secret`. A random secret is made per release and stored twice: the function secret `ACCOUNT_DELETION_SECRET` and the Vault secret `account_deletion_secret`; the Vault URL `account_deletion_url` is created if missing. It deletes accounts whose 30-day wait (minus one hour) is over.
+- `apple-revoke`: deployed with JWT verification; the app calls it right before it asks for the deletion, to revoke Sign in with Apple at Apple (Apple's account-deletion rule). It reads the function secrets `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` and `APPLE_CLIENT_ID`.
+
+GitHub secrets the step reads (Settings, Secrets):
+
+| GitHub secret | Becomes function secret | Comes from |
+|---|---|---|
+| `APPLE_TEAM_ID` | `APPLE_TEAM_ID` | already exists (iOS signing) |
+| `APPLE_SIWA_KEY_ID` | `APPLE_KEY_ID` | the owner: Apple Developer, Keys, a new key with "Sign in with Apple" enabled (its Key ID) |
+| `APPLE_SIWA_PRIVATE_KEY` | `APPLE_PRIVATE_KEY` | the owner: the `.p8` file of that same key, the whole text including the BEGIN and END lines; Apple shows it once |
+| none | `APPLE_CLIENT_ID` | fixed in the workflow: the app id `com.esd.sis` (public, permanent) |
+
+`APPLE_SIWA_*` are separate from the App Store Connect key on purpose. The Vault names the database job reads are `account_deletion_url` and `account_deletion_secret`; without them (local, CI) the job does nothing. If the Apple secrets are absent the release fails at this step; remove the step only by a decision, never by skipping it.
+
 `google-services.json` and `ios/Runner/GoogleService-Info.plist` are not
 committed; CI and the release restore them from the `GOOGLE_SERVICES_JSON`
 and `GOOGLE_SERVICE_INFO_PLIST` secrets. Local copies live in

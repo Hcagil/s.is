@@ -9,6 +9,7 @@ import '../../../app/settings_row.dart';
 import '../../../app/theme.dart';
 import '../../../core/failure.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../auth/application/deleted_users_controller.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/member.dart';
 import '../../auth/domain/session_state.dart';

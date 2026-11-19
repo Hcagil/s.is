@@ -251,6 +251,21 @@ jobs:
         run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # The Apple secrets deletion needs are checked first, before any build or database change.
+      - name: Check the Apple secrets for account deletion
+        run: |
+          missing=""
+          for v in APPLE_TEAM_ID APPLE_SIWA_KEY_ID APPLE_SIWA_PRIVATE_KEY; do
+            if [ -z "${!v}" ]; then missing="$missing $v"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing GitHub secret(s):$missing (see docs/DELIVERY.md, Delete my account)"
+            exit 1
+          fi
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_SIWA_KEY_ID: ${{ secrets.APPLE_SIWA_KEY_ID }}
+          APPLE_SIWA_PRIVATE_KEY: ${{ secrets.APPLE_SIWA_PRIVATE_KEY }}
       - name: Restore the Rust codegen tools
         id: cargo-tools
         uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
@@ -327,6 +342,25 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      # Delete my account (docs/DELIVERY.md, "Delete my account"): account-deletion is called every hour by the database (no JWT; the shared secret is the credential), apple-revoke is called by the signed-in app (JWT verified). Not optional: a missing GitHub secret fails the release here, loudly, instead of leaving deletion silently off. It goes out before the schema push: the functions only run when the hourly database job (created by the migration) calls them.
+      - name: Deploy the account deletion functions
+        run: |
+          supabase functions deploy account-deletion --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
+          supabase functions deploy apple-revoke --project-ref "$SUPABASE_PROJECT_REF" --use-api
+          # one random secret shared by the database job (Vault) and the function; new every release, never printed.
+          DELETION_SECRET=$(openssl rand -hex 32)
+          echo "::add-mask::$DELETION_SECRET"
+          # APPLE_CLIENT_ID is the app id (public, permanent); the other three Apple values come from GitHub secrets.
+          supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" ACCOUNT_DELETION_SECRET="$DELETION_SECRET" APPLE_TEAM_ID="$APPLE_TEAM_ID" APPLE_KEY_ID="$APPLE_SIWA_KEY_ID" APPLE_PRIVATE_KEY="$APPLE_SIWA_PRIVATE_KEY" APPLE_CLIENT_ID="com.esd.sis"
+          supabase db query --linked "delete from vault.secrets where name in ('account_deletion_secret')"
+          supabase db query --linked "select vault.create_secret('$DELETION_SECRET', 'account_deletion_secret') is not null"
+          supabase db query --linked "select vault.create_secret('https://$SUPABASE_PROJECT_REF.supabase.co/functions/v1/account-deletion', 'account_deletion_url') where not exists (select 1 from vault.secrets where name in ('account_deletion_url'))"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_SIWA_KEY_ID: ${{ secrets.APPLE_SIWA_KEY_ID }}
+          APPLE_SIWA_PRIVATE_KEY: ${{ secrets.APPLE_SIWA_PRIVATE_KEY }}
       - name: Apply database migrations (schema goes forward before the app)
         run: supabase db push
         env:
@@ -478,13 +512,12 @@ jobs:
         run: rm -f .private/upload-keystore.jks
 
   ios:
-    # Independent of `publish` on purpose: an iOS failure shows as a red job
-    # but leaves the Play release intact, and Play never waits on Apple.
+    # Waits for `publish` on purpose: that job deploys the account deletion functions, and no iPhone build ships without them. An iOS failure still shows as a red job and leaves the Play release intact; Play never waits on Apple.
     # Repository variable IOS_RELEASE=off skips it; unset means on.
     # Waits for old_app only so that a failed old_app stops the iOS build too (!failure() lets it run when old_app was skipped).
-    needs: [scope, old_app]
+    needs: [scope, old_app, publish]
     # A quiet release (Admin Panels only) sends no TestFlight build: testers get no message.
-    if: needs.scope.outputs.ship == 'true' && vars.IOS_RELEASE != 'off' && needs.scope.outputs.quiet != 'true' && !failure() && !cancelled()
+    if: needs.scope.outputs.ship == 'true' && needs.publish.result == 'success' && vars.IOS_RELEASE != 'off' && needs.scope.outputs.quiet != 'true' && !failure() && !cancelled()
     uses: ./.github/workflows/ios-ipa.yml
     with:
       ref: ${{ needs.scope.outputs.sha }}

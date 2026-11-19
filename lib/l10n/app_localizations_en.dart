@@ -3122,6 +3122,37 @@ class AppLocalizationsEn extends AppLocalizations {
       'No fresh status from your computer. It may be off or asleep.';
 
   @override
+  String get settingsDeleteAccount => 'Delete my account';
+
+  @override
+  String get settingsDeleteAccountTitle => 'Delete your account?';
+
+  @override
+  String get settingsDeleteAccountBody =>
+      'You will be signed out on every phone right away. Your account will be deleted in 30 days. To keep it, sign in again before then. Until then, others see your name and messages as before. After that, your messages show the name \"Deleted account\".';
+
+  @override
+  String get settingsDeleteAccountCancel => 'Cancel';
+
+  @override
+  String get settingsDeleteAccountConfirm => 'Delete my account';
+
+  @override
+  String get failDeleteAccount =>
+      'Your account could not be deleted. Try again.';
+
+  @override
+  String get deletedAccountName => 'Deleted account';
+
+  @override
+  String get failDeleteAccountReauth =>
+      'Sign out and sign in again, then delete your account.';
+
+  @override
+  String get failDeleteAccountApple =>
+      'Your account was not deleted. Apple sign-in could not be removed. Try again.';
+
+  @override
   String get chatSettingsTitle => 'Chat settings';
 
   @override

@@ -13,7 +13,7 @@ import '../../auth/application/session_controller.dart';
 import '../../auth/domain/member.dart';
 import '../../auth/domain/session_state.dart';
 import '../../notifications/domain/notification_settings.dart';
-import '../../notifications/presentation/alert_widgets.dart';
+import '../../notifications/presentation/chat_settings_page.dart';
 import '../../notifications/presentation/notification_pages.dart';
 import '../../presence/application/presence_controllers.dart';
 import '../../presence/presentation/last_seen_text.dart';

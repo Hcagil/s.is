@@ -3095,6 +3095,19 @@ class AppLocalizationsTr extends AppLocalizations {
       'Bilgisayarınızdan güncel durum gelmiyor. Bilgisayarınız kapalı veya uykuda olabilir.';
 
   @override
+  String get chatSettingsTitle => 'Sohbet ayarları';
+
+  @override
+  String get chatMutedSoundVibrationNote =>
+      'Bu sohbet sessizdeyken ses ve titreşim kapalıdır.';
+
+  @override
+  String get chatMutedSoundNote => 'Bu sohbet sessizdeyken ses kapalıdır.';
+
+  @override
+  String get alertChoiceDefaultHint => 'Bildirim ayarlarınızı izler';
+
+  @override
   String get groupInviteTitle => 'Davet bağlantısı';
 
   @override

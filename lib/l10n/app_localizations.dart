@@ -5420,6 +5420,30 @@ abstract class AppLocalizations {
   /// **'No fresh status from your computer. It may be off or asleep.'**
   String get adminDashboardStale;
 
+  /// Title of the per-chat notification settings page
+  ///
+  /// In en, this message translates to:
+  /// **'Chat settings'**
+  String get chatSettingsTitle;
+
+  /// Note under the grey Sound and Vibration rows while the chat is muted (Android)
+  ///
+  /// In en, this message translates to:
+  /// **'Sound and vibration are off while this chat is muted.'**
+  String get chatMutedSoundVibrationNote;
+
+  /// Note under the grey Sound row while the chat is muted (iPhone)
+  ///
+  /// In en, this message translates to:
+  /// **'Sound is off while this chat is muted.'**
+  String get chatMutedSoundNote;
+
+  /// Small line under the Default choice of the Sound and Vibration sheets
+  ///
+  /// In en, this message translates to:
+  /// **'Follows your notification settings'**
+  String get alertChoiceDefaultHint;
+
   /// Invite by link: Page title; also the row name in Group settings (Q71)
   ///
   /// In en, this message translates to:

@@ -60,6 +60,8 @@ const realFetch = globalThis.fetch;
 // and 0.30.8 columns returns it: no sender, no chat, no badge (a function
 // deployed ahead of its migration, or rolled back behind it).
 let oldSchema = false;
+// When set, the push_alerts lookup (per-chat sound/vibration) answers HTTP 500, as a database without the function, or one that is down, would.
+let alertsFail = false;
 // 0.30.12: what Google's token endpoint and FCM saw, and how they answer.
 let mints = 0; // access tokens minted
 let mintGate: Promise<void> | null = null; // holds the token endpoint's answer
@@ -73,6 +75,9 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const res = await realFetch(input, init);
     const rows = (await res.json()) as Record<string, unknown>[];
     return Response.json(rows.map(({ sender: _s, chat: _c, badge: _b, ...rest }) => rest), { status: res.status });
+  }
+  if (alertsFail && url.includes('/rest/v1/rpc/push_alerts')) {
+    return Response.json({ message: 'edge test: push_alerts is down' }, { status: 500 });
   }
   if (url.startsWith('https://oauth2.googleapis.com/')) {
     mints++;
@@ -282,6 +287,8 @@ Deno.test({
           chat: target.chat,
           // 0.30.8: the recipient's own unread total, as a string.
           badge: String(await unreadOf(target.user_id)),
+          alert_sound: '1',
+          alert_vibration: '1',
         }, `data for ${target.token}`);
         assertEquals(data.conversation_id, conversationId);
         assertEquals(data.user_id, recipientOf[target.token as string],
@@ -428,6 +435,8 @@ Deno.test({
         const t = target(x);
         return {
           badge: String(badges[x.id]),
+          alert_sound: '1',
+          alert_vibration: '1',
           user_id: x.id,
           message_id: messageId,
           // Only with the real text (preview full): nothing wrong can be saved.
@@ -599,7 +608,7 @@ Deno.test({
       const direct1 = placeholders(onlyTo(d.sent, p.dfull), ids(p.dfull, direct, d.id));
       assertEquals(direct1, fixture.direct_full, '1:1: the five keys it always had, plus the badge');
       // As before 0.30.6, plus only 0.30.8's badge: no sender, no chat.
-      assertEquals(Object.keys(direct1).sort(), ['badge', 'body', 'conversation_id', 'message_id', 'sender_id', 'title', 'user_id']);
+      assertEquals(Object.keys(direct1).sort(), ['alert_sound', 'alert_vibration', 'badge', 'body', 'conversation_id', 'message_id', 'sender_id', 'title', 'user_id']);
     } finally {
       await sql.begin(async (tx) => {
         await tx`delete from app_private.tag_finds where finder in ${sql(people.map((x) => x.id))}`;
@@ -756,6 +765,8 @@ Deno.test({
         conversation_id: group,
         title: t(x).title,
         body: t(x).body,
+        alert_sound: '1',
+        alert_vibration: '1',
       });
       assertEquals(to(p.droidnew), { token: p.droidnew.token, data: data(p.droidnew), android: { priority: 'high' } });
       assertEquals(to(p.droidold), {
@@ -1524,7 +1535,7 @@ Deno.test({
         assertEquals(mine.length, 1, `exactly one send to ${x.name}: ${JSON.stringify(sent)}`);
         return mine[0].message;
       };
-      const baseKeys = ['badge', 'body', 'conversation_id', 'message_id', 'sender_id', 'title', 'user_id'];
+      const baseKeys = ['alert_sound', 'alert_vibration', 'badge', 'body', 'conversation_id', 'message_id', 'sender_id', 'title', 'user_id'];
 
       // iPhone 1:1 plain
       const id1 = await send(toIos, 'dt plain words');
@@ -1556,6 +1567,164 @@ Deno.test({
       await sql.begin(async (tx) => {
         await tx`delete from app_private.tag_finds where finder in ${sql(people.map((x) => x.id))}`;
         await tx`delete from app_private.device_tokens where user_id in ${sql(people.map((x) => x.id))}`;
+        await tx`delete from app_private.allowlist where email in ${sql(people.map((x) => x.email))}`;
+      }).catch(() => {});
+    }
+  },
+});
+
+Deno.test({
+  name: 'alerts: the chat choice wins, Default follows the account, and aps.sound is present exactly when the sound is on',
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const run = Date.now().toString(36);
+    const who = ['sender', 'iosnone', 'iosacct', 'ioschatoff', 'ioschaton', 'droidmix'];
+    const people = who.map((w) => ({
+      id: crypto.randomUUID(),
+      session: crypto.randomUUID(),
+      email: `${w}-${run}@edge.test`,
+      name: `${w[0].toUpperCase()}${w.slice(1)}`,
+      token: `edge-${w}-${run}`.padEnd(16, '0'),
+    }));
+    const [sender, iosnone, iosacct, ioschatoff, ioschaton, droidmix] = people;
+    const asP = <T>(x: typeof sender, body: (tx: postgres.TransactionSql) => Promise<T>) =>
+      as(x.id, x.email, x.session, body);
+    const ids = people.map((x) => x.id);
+    try {
+      for (const x of people) {
+        await sql`insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
+                  values (${x.id}, ${x.email}, now(), ${sql.json({ full_name: x.name })})`;
+        await sql`insert into app_private.allowlist(email) values (${x.email})`;
+        await sql`insert into auth.sessions (id, user_id, created_at, updated_at)
+                  values (${x.session}, ${x.id}, now(), now())`;
+        await asP(x, (tx) => tx`select public.activate_session()`);
+      }
+      for (const x of [iosnone, iosacct, ioschatoff, ioschaton]) {
+        await asP(x, (tx) => tx`select public.register_device_token(${x.token}, 'ios', true)`);
+      }
+      await asP(droidmix, (tx) => tx`select public.register_device_token(${droidmix.token}, 'android', true)`);
+      const five = [iosnone, iosacct, ioschatoff, ioschaton, droidmix];
+      for (const x of five) {
+        await sql`insert into app_private.tag_finds(finder, found_id) values (${sender.id}, ${x.id})`;
+      }
+      const grp = (await asP(sender, (tx) => tx`select public.start_group_conversation(${`edge-al-${run}`}, ${five.map((x) => x.id)}::uuid[]) as id`))[0].id as string;
+      await sql`insert into public.notification_settings (user_id, alert_sound, alert_vibration) values
+        (${iosacct.id}, false, false),
+        (${ioschatoff.id}, true, true),
+        (${ioschaton.id}, false, false),
+        (${droidmix.id}, true, true)`;
+      await sql`insert into public.chat_alert_settings (user_id, conversation_id, sound, vibration) values
+        (${iosacct.id}, ${grp}, 'default', 'default'),
+        (${ioschatoff.id}, ${grp}, 'off', 'off'),
+        (${ioschaton.id}, ${grp}, 'on', 'on'),
+        (${droidmix.id}, ${grp}, 'on', 'off')`;
+      const [{ id: messageId }] = await asP(sender, (tx) => tx`insert into public.messages(conversation_id, sender_id, body)
+        values (${grp}, ${sender.id}, ${'alerts ' + run}) returning id`);
+      assertEquals(await deliver(messageId as string), { status: 204, text: '' });
+      assertEquals(sent.length, 5);
+      const pushOf = (x: typeof sender) => {
+        const hits = sent.filter((s) => (s.message as Record<string, unknown>).token === x.token);
+        assertEquals(hits.length, 1, `${x.name}: exactly one push`);
+        return hits[0].message as Record<string, unknown>;
+      };
+      const apsOf = (m: Record<string, unknown>) => ((m.apns as { payload?: { aps?: Record<string, unknown> } } | undefined)?.payload?.aps ?? {});
+      const dataOf = (m: Record<string, unknown>) => (m.data ?? {}) as Record<string, unknown>;
+
+      const mNone = pushOf(iosnone);
+      assertEquals(apsOf(mNone).sound, 'default', `${iosnone.name}: sound on`);
+      assertEquals(dataOf(mNone).alert_sound, '1', `${iosnone.name}: alert_sound`);
+      assertEquals(dataOf(mNone).alert_vibration, '1', `${iosnone.name}: alert_vibration`);
+
+      const mAcct = pushOf(iosacct);
+      assert(!('sound' in apsOf(mAcct)), `${iosacct.name}: no sound key`);
+      assertEquals(dataOf(mAcct).alert_sound, '0', `${iosacct.name}: alert_sound`);
+      assertEquals(dataOf(mAcct).alert_vibration, '0', `${iosacct.name}: alert_vibration`);
+
+      const mOff = pushOf(ioschatoff);
+      assert(!('sound' in apsOf(mOff)), `${ioschatoff.name}: no sound key`);
+      assertEquals(dataOf(mOff).alert_sound, '0', `${ioschatoff.name}: alert_sound`);
+      assertEquals(dataOf(mOff).alert_vibration, '0', `${ioschatoff.name}: alert_vibration`);
+
+      const mOn = pushOf(ioschaton);
+      assertEquals(apsOf(mOn).sound, 'default', `${ioschaton.name}: sound on`);
+      assertEquals(dataOf(mOn).alert_sound, '1', `${ioschaton.name}: alert_sound`);
+      assertEquals(dataOf(mOn).alert_vibration, '1', `${ioschaton.name}: alert_vibration`);
+
+      const mDroid = pushOf(droidmix);
+      assert(!('apns' in mDroid), `${droidmix.name}: no apns key`);
+      assertEquals(dataOf(mDroid).alert_sound, '1', `${droidmix.name}: alert_sound`);
+      assertEquals(dataOf(mDroid).alert_vibration, '0', `${droidmix.name}: alert_vibration`);
+    } finally {
+      await sql.begin(async (tx) => {
+        await tx`delete from public.chat_alert_settings where user_id in ${sql(ids)}`;
+        await tx`delete from public.notification_settings where user_id in ${sql(ids)}`;
+        await tx`delete from app_private.tag_finds where finder in ${sql(ids)}`;
+        await tx`delete from app_private.device_tokens where user_id in ${sql(ids)}`;
+        await tx`delete from app_private.allowlist where email in ${sql(people.map((x) => x.email))}`;
+      }).catch(() => {});
+    }
+  },
+});
+
+Deno.test({
+  name: 'alerts: when the per-chat lookup fails, the push still goes with sound and vibration on',
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const run = Date.now().toString(36);
+    const who = ['sender', 'iosoff'];
+    const people = who.map((w) => ({
+      id: crypto.randomUUID(),
+      session: crypto.randomUUID(),
+      email: `${w}-${run}@edge.test`,
+      name: `${w[0].toUpperCase()}${w.slice(1)}`,
+      token: `edge-${w}-${run}`.padEnd(16, '0'),
+    }));
+    const [sender, iosoff] = people;
+    const asP = <T>(x: typeof sender, body: (tx: postgres.TransactionSql) => Promise<T>) =>
+      as(x.id, x.email, x.session, body);
+    const ids = people.map((x) => x.id);
+    try {
+      for (const x of people) {
+        await sql`insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
+                  values (${x.id}, ${x.email}, now(), ${sql.json({ full_name: x.name })})`;
+        await sql`insert into app_private.allowlist(email) values (${x.email})`;
+        await sql`insert into auth.sessions (id, user_id, created_at, updated_at)
+                  values (${x.session}, ${x.id}, now(), now())`;
+        await asP(x, (tx) => tx`select public.activate_session()`);
+      }
+      await asP(iosoff, (tx) => tx`select public.register_device_token(${iosoff.token}, 'ios', true)`);
+      await sql`insert into app_private.tag_finds(finder, found_id) values (${sender.id}, ${iosoff.id})`;
+      const [{ id: conv }] = await asP(sender, (tx) => tx`select public.start_direct_conversation(${iosoff.id}) as id`);
+      await sql`insert into public.notification_settings (user_id, alert_sound, alert_vibration)
+                values (${iosoff.id}, false, false)`;
+      await sql`insert into public.chat_alert_settings (user_id, conversation_id, sound, vibration)
+                values (${iosoff.id}, ${conv as string}, 'off', 'off')`;
+      const [{ id: messageId }] = await asP(sender, (tx) => tx`insert into public.messages(conversation_id, sender_id, body)
+        values (${conv as string}, ${sender.id}, ${'alerts fail ' + run}) returning id`);
+      alertsFail = true;
+      let res: { status: number; text: string };
+      try {
+        res = await deliver(messageId as string);
+      } finally {
+        alertsFail = false;
+      }
+      assertEquals(res.status, 204);
+      assertEquals(sent.length, 1);
+      const m = sent[0].message as Record<string, unknown>;
+      const aps = ((m.apns as { payload?: { aps?: Record<string, unknown> } } | undefined)?.payload?.aps ?? {});
+      const data = (m.data ?? {}) as Record<string, unknown>;
+      assertEquals(aps.sound, 'default', `${iosoff.name}: sound on after failed lookup`);
+      assertEquals(data.alert_sound, '1', `${iosoff.name}: alert_sound`);
+      assertEquals(data.alert_vibration, '1', `${iosoff.name}: alert_vibration`);
+    } finally {
+      alertsFail = false;
+      await sql.begin(async (tx) => {
+        await tx`delete from public.chat_alert_settings where user_id in ${sql(ids)}`;
+        await tx`delete from public.notification_settings where user_id in ${sql(ids)}`;
+        await tx`delete from app_private.tag_finds where finder in ${sql(ids)}`;
+        await tx`delete from app_private.device_tokens where user_id in ${sql(ids)}`;
         await tx`delete from app_private.allowlist where email in ${sql(people.map((x) => x.email))}`;
       }).catch(() => {});
     }

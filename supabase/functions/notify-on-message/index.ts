@@ -183,6 +183,16 @@ async function send(id: string): Promise<void> {
     notFull = prefRows.error ? new Set<string>(targets.map((t) => t.user_id)) : new Set<string>((prefRows.data ?? []).filter((r: { preview: string }) => r.preview !== 'full').map((r: { user_id: string }) => r.user_id));
   } catch { /* leave sender_id out */ }
 
+  // Per recipient: should this push make a sound / vibrate? Resolved in SQL (the chat's own choice, else the account's setting). A failed lookup keeps today's behaviour (sound and vibration on).
+  const alerts = new Map<string, { sound: boolean; vibration: boolean }>();
+  try {
+    const { data: alertRows, error: alertErr } = await db.rpc('push_alerts', {
+      conversation: targets[0].conversation_id,
+      users: [...new Set(targets.map((t) => t.user_id))],
+    });
+    if (!alertErr) for (const r of (alertRows ?? []) as { user_id: string; sound: boolean; vibration: boolean }[]) alerts.set(r.user_id, { sound: r.sound, vibration: r.vibration });
+  } catch { /* keep the defaults */ }
+
   const token = await accessToken(serviceAccount);
   const projectId = serviceAccount.project_id;
   // The buttons on the notification (Mark as read, Reply) call
@@ -239,6 +249,7 @@ async function send(id: string): Promise<void> {
       // always gets a regular notification, grouped per chat by the system
       // (thread-id) and with the default sound. Android is untouched.
       const ios = t.platform === 'ios';
+      const alert = alerts.get(t.user_id) ?? { sound: true, vibration: true };
       // The badge is a count the database computed for this recipient; a
       // missing or odd value sets nothing rather than a wrong number.
       const badge =
@@ -281,6 +292,9 @@ async function send(id: string): Promise<void> {
               ...(withCt ? { ct: t.ciphertext!, ot: String(t.olm_type), ...(t.sender_key && t.sender_id && SENDER_KEY_RE.test(t.sender_key) && UUID_RE.test(t.sender_id) ? { sk: t.sender_key, si: t.sender_id } : {}) } : {}),
               ...actionData,
               ...(thumbUrl ? { thumb_url: thumbUrl, thumb_kind: t.thumb_video ? 'video' : 'photo' } : {}),
+              // Resolved sound / vibration for this chat ('1' / '0'); an older build ignores them.
+              alert_sound: alert.sound ? '1' : '0',
+              alert_vibration: alert.vibration ? '1' : '0',
               // Android has no remote badge: the app's own notification sets
               // it (Notification.setNumber) from this.
               ...(badge != null ? { badge: String(badge) } : {}),
@@ -295,7 +309,7 @@ async function send(id: string): Promise<void> {
                         // category; an older build has none and shows none.
                         // SIS_MESSAGE_LOCKED has only a foreground Reply (AppDelegate.swift hands the text to the app, which locks and sends it); no Mark as read.
                         category: apnsCategory(!!t.encrypted, chatEncrypted),
-                        sound: 'default',
+                        ...(alert.sound ? { sound: 'default' } : {}), // no sound field = a silent notification
                         // Runs the iPhone's notification service extension: it fetches the picture, decrypts ct into the real text, sets the one locked text of an encrypted chat, or marks a plain 1:1 message delivered (1:1 only, decided from conversations.direct_key).
                         ...(thumbUrl || withCt || t.encrypted || oneToOne ? { 'mutable-content': 1 } : {}),
                         ...(badge != null ? { badge } : {}),

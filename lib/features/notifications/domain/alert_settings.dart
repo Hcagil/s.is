@@ -1,3 +1,5 @@
+import '../../../core/failure.dart';
+
 /// Sound and vibration choices for new-message notifications. Stored on the
 /// phone only; see AlertStore.
 enum AlertChoice {
@@ -15,7 +17,11 @@ enum AlertChoice {
 
 /// The member's global sound and vibration settings.
 final class AlertDefaults {
+  /// The account these choices belong to; null = saved before the phone tracked it (kept for the one-time copy to the account). Not part of ==.
+  final String? owner;
+
   const AlertDefaults({
+    this.owner,
     this.sound = true,
     this.tone,
     this.toneName,
@@ -37,6 +43,7 @@ final class AlertDefaults {
     tone: tone,
     toneName: toneName,
     vibration: vibration ?? this.vibration,
+    owner: owner,
   );
 
   /// Sets both tone and name, either of them to null.
@@ -45,6 +52,16 @@ final class AlertDefaults {
     tone: tone,
     toneName: toneName,
     vibration: vibration,
+    owner: owner,
+  );
+
+  /// Returns a copy with the given owner.
+  AlertDefaults withOwner(String? owner) => AlertDefaults(
+    sound: sound,
+    tone: tone,
+    toneName: toneName,
+    vibration: vibration,
+    owner: owner,
   );
 
   Map<String, Object?> toJson() => {
@@ -52,6 +69,7 @@ final class AlertDefaults {
     't': tone,
     'n': toneName,
     'v': vibration,
+    if (owner != null) 'o': owner,
   };
 
   static AlertDefaults fromJson(Map<String, Object?> j) => AlertDefaults(
@@ -59,6 +77,7 @@ final class AlertDefaults {
     tone: j['t'] as String?,
     toneName: j['n'] as String?,
     vibration: j['v'] as bool? ?? true,
+    owner: j['o'] as String?,
   );
 
   @override
@@ -191,6 +210,28 @@ abstract interface class AlertStore {
 
   /// Removes the chat's entry when [c] is all Default.
   Future<void> saveChat(String conversationId, ChatAlert c);
+}
+
+/// What the account keeps: its sound and vibration settings and the chats that differ from Default. [sound] and [vibration] are null when the account has no saved settings yet (the phone's own values stay).
+final class RemoteAlerts {
+  const RemoteAlerts({this.sound, this.vibration, required this.chats});
+
+  final bool? sound;
+  final bool? vibration;
+  final Map<String, ChatAlert> chats;
+}
+
+/// The account-side copy of the alert settings (the server applies it to pushes while the app is closed, and every phone of the account uses it).
+abstract interface class AlertRemote {
+  Future<Result<RemoteAlerts>> load();
+
+  Future<Result<void>> saveDefaults({
+    required bool sound,
+    required bool vibration,
+  });
+
+  /// All Default removes the chat's row.
+  Future<Result<void>> saveChat(String conversationId, ChatAlert c);
 }
 
 /// A tone the member picked.

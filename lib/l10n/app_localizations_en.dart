@@ -1475,6 +1475,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatSelMarkRead => 'Mark as read';
 
   @override
+  String get chatMenuMarkUnread => 'Mark as unread';
+
+  @override
+  String get commonSelect => 'Select';
+
+  @override
+  String get chatMarkedUnread => 'Chat marked as unread';
+
+  @override
   String get chatDeleteAction => 'Delete';
 
   @override
@@ -3124,6 +3133,189 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get alertChoiceDefaultHint => 'Follows your notification settings';
+
+  @override
+  String get groupInviteTitle => 'Invite link';
+
+  @override
+  String get groupInviteHelp =>
+      'Only accounts invited to SIS can join with this link.';
+
+  @override
+  String get groupInviteTimeLimit => 'Time limit';
+
+  @override
+  String get groupInviteNoLimit => 'No limit';
+
+  @override
+  String groupInviteDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count days',
+      one: '1 day',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get groupInviteTimeNote => 'The time starts when you save.';
+
+  @override
+  String groupInviteValidUntil(String date, String time) {
+    return 'Works until $date, $time.';
+  }
+
+  @override
+  String get groupInviteShare => 'Share link';
+
+  @override
+  String get groupInviteReset => 'Reset link';
+
+  @override
+  String get groupInviteTurnOff => 'Turn off link';
+
+  @override
+  String get groupInviteResetDone => 'Link reset';
+
+  @override
+  String get groupInviteTurnedOff => 'Link turned off';
+
+  @override
+  String get groupInviteResetTitle => 'Reset link?';
+
+  @override
+  String get groupInviteResetBody =>
+      'The old link will stop working. A new link is made with the same time limit, and the time starts again.';
+
+  @override
+  String get groupInviteTurnOffTitle => 'Turn off link?';
+
+  @override
+  String get groupInviteTurnOffBody =>
+      'No one can join with this link anymore. You can create a new link later.';
+
+  @override
+  String get groupInviteTurnOffAction => 'Turn off';
+
+  @override
+  String get groupInviteNoneTitle => 'No link yet';
+
+  @override
+  String get groupInviteNoneBody =>
+      'Create a link and share it with accounts invited to SIS.';
+
+  @override
+  String get groupInviteCreate => 'Create link';
+
+  @override
+  String get groupInviteExpiredNote =>
+      'Expired · No one can join with this link anymore.';
+
+  @override
+  String get groupInviteCreateNew => 'Create new link';
+
+  @override
+  String get groupInviteSaveFailed =>
+      'Could not save the change. The current link has not changed.';
+
+  @override
+  String get groupInviteOffline =>
+      'No internet connection. You can copy and share the link, but you can\'t change it now.';
+
+  @override
+  String get groupInviteNoneOfflineBody =>
+      'Connect to the internet to create a link.';
+
+  @override
+  String get inviteNoInternet => 'No internet connection';
+
+  @override
+  String groupInviteShareText(String link) {
+    return 'SIS group invite. In SIS, choose Join with a link and paste this link: $link';
+  }
+
+  @override
+  String get joinLinkTitle => 'Join with a link';
+
+  @override
+  String get joinLinkHint => 'Paste the invite link';
+
+  @override
+  String get joinLinkHelp =>
+      'Ask a group admin for the invite link, then paste it here.';
+
+  @override
+  String get commonPaste => 'Paste';
+
+  @override
+  String get joinLinkNotInvite =>
+      'This is not a SIS invite link. Check it and try again.';
+
+  @override
+  String get joinLinkTooManyTries => 'Too many tries. Try again later.';
+
+  @override
+  String get joinLinkOffline =>
+      'No internet connection. Connect and try again.';
+
+  @override
+  String get inviteInvalidPageTitle => 'Link can\'t be used';
+
+  @override
+  String get inviteInvalidTitle => 'This invite link is not valid';
+
+  @override
+  String get inviteInvalidBody =>
+      'It may have expired, or an admin may have reset or turned it off.';
+
+  @override
+  String get inviteJoinGroup => 'Join group';
+
+  @override
+  String get inviteJoinNoHistory => 'New members can\'t see earlier messages.';
+
+  @override
+  String get inviteJoiningStatus => 'Joining the group…';
+
+  @override
+  String get inviteJoining => 'Joining…';
+
+  @override
+  String get inviteJoinFailed => 'Could not join the group. Try again.';
+
+  @override
+  String get inviteJoinOfflineBody =>
+      'You need the internet to join the group.';
+
+  @override
+  String get inviteJoinNotDone => 'You have not joined yet.';
+
+  @override
+  String get inviteJoinedToast => 'You joined the group';
+
+  @override
+  String eventJoinedByLink(String name) {
+    return '$name joined the group via invite link';
+  }
+
+  @override
+  String get inviteAlreadyTitle => 'Already a member';
+
+  @override
+  String get inviteAlreadyBody => 'You are already in this group.';
+
+  @override
+  String get inviteOpenGroup => 'Go to group';
+
+  @override
+  String get inviteClosedBody => 'No one can join it anymore.';
+
+  @override
+  String get inviteRemovedTitle => 'You were removed';
+
+  @override
+  String get inviteRemovedBody => 'Only a group admin can add you back.';
 
   @override
   String get messageShowMore => 'Show more';

@@ -14,6 +14,7 @@ import '../domain/message.dart';
 import '../domain/timeline.dart';
 import 'chat_controllers.dart';
 import 'chat_drafts.dart';
+import 'invite_link_controller.dart';
 import 'security_code_controller.dart';
 
 /// Mirrors chat_controllers.dart's own `_never`: no automatic retry on a
@@ -213,7 +214,16 @@ final chatTimelineProvider = Provider.autoDispose<List<TimelineEntry>>((ref) {
   final closes =
       ref.watch(groupCloseEventsProvider(conversationId)).value ??
       const <GroupEvent>[];
-  return buildTimeline(messages, [...events, ...pictures, ...closes, ...pins]);
+  final joins =
+      ref.watch(groupJoinEventsProvider(conversationId)).value ??
+      const <GroupEvent>[];
+  return buildTimeline(messages, [
+    ...events,
+    ...pictures,
+    ...closes,
+    ...pins,
+    ...joins,
+  ]);
 });
 
 final groupControllerProvider = Provider<GroupController>(GroupController.new);

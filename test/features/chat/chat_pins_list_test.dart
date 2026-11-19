@@ -190,6 +190,8 @@ void main() {
     await pumpList(t, pins: pins);
     await t.longPress(byKey('conversation-c2'));
     await t.pumpAndSettle();
+    await t.tap(byKey('chat-menu-select'));
+    await t.pumpAndSettle();
     expect(find.byTooltip('Pin'), findsOneWidget);
     await t.tap(byKey('selection-pin'));
     await t.pump(const Duration(milliseconds: 300));
@@ -212,6 +214,8 @@ void main() {
       pins: pins,
     );
     await t.longPress(byKey('conversation-c2'));
+    await t.pumpAndSettle();
+    await t.tap(byKey('chat-menu-select'));
     await t.pumpAndSettle();
     expect(find.byTooltip('Unpin chat'), findsOneWidget);
     await t.tap(byKey('selection-pin'));
@@ -243,6 +247,8 @@ void main() {
     );
     await t.longPress(byKey('conversation-c6'));
     await t.pumpAndSettle();
+    await t.tap(byKey('chat-menu-select'));
+    await t.pumpAndSettle();
     expect(find.byTooltip('Pin'), findsOneWidget);
     await t.tap(byKey('selection-pin'));
     await t.pump();
@@ -261,6 +267,8 @@ void main() {
     await pumpList(t, pins: pins);
     await t.longPress(byKey('conversation-c1'));
     await t.pumpAndSettle();
+    await t.tap(byKey('chat-menu-select'));
+    await t.pumpAndSettle();
     expect(find.byTooltip('Pin'), findsOneWidget);
     await t.tap(byKey('selection-pin'));
     await t.pumpAndSettle();
@@ -276,6 +284,8 @@ void main() {
     pins.writeResult = const Err(DeniedFailure());
     await pumpList(t, pins: pins);
     await t.longPress(byKey('conversation-c1'));
+    await t.pumpAndSettle();
+    await t.tap(byKey('chat-menu-select'));
     await t.pumpAndSettle();
     expect(find.byTooltip('Pin'), findsOneWidget);
     await t.tap(byKey('selection-pin'));
@@ -346,6 +356,8 @@ void main() {
     pins.pinned.remove('p1');
     await t.longPress(byKey('conversation-c6'));
     await t.pumpAndSettle();
+    await t.tap(byKey('chat-menu-select'));
+    await t.pumpAndSettle();
     await t.tap(byKey('selection-pin'));
     await t.pumpAndSettle();
     expect(find.text(l10nEn.chatPinLimit), findsNothing);
@@ -359,6 +371,8 @@ void main() {
     final pins = ChatPinFake()..writeResult = const Err(PinLimitFailure());
     await pumpList(t, pins: pins);
     await t.longPress(byKey('conversation-c1'));
+    await t.pumpAndSettle();
+    await t.tap(byKey('chat-menu-select'));
     await t.pumpAndSettle();
     await t.tap(byKey('selection-pin'));
     await t.pumpAndSettle();
@@ -377,6 +391,8 @@ void main() {
     expect(headerText(t, 'list-header-0'), 'sabitlenenler');
     expect(headerText(t, 'list-header-2'), 'sohbetler');
     await t.longPress(byKey('conversation-c1'));
+    await t.pumpAndSettle();
+    await t.tap(byKey('chat-menu-select'));
     await t.pumpAndSettle();
     expect(find.byTooltip('Sabitle'), findsOneWidget);
   });

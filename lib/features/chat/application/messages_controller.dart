@@ -640,6 +640,27 @@ class MessagesController extends AsyncNotifier<List<Message>> {
     );
   }
 
+  /// Most older pages [loadUntil] reads for one quote tap (20 x 50 = 1000 messages).
+  static const _maxQuotePages = 20;
+
+  /// Pages older history in with [loadOlder] until the message [id] is shown.
+  /// true = it is shown; false = the chat's start was reached without it (it
+  /// no longer exists); null = unknown (a read failed or [_maxQuotePages]
+  /// pages passed): the caller leaves the list alone.
+  Future<bool?> loadUntil(String id) async {
+    for (var i = 0; i < _maxQuotePages; i++) {
+      final before = state.value;
+      if (before == null) return null;
+      if (before.any((m) => m.id == id)) return true;
+      if (_noOlder) return false;
+      await loadOlder();
+      final after = state.value;
+      if (!ref.mounted || after == null) return null;
+      if (after.length == before.length && !_noOlder) return null;
+    }
+    return state.value?.any((m) => m.id == id) == true ? true : null;
+  }
+
   /// The server page just read for [oldest] (rows at or before it, plus rows
   /// after) joins the stored block when that block reaches [oldest]: the phone
   /// then holds the page with no gap, so the chat's contiguous start moves

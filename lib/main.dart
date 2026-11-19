@@ -38,6 +38,7 @@ import 'features/auth/data/file_last_session_store.dart';
 import 'features/auth/data/secure_session_storage.dart';
 import 'features/auth/data/supabase_auth_repository.dart';
 import 'features/chat/application/chat_controllers.dart';
+import 'features/chat/application/invite_link_controller.dart';
 import 'features/chat/application/pending_push_messages_provider.dart';
 import 'features/chat/application/staff_registry_controller.dart';
 import 'features/chat/application/link_preview_controller.dart';
@@ -88,8 +89,10 @@ import 'features/chat/data/supabase_staff_registry_repository.dart';
 import 'features/chat/data/supabase_chat_archive_repository.dart';
 import 'features/chat/data/supabase_chat_delete_repository.dart';
 import 'features/chat/data/supabase_chat_file_repository.dart';
+import 'features/chat/data/supabase_chat_mark_repository.dart';
 import 'features/chat/data/supabase_chat_pin_repository.dart';
 import 'features/chat/data/supabase_group_settings_repository.dart';
+import 'features/chat/data/supabase_invite_link_repository.dart';
 import 'features/chat/data/supabase_chat_repository.dart';
 import 'features/chat/data/supabase_encrypted_message_repository.dart';
 import 'features/chat/data/supabase_location_share_repository.dart';
@@ -347,11 +350,17 @@ Future<void> main() async {
           groupSettingsRepositoryProvider.overrideWithValue(
             SupabaseGroupSettingsRepository(client),
           ),
+          inviteLinkRepositoryProvider.overrideWithValue(
+            SupabaseInviteLinkRepository(client),
+          ),
           chatArchiveRepositoryProvider.overrideWithValue(
             SupabaseChatArchiveRepository(client),
           ),
           chatPinRepositoryProvider.overrideWithValue(
             SupabaseChatPinRepository(client),
+          ),
+          chatMarkRepositoryProvider.overrideWithValue(
+            SupabaseChatMarkRepository(client),
           ),
           chatDeleteRepositoryProvider.overrideWithValue(
             SupabaseChatDeleteRepository(client),

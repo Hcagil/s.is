@@ -23,6 +23,7 @@ import '../application/pin_controller.dart';
 import '../domain/group_member.dart';
 import '../domain/message.dart';
 import 'add_members_page.dart';
+import 'group_invite_page.dart';
 import 'avatar_card.dart';
 import 'encryption_row.dart';
 import 'group_gone_guard.dart';
